@@ -10,7 +10,7 @@ ESP32-S3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobo
 | GPIO4 | SWDIO |
 | GND | GND |
 
-用杜邦线连接时，引脚驱动强度已降到 1（默认 2）。默认强度边沿过冲，会让 SWD 应答出错。
+引脚驱动强度设为最低（0，ESP-IDF 默认是 2），减小边沿过冲和振铃。
 
 ## 编译和烧录
 
@@ -27,17 +27,19 @@ scripts\build.ps1 -LibxrRoot D:\src\libxr-c flash -p COM3
 
 ### USB
 
-插上 ESP32-S3 的 USB 口（板上标 USB 的那个，不是串口桥那个）。设备是 `XR-DAP-S3`，VID:PID 为 `303A:4A01`，CMSIS-DAP v2（Bulk），Windows 自带 WinUSB，免驱。同时会多出一个 CDC 虚拟串口。
+插上 ESP32-S3 的 USB 口（板上标 USB 的那个，不是串口桥那个）。设备名 `XR-DAP-S3`，VID:PID 为 `1D50:6199`（XRUSB 登记的标识），序列号是 `XRobot-XRDAP-` 加芯片唯一 ID。CMSIS-DAP v2（Bulk），Windows 自带 WinUSB，免驱。同时会多出一个 CDC 虚拟串口。
 
 OpenOCD：
 
 ```tcl
 adapter driver cmsis-dap
-cmsis-dap vid_pid 0x303a 0x4a01
+cmsis-dap vid_pid 0x1d50 0x6199
 transport select swd
 source [find target/stm32g4x.cfg]
 adapter speed 4000
 ```
+
+同一台电脑上有多个使用这组 VID:PID 的设备时，用 `adapter serial <序列号>` 指定。
 
 Keil：调试器选 CMSIS-DAP Debugger，端口选 SW，设备选你的目标芯片。pyOCD、probe-rs 按平常的 CMSIS-DAP 方式用，不需要额外配置。
 

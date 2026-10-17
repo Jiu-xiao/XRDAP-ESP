@@ -11,6 +11,7 @@
 #include "debug/swd_general_gpio.hpp"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_timebase.hpp"
 #include "esp_usb_dev.hpp"
 #include "freertos/FreeRTOS.h"
@@ -156,8 +157,12 @@ extern "C" void app_main(void)
   static LibXR::USB::CDCUart cdc(LibXR::USB::Endpoint::EPNumber::EP2,
                                  LibXR::USB::Endpoint::EPNumber::EP2,
                                  LibXR::USB::Endpoint::EPNumber::EP3, 1024, 1024, 8);
+  // 序列号 = 前缀 + 芯片唯一 ID。ESP32-S3 用 eFuse 里的出厂 MAC（6 字节）做唯一 ID，协议栈把它转成十六进制接在前缀后面。
+  static uint8_t uid[6];
+  ESP_ERROR_CHECK(esp_efuse_mac_get_default(uid));
   static constexpr auto lang = LibXR::USB::DescriptorStrings::MakeLanguagePack(
-      LibXR::USB::DescriptorStrings::Language::EN_US, "XRobot", "XR-DAP-S3", "XRDAP-S3-0001");
+      LibXR::USB::DescriptorStrings::Language::EN_US, "XRobot", "XR-DAP-S3",
+      Config::kUsbSerialPrefix);
   static LibXR::ESP32USBDevice usb(
       {
           {LibXR::RawData{ep0_buffer, sizeof(ep0_buffer)}},
@@ -165,8 +170,8 @@ extern "C" void app_main(void)
           {LibXR::RawData{ep2_cdc, sizeof(ep2_cdc)}},
           {LibXR::RawData{ep3_comm, sizeof(ep3_comm)}, true},
       },
-      LibXR::USB::DeviceDescriptor::PacketSize0::SIZE_64, 0x303A, Config::kUsbPid, 0x0100,
-      {&lang}, {{&dap, &cdc}});
+      LibXR::USB::DeviceDescriptor::PacketSize0::SIZE_64, Config::kUsbVid, Config::kUsbPid, 0x0100,
+      {&lang}, {{&dap, &cdc}}, LibXR::ConstRawData{uid, sizeof(uid)});
   usb.Init(false);
   usb.Start(false);
   ESP_LOGI(TAG, "USB 已启动");

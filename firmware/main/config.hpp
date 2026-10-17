@@ -17,8 +17,13 @@ constexpr unsigned kStepPriority = 10;
 
 constexpr uint16_t kDapPacketSize = 1024;  // 通告给上位机的 DAP 包长
 constexpr uint16_t kTcpPort = 3241;
-constexpr uint16_t kUsbPid = 0x4A01;  // VID 使用乐鑫的 0x303A
 
-// 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。默认强度在杜邦线上会振铃，导致 SWD 应答出错，所以降一档。
-constexpr int kPadDriveStrength = 1;
+// USB 标识：使用 XRUSB 登记的 VID:PID（1D50:6199）。同一组 VID:PID 靠序列号区分设备，
+// 序列号 = 前缀 + 芯片唯一 ID（十六进制），前缀规则见 xrobot.work 的「VID/PID 与 Serial 使用约定」。
+constexpr uint16_t kUsbVid = 0x1D50;
+constexpr uint16_t kUsbPid = 0x6199;
+constexpr char kUsbSerialPrefix[] = "XRobot-XRDAP-";
+
+// 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降低强度是为了减小边沿过冲和振铃。
+constexpr int kPadDriveStrength = 0;
 }  // namespace XrDap::Config
