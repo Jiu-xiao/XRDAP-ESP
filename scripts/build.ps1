@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Build the firmware. Usage: scripts\build.ps1 -LibxrRoot D:\src\libxr-c [-IdfPath C:\esp\esp-idf-v5.5.2] [-Build <dir>] [build|flash|...]
 # Needs ESP-IDF v5.5.x with its tools installed (install.ps1 done once). Extra arguments go to idf.py.
 param(

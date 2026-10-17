@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #include "wifi_sta.hpp"
 
 #include <cstdint>
@@ -16,6 +17,7 @@ namespace
 constexpr const char* TAG = "xrdap_wifi";
 constexpr EventBits_t kGotIp = BIT0;
 EventGroupHandle_t g_events;
+bool g_started = false;
 
 struct Credentials
 {
@@ -23,6 +25,32 @@ struct Credentials
   char ssid[33];
   char password[64];
 };
+
+
+constexpr const char* kNvsNamespace = "rmlink";  // 与 RMLink 固件相同
+constexpr const char* kNvsKey = "wifi";
+
+esp_err_t LoadCredentials(Credentials& cred)
+{
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(kNvsNamespace, NVS_READONLY, &nvs);
+  if (err != ESP_OK)
+  {
+    ESP_LOGW(TAG, "没有保存的热点参数（nvs_open: %s）", esp_err_to_name(err));
+    return err;
+  }
+  size_t size = sizeof(cred);
+  err = nvs_get_blob(nvs, kNvsKey, &cred, &size);
+  nvs_close(nvs);
+  if (err != ESP_OK || size != sizeof(cred) || cred.version != 1 || cred.ssid[0] == 0)
+  {
+    ESP_LOGW(TAG, "保存的热点参数缺失或无效");
+    return ESP_ERR_NOT_FOUND;
+  }
+  cred.ssid[sizeof(cred.ssid) - 1] = 0;
+  cred.password[sizeof(cred.password) - 1] = 0;
+  return ESP_OK;
+}
 
 void OnEvent(void*, esp_event_base_t base, int32_t id, void* data)
 {
@@ -55,23 +83,11 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   }
 
   Credentials cred = {};
-  nvs_handle_t nvs;
-  err = nvs_open("rmlink", NVS_READONLY, &nvs);
+  err = LoadCredentials(cred);
   if (err != ESP_OK)
   {
-    ESP_LOGE(TAG, "没有保存的热点参数（nvs_open: %s）", esp_err_to_name(err));
     return err;
   }
-  size_t size = sizeof(cred);
-  err = nvs_get_blob(nvs, "wifi", &cred, &size);
-  nvs_close(nvs);
-  if (err != ESP_OK || size != sizeof(cred) || cred.version != 1 || cred.ssid[0] == 0)
-  {
-    ESP_LOGE(TAG, "保存的热点参数缺失或无效");
-    return ESP_ERR_NOT_FOUND;
-  }
-  cred.ssid[sizeof(cred.ssid) - 1] = 0;
-  cred.password[sizeof(cred.password) - 1] = 0;
   ESP_LOGI(TAG, "使用已保存的热点，SSID 长度 %u", (unsigned)strlen(cred.ssid));
 
   g_events = xEventGroupCreate();
@@ -95,9 +111,86 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   memset(&wifi, 0, sizeof(wifi));
   ESP_ERROR_CHECK(esp_wifi_start());
   esp_wifi_set_ps(WIFI_PS_NONE);
+  g_started = true;
 
   const EventBits_t bits =
       xEventGroupWaitBits(g_events, kGotIp, pdFALSE, pdTRUE, pdMS_TO_TICKS(timeout_ms));
   return (bits & kGotIp) ? ESP_OK : ESP_ERR_TIMEOUT;
+}
+
+esp_err_t WifiStaSave(const char* ssid, const char* password)
+{
+  const size_t ssid_len = strlen(ssid);
+  const size_t pwd_len = strlen(password);
+  if (ssid_len < 1 || ssid_len > 32 || (pwd_len != 0 && (pwd_len < 8 || pwd_len > 63)))
+  {
+    return ESP_ERR_INVALID_ARG;
+  }
+  Credentials cred = {};
+  cred.version = 1;
+  memcpy(cred.ssid, ssid, ssid_len);
+  memcpy(cred.password, password, pwd_len);
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
+  if (err == ESP_OK)
+  {
+    err = nvs_set_blob(nvs, kNvsKey, &cred, sizeof(cred));
+    if (err == ESP_OK)
+    {
+      err = nvs_commit(nvs);
+    }
+    nvs_close(nvs);
+  }
+  memset(&cred, 0, sizeof(cred));
+  return err;
+}
+
+esp_err_t WifiStaClear()
+{
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
+  if (err != ESP_OK)
+  {
+    return err;
+  }
+  err = nvs_erase_key(nvs, kNvsKey);
+  if (err == ESP_ERR_NVS_NOT_FOUND)
+  {
+    err = ESP_OK;
+  }
+  if (err == ESP_OK)
+  {
+    err = nvs_commit(nvs);
+  }
+  nvs_close(nvs);
+  return err;
+}
+
+WifiStatus WifiStaGetStatus()
+{
+  WifiStatus st = {};
+  Credentials cred = {};
+  if (LoadCredentials(cred) == ESP_OK)
+  {
+    memcpy(st.ssid, cred.ssid, sizeof(st.ssid));
+  }
+  memset(&cred, 0, sizeof(cred));
+  st.started = g_started;
+  if (g_started)
+  {
+    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t ip = {};
+    if (netif != nullptr && esp_netif_get_ip_info(netif, &ip) == ESP_OK && ip.ip.addr != 0)
+    {
+      st.connected = true;
+      memcpy(st.ip, &ip.ip.addr, 4);
+    }
+    wifi_ap_record_t ap = {};
+    if (st.connected && esp_wifi_sta_get_ap_info(&ap) == ESP_OK)
+    {
+      st.rssi = ap.rssi;
+    }
+  }
+  return st;
 }
 }  // namespace XrDap

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // XR-DAP-S3：基于 libxr 的 ESP32-S3 CMSIS-DAP 调试探针。
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
 //   Wi-Fi：连上热点后在 TCP 端口提供 CMSIS-DAP。有 TCP 客户端时 USB 关闭，客户端走后 USB 恢复。
@@ -18,6 +19,7 @@
 #include "libxr.hpp"
 #include "s3_dedic_gpio.hpp"
 #include "swd_link.hpp"
+#include "wifi_console.hpp"
 #include "wifi_sta.hpp"
 
 namespace
@@ -172,6 +174,9 @@ extern "C" void app_main(void)
   // Wi-Fi 和 TCP。Wi-Fi 最多等 20 秒；没连上时 Wi-Fi 仍会在后台重连，TCP 服务照常启动。
   // 没有热点参数时 Wi-Fi 不启动，只提供 USB。
   const esp_err_t wifi = WifiStaStart(20000);
+  // 通过 USB 虚拟串口配置 Wi-Fi。没有热点参数时也能用它来设置。
+  static WifiConsole<LibXR::USB::CDCUart> console(cdc);
+  console.Start(0);
   if (wifi == ESP_OK || wifi == ESP_ERR_TIMEOUT)
   {
     static UsbSwitch usb_switch(usb);

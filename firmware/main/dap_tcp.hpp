@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 #pragma once
 
 // CMSIS-DAP over TCP。帧格式：8 字节头 + DAP 数据。
