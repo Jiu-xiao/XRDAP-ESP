@@ -3,12 +3,9 @@ idf_component_register(
   INCLUDE_DIRS "."
   REQUIRES freertos driver esp_driver_gpio hal soc usb esp_hw_support esp_timer esp_event
            esp_netif esp_wifi esp_adc nvs_flash esp_rom esp_system esp_common)
-# libxr-c checkout: -DLIBXR_ROOT=<path> or the environment variable XRDAP_LIBXR_ROOT
-# (tested with branch feat/usb-slot-model-dap, commit 22ba8642 or later)
-if(NOT DEFINED LIBXR_ROOT AND DEFINED ENV{XRDAP_LIBXR_ROOT})
-  set(LIBXR_ROOT "$ENV{XRDAP_LIBXR_ROOT}")
-endif()
-if(NOT DEFINED LIBXR_ROOT OR NOT EXISTS "${LIBXR_ROOT}/cmake/esp32.cmake")
-  message(FATAL_ERROR "Set XRDAP_LIBXR_ROOT (or -DLIBXR_ROOT) to a libxr-c checkout")
+# libxr 以子模块形式放在 third_party/libxr
+set(LIBXR_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../third_party/libxr")
+if(NOT EXISTS "${LIBXR_ROOT}/cmake/esp32.cmake")
+  message(FATAL_ERROR "没有找到 libxr 子模块，先执行 git submodule update --init")
 endif()
 include(${LIBXR_ROOT}/cmake/esp32.cmake)

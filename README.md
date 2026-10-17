@@ -14,14 +14,26 @@ ESP32-S3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobo
 
 ## 编译和烧录
 
-需要 ESP-IDF v5.5 和 libxr-c（`feat/usb-slot-model-dap` 分支，commit `22ba8642` 或更新）。
+### 直接烧录 release
 
-```powershell
-scripts\build.ps1 -LibxrRoot D:\src\libxr-c build
-scripts\build.ps1 -LibxrRoot D:\src\libxr-c flash -p COM3
+在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`，这是合并好的完整镜像，从地址 0 烧录：
+
+```
+python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
 ```
 
-引脚、核分配、TCP 端口等固定参数在 `firmware/main/config.hpp`。
+### 自己编译
+
+需要 ESP-IDF v5.5。libxr 以 git 子模块形式放在 `third_party/libxr`，克隆时带上 `--recurse-submodules`（已经克隆的执行 `git submodule update --init`）。
+
+```
+git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP32-S3.git
+cd XRDAP-ESP32-S3/firmware
+idf.py build
+idf.py -p COM3 flash
+```
+
+引脚、核分配、TCP 端口等固定参数在 `firmware/main/config.hpp`。每次推送和 PR 都会由 GitHub Actions 编译，打 `v*` 标签会自动发布 release。
 
 ## 上位机怎么连
 

@@ -1,0 +1,46 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: 编译
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          git config --global --add safe.directory '*'
+          cd firmware
+          idf.py set-target esp32s3
+          idf.py build merge-bin
+
+      - name: 整理固件文件
+        run: |
+          mkdir out
+          cp firmware/build/merged-binary.bin out/xrdap-esp32-s3.bin
+          cd out && sha256sum * > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xrdap-esp32-s3
+          path: out/*
+
+      - name: 发布 release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
