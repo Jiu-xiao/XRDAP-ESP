@@ -8,6 +8,7 @@
 #include "dap_tcp.hpp"
 #include "daplink_v2_profile_swd.hpp"
 #include "debug/swd_general_gpio.hpp"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timebase.hpp"
 #include "esp_usb_dev.hpp"
@@ -179,7 +180,8 @@ extern "C" void app_main(void)
     server.SetHooks([](void* sw) { static_cast<UsbSwitch*>(sw)->Down(); },
                     [](void* sw) { static_cast<UsbSwitch*>(sw)->Up(); }, &usb_switch);
     server.Start(Config::kSwdCore);
-    ESP_LOGI(TAG, "TCP 服务已启动，端口 %u", (unsigned)Config::kTcpPort);
+    ESP_LOGI(TAG, "TCP 服务已启动，端口 %u，剩余堆 %u 字节", (unsigned)Config::kTcpPort,
+             (unsigned)esp_get_free_heap_size());
   }
   else
   {
