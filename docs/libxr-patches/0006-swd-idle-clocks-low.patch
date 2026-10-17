@@ -1,0 +1,13 @@
+diff --git "D:\\Codex\\tmp\\usb-impl-20261014\\libxr-c\\src\\driver\\debug\\swd_general_gpio.hpp" "libxr-idle\\src\\driver\\debug\\swd_general_gpio.hpp"
+index f4895bc..bdb10e6 100644
+--- "D:\\Codex\\tmp\\usb-impl-20261014\\libxr-c\\src\\driver\\debug\\swd_general_gpio.hpp"
++++ "libxr-idle\\src\\driver\\debug\\swd_general_gpio.hpp"
+@@ -217,7 +217,7 @@ class SwdGeneralGPIO final : public Swd
+     // 保留历史序列：周期内驱动 SWDIO 高电平，结束后拉低。
+     // Keep the legacy sequence: drive SWDIO high during cycles, then pull low.
+     (void)SetSwdioDriveMode();
+-    swdio_.Write(true);
++    swdio_.Write(false);
+ 
+     for (uint32_t i = 0; i < cycles; ++i)
+     {

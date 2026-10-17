@@ -1,0 +1,19 @@
+--- a/src/driver/usb/device/dap/daplink_v2.hpp
++++ b/src/driver/usb/device/dap/daplink_v2.hpp
+@@ -1307,7 +1307,15 @@
+     // no end-of-transfer hint and a PACKET_SIZE-sized read times out (the USB
+     // end-of-transfer rule).
+     const size_t mps = ep_data_in_->MaxPacketSize();
+-    const bool need_zlp = (mps != 0U) && (response.len % mps == 0U);
++    // 响应恰好等于 DAP 包长时，主机的 DAP 包长缓冲读满即结束，不需要 ZLP；此时补 ZLP 会
++    // 留下一个主机不取的零长包，把响应队列的一个位置占住直到下一次读，深流水下会把
++    // 命令流堵死。
++    // A response exactly as long as the DAP packet needs no ZLP: the host's DAP-packet-sized
++    // read completes when the buffer is full. Appending one would leave a zero-length packet
++    // the host never takes, keeping a response-queue slot occupied until the next read, which
++    // stalls the command stream under a deep pipeline.
++    const bool need_zlp = (mps != 0U) && (response.len % mps == 0U) &&
++                          (response.len < GetDapPacketSize());
+     if (ep_data_in_->Write({response.payload, response.len}, need_zlp, in_isr) ==
+         ErrorCode::OK)
+     {

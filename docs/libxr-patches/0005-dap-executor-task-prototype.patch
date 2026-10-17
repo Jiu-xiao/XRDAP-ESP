@@ -1,0 +1,92 @@
+--- _orig_daplink.hpp	2026-10-16 22:05:48.365514100 +0100
++++ libxr-proto/src/driver/usb/device/dap/daplink_v2.hpp	2026-10-16 21:57:47.048167600 +0100
+@@ -245,6 +245,32 @@
+    */
+   void RequestAbort() { SetTransferAbortFlag(true); }
+ 
++ public:
++  /// PROTOTYPE: install an executor. `kick(ctx, in_isr)` must wake a task that calls
++  /// ExecutorStep(); commands then run in that task and never inside the owner context.
++  void SetExecutor(void (*kick)(void*, bool), void* ctx)
++  {
++    executor_ctx_ = ctx;
++    executor_kick_ = kick;
++  }
++
++  /// PROTOTYPE: run the oldest received command (task context), then hand the response back
++  /// to the owner.
++  void ExecutorStep()
++  {
++    if (!exec_busy_ || exec_done_.load(std::memory_order_acquire))
++    {
++      return;
++    }
++    auto& response = resp_q_[resp_q_tail_];
++    uint16_t size = 0;
++    (void)ProcessOneCommand(false, command_buffers_[cmd_head_], cmd_len_[cmd_head_],
++                            response.payload, RESP_SLOT_SIZE, size);
++    exec_size_ = size;
++    exec_done_.store(true, std::memory_order_release);
++    RequestClassService(false);
++  }
++
+  protected:
+   /**
+    * @brief Bind endpoint resources
+@@ -476,6 +502,12 @@
+     {
+       return;
+     }
++    if (exec_done_.load(std::memory_order_acquire))
++    {
++      exec_done_.store(false, std::memory_order_relaxed);
++      exec_busy_ = false;
++      FinishReceivedCommand(in_isr, exec_size_);
++    }
+     if (pending_action_.load(std::memory_order_acquire) !=
+         static_cast<uint8_t>(PendingAction::NONE))
+     {
+@@ -493,6 +525,16 @@
+     {
+       return;
+     }
++    if (executor_kick_ != nullptr)
++    {
++      // PROTOTYPE: run the command in the executor task instead of in this owner context.
++      if (!exec_busy_ && !IsResponseQueueFull())
++      {
++        exec_busy_ = true;
++        executor_kick_(executor_ctx_, in_isr);
++      }
++      return;
++    }
+     ProcessReceivedCommand(in_isr);
+     // 还有已收到的命令就再请求一次服务，每次服务只执行一条，不长占 owner。
+     // More received commands: ask for another service call; one command per call keeps
+@@ -830,6 +872,12 @@
+         ProcessOneCommand(in_isr, command_buffers_[cmd_head_], cmd_len_[cmd_head_],
+                           response.payload, RESP_SLOT_SIZE, size);
+     UNUSED(result);
++    FinishReceivedCommand(in_isr, size);
++  }
++
++  /// Second half of ProcessReceivedCommand: retire the command buffer and queue the response.
++  void FinishReceivedCommand(bool in_isr, uint16_t size)
++  {
+     // 命令缓冲在执行完后才出环；出环后它的名额由响应队列（或延时保留槽）接着计数。
+     // The command buffer leaves the ring only after the command ran; its place in the
+     // outstanding count passes to the response queue (or the deferred slot).
+@@ -4632,6 +4680,13 @@
+   uint16_t deferred_resp_cap_ = 0u;   ///< 保留的响应容量 / Reserved response capacity
+   uint8_t swj_pin_sel_ = 0u;          ///< PinWait 引脚选择 / PinWait pin select
+   uint8_t swj_pin_expect_ = 0u;       ///< PinWait 期望电平 / PinWait expected level
++  // PROTOTYPE executor state (owner writes exec_busy_, the task writes exec_size_ before exec_done_).
++  void (*executor_kick_)(void*, bool) = nullptr;
++  void* executor_ctx_ = nullptr;
++  bool exec_busy_ = false;
++  std::atomic<bool> exec_done_{false};
++  uint16_t exec_size_ = 0u;
++
+   Timer::TimerHandle delay_timer_ = nullptr;  ///< 1 ms 门铃任务 / 1 ms doorbell task
+ 
+   LIBXR_PACKED_BEGIN

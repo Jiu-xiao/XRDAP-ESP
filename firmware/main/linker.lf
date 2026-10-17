@@ -1,0 +1,6 @@
+# Hot path: the SWD bit-bang, DAP command processing and TCP framing are instantiated in
+# main.cpp.obj. Running them from IRAM removes instruction-cache misses on the flash XIP path.
+[mapping:xrdap_hot]
+archive: libmain.a
+entries:
+    main (noflash)

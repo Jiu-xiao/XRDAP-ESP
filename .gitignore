@@ -1,0 +1,8 @@
+build/
+build-*/
+sdkconfig
+sdkconfig.old
+__pycache__/
+*.pyc
+*.bin
+*.log
