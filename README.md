@@ -10,7 +10,7 @@ ESP32-S3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobo
 | GPIO4 | SWDIO |
 | GND | GND |
 
-引脚驱动强度设为最低（0，ESP-IDF 默认是 2），减小边沿过冲和振铃。
+引脚驱动强度设为 1（ESP-IDF 默认是 2），减小边沿过冲和振铃。实测 0 档（最弱）在 10 MHz 以上出错更多。
 
 ## 编译和烧录
 

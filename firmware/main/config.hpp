@@ -24,6 +24,6 @@ constexpr uint16_t kUsbVid = 0x1D50;
 constexpr uint16_t kUsbPid = 0x6199;
 constexpr char kUsbSerialPrefix[] = "XRobot-XRDAP-";
 
-// 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降低强度是为了减小边沿过冲和振铃。
-constexpr int kPadDriveStrength = 0;
+// 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档是为了减小边沿过冲和振铃；0 档在 10 MHz 以上错得更多。
+constexpr int kPadDriveStrength = 1;
 }  // namespace XrDap::Config
