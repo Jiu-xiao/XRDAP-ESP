@@ -9,8 +9,7 @@ CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
 CONFIG_LWIP_TCP_WND_DEFAULT=16384
 CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_0=y
-# Performance tuning (measured, see results-20261016.md): QIO flash, 32 KB icache / 64 KB dcache, silent asserts,
-# lwIP in IRAM on core 0, larger Wi-Fi buffers. TCP block read/write at 12 MHz 259/265 -> 379/427 KiB/s, USB unchanged.
+# 性能相关：QIO Flash、32 KB 指令缓存 / 64 KB 数据缓存、断言静默、lwIP 放 IRAM 并固定在核 0、加大 Wi-Fi 缓冲。
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
 CONFIG_ESP32S3_DATA_CACHE_64KB=y
@@ -23,8 +22,7 @@ CONFIG_LWIP_EXTRA_IRAM_OPTIMIZATION=y
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=64
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=64
-# from the ESP-IDF speed guide / examples/wifi/iperf (S3 variant): larger block-ack windows, bigger lwIP mailboxes,
-# lwIP task priority equal to the Wi-Fi task
+# 参考 ESP-IDF 的 examples/wifi/iperf（S3）：更大的块确认窗口、更大的 lwIP 邮箱，lwIP 任务优先级与 Wi-Fi 任务相同
 CONFIG_ESP_WIFI_TX_BA_WIN=32
 CONFIG_ESP_WIFI_RX_BA_WIN=32
 CONFIG_LWIP_TCP_RECVMBOX_SIZE=64

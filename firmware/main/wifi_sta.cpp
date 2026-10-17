@@ -38,7 +38,7 @@ void OnEvent(void*, esp_event_base_t base, int32_t id, void* data)
   else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP)
   {
     auto* ev = static_cast<ip_event_got_ip_t*>(data);
-    ESP_LOGI(TAG, "STA address " IPSTR, IP2STR(&ev->ip_info.ip));
+    ESP_LOGI(TAG, "已获得 IP " IPSTR, IP2STR(&ev->ip_info.ip));
     xEventGroupSetBits(g_events, kGotIp);
   }
 }
@@ -51,7 +51,7 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   esp_err_t err = nvs_flash_init();
   if (err != ESP_OK)
   {
-    return err;  // never erase NVS: it holds the stored Wi-Fi credentials
+    return err;  // 不要擦除 NVS，里面存着热点参数
   }
 
   Credentials cred = {};
@@ -59,7 +59,7 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   err = nvs_open("rmlink", NVS_READONLY, &nvs);
   if (err != ESP_OK)
   {
-    ESP_LOGE(TAG, "no stored Wi-Fi credentials (nvs_open: %s)", esp_err_to_name(err));
+    ESP_LOGE(TAG, "没有保存的热点参数（nvs_open: %s）", esp_err_to_name(err));
     return err;
   }
   size_t size = sizeof(cred);
@@ -67,12 +67,12 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   nvs_close(nvs);
   if (err != ESP_OK || size != sizeof(cred) || cred.version != 1 || cred.ssid[0] == 0)
   {
-    ESP_LOGE(TAG, "stored Wi-Fi credentials missing or invalid");
+    ESP_LOGE(TAG, "保存的热点参数缺失或无效");
     return ESP_ERR_NOT_FOUND;
   }
   cred.ssid[sizeof(cred.ssid) - 1] = 0;
   cred.password[sizeof(cred.password) - 1] = 0;
-  ESP_LOGI(TAG, "using stored SSID (%u chars)", (unsigned)strlen(cred.ssid));
+  ESP_LOGI(TAG, "使用已保存的热点，SSID 长度 %u", (unsigned)strlen(cred.ssid));
 
   g_events = xEventGroupCreate();
   ESP_ERROR_CHECK(esp_netif_init());
