@@ -1,0 +1,8 @@
+[package]
+name = "xrdap-forward"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serial2 = "0.2.38"

@@ -2,23 +2,29 @@
 // XR-DAP-S3：基于 libxr 的 ESP32-S3 CMSIS-DAP 调试探针。
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
 //   Wi-Fi：连上热点后在 TCP 端口提供 CMSIS-DAP。有 TCP 客户端时 USB 关闭，客户端走后 USB 恢复。
+//   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端的 xrdap-forward 给 OpenOCD 用。
+//   三种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。
 #include <cstdint>
 
 #include "cdc_uart.hpp"
 #include "config.hpp"
 #include "dap_tcp.hpp"
+#include "dap_vendor.hpp"
+#include "debug/dap_serial_transport.hpp"
 #include "daplink_v2_profile_swd.hpp"
 #include "debug/swd_general_gpio.hpp"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_timebase.hpp"
+#include "esp_uart.hpp"
 #include "esp_usb_dev.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "libxr.hpp"
 #include "s3_dedic_gpio.hpp"
+#include "serial_link.hpp"
 #include "swd_link.hpp"
 #include "wifi_console.hpp"
 #include "wifi_sta.hpp"
@@ -116,6 +122,28 @@ class UsbSwitch
   volatile Command command_ = Command::UP;
   bool active_ = true;
 };
+
+// TCP 客户端连上时：之前别的传输发起的采样作废，USB 关闭；客户端走后：TCP 发起的采样停止，USB 恢复。
+struct TcpHandover
+{
+  UsbSwitch& usb;
+  DapVendor& vendor;
+
+  static void OnConnect(void* ctx)
+  {
+    auto* self = static_cast<TcpHandover*>(ctx);
+    self->vendor.OnTransportClosed();
+    self->vendor.SetTransport(DapVendor::Transport::TCP);
+    self->usb.Down();
+  }
+
+  static void OnDisconnect(void* ctx)
+  {
+    auto* self = static_cast<TcpHandover*>(ctx);
+    self->vendor.OnTransportClosed();
+    self->usb.Up();
+  }
+};
 }  // namespace
 
 extern "C" void app_main(void)
@@ -140,6 +168,11 @@ extern "C" void app_main(void)
 
   static Dap dap(LibXR::USB::Endpoint::EPNumber::EP1, LibXR::USB::Endpoint::EPNumber::EP1,
                  GetSwdSet().swd, nullptr);
+
+  // XR 厂商扩展（0x80 到 0x85）挂在 DAP 类的命令钩子上，USB、TCP、串口行为一致。
+  static DapVendor vendor(GetSwdSet().swd, Config::kDapPacketSize);
+  vendor.Begin(Config::kSwdCore, Config::kSamplingPriority);
+  dap.SetCommandHook(&DapVendor::Hook, &vendor);
 
   // libxr 在应用线程里执行 DAP 命令：循环调用 Step()。线程放在 SWD 核上，
   // 和 USB 中断分开，避免互相抢占。
@@ -174,7 +207,35 @@ extern "C" void app_main(void)
       {&lang}, {{&dap, &cdc}}, LibXR::ConstRawData{uid, sizeof(uid)});
   usb.Init(false);
   usb.Start(false);
+  vendor.SetUsbResetSource([](void* ctx) -> uint32_t
+                           { return static_cast<LibXR::ESP32USBDevice*>(ctx)->BusResetCount(); },
+                           &usb);
   ESP_LOGI(TAG, "USB 已启动");
+
+  // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里负责创建。
+  if constexpr (Config::kSerialLink)
+  {
+    using SerialAdapter = SerialDap<Dap>;
+    using SerialLink = LibXR::DapSerialTransport<SerialAdapter, Config::kDapPacketSize>;
+    static LibXR::ESP32UART uart(
+        static_cast<uart_port_t>(Config::kSerialUart), Config::kSerialTxGpio,
+        Config::kSerialRxGpio, LibXR::ESP32UART::PIN_NO_CHANGE, LibXR::ESP32UART::PIN_NO_CHANGE,
+        /*rx_buffer_size=*/8192, /*tx_buffer_size=*/4096, /*tx_queue_size=*/5,
+        LibXR::UART::Configuration{Config::kSerialBaud, LibXR::UART::Parity::NO_PARITY, 8, 1},
+        /*enable_dma=*/false);
+    static SerialAdapter adapter(dap, vendor);
+    static SerialLink link(adapter, uart);
+    link.SetThreadStarter(
+        [](void*, const SerialLink::ThreadConfig&, void (*entry)(void*), void* arg)
+        {
+          xTaskCreatePinnedToCore(entry, "dap_serial", 8192, arg, Config::kSerialPriority, nullptr,
+                                  Config::kSwdCore);
+        });
+    if (link.Start() != LibXR::ErrorCode::OK)
+    {
+      ESP_LOGE(TAG, "串口 DAP 链路启动失败");
+    }
+  }
 
   // Wi-Fi 和 TCP。Wi-Fi 最多等 20 秒；没连上时 Wi-Fi 仍会在后台重连，TCP 服务照常启动。
   // 没有热点参数时 Wi-Fi 不启动，只提供 USB。
@@ -186,9 +247,9 @@ extern "C" void app_main(void)
   {
     static UsbSwitch usb_switch(usb);
     usb_switch.Start();
+    static TcpHandover handover{usb_switch, vendor};
     static DapTcpServer<Dap> server(dap, Config::kTcpPort);
-    server.SetHooks([](void* sw) { static_cast<UsbSwitch*>(sw)->Down(); },
-                    [](void* sw) { static_cast<UsbSwitch*>(sw)->Up(); }, &usb_switch);
+    server.SetHooks(&TcpHandover::OnConnect, &TcpHandover::OnDisconnect, &handover);
     server.Start(Config::kSwdCore);
     ESP_LOGI(TAG, "TCP 服务已启动，端口 %u，剩余堆 %u 字节", (unsigned)Config::kTcpPort,
              (unsigned)esp_get_free_heap_size());
