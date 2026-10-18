@@ -1,0 +1,108 @@
+/**
+ * XR-DAP on the LP-MSPM0G3507 LaunchPad.
+ *
+ * Clock: SYSOSC (32 MHz) -> SYSPLL -> MCLK 80 MHz, ULPCLK 40 MHz (same PLL settings as the
+ * SDK example sysctl_mclk_syspll). SysTick: 1 ms (libxr MSPM0Timebase).
+ * UART0 on PA10 (TX) / PA11 (RX): the XDS110 backchannel UART through the J101 jumpers.
+ * TX uses a DMA basic channel, RX a DMA full channel in repeat mode (libxr MSPM0UART,
+ * Extend RX path). The libxr driver programs the UART interrupts and the DMA channels
+ * itself; SysConfig only reserves the channels and pins.
+ * GPIO_SWD: the probe's SWD pins. The firmware takes them over at start-up.
+ *
+ * @cliArgs --device "MSPM0G350X" --package "LQFP-64(PM)" --part "Default" --product "mspm0_sdk@2.11.00.07"
+ * @v2CliArgs --device "MSPM0G3507" --package "LQFP-64(PM)" --product "mspm0_sdk@2.11.00.07"
+ * @versions {"tool":"1.28.1+4785"}
+ */
+
+/**
+ * Import the modules used in this configuration.
+ */
+const Board   = scripting.addModule("/ti/driverlib/Board", {}, false);
+const GPIO    = scripting.addModule("/ti/driverlib/GPIO", {}, false);
+const GPIO1   = GPIO.addInstance();
+const SYSCTL  = scripting.addModule("/ti/driverlib/SYSCTL");
+const SYSTICK = scripting.addModule("/ti/driverlib/SYSTICK");
+const UART    = scripting.addModule("/ti/driverlib/UART", {}, false);
+const UART1   = UART.addInstance();
+
+/**
+ * Clock tree: SYSOSC 32 MHz / PDIV 2 * QDIV 10 -> VCO 160 MHz, CLK2X = 320 / 4 = 80 MHz.
+ */
+const divider1       = system.clockTree["PLL_CLK2X_DIV"];
+divider1.divideValue = 4;
+
+const divider2       = system.clockTree["PLL_PDIV"];
+divider2.divideValue = 2;
+
+const divider3       = system.clockTree["UDIV"];
+divider3.divideValue = 2;
+
+const multiplier1         = system.clockTree["PLL_QDIV"];
+multiplier1.multiplyValue = 10;
+
+const mux1       = system.clockTree["HSCLKMUX"];
+mux1.inputSelect = "HSCLKMUX_SYSPLL2X";
+
+SYSCTL.forceDefaultClkConfig = true;
+SYSCTL.clockTreeEn           = true;
+SYSCTL.validateClkStatus     = true;
+
+SYSTICK.periodEnable    = true;
+SYSTICK.period          = 80000;
+SYSTICK.interruptEnable = true;
+SYSTICK.systickEnable   = true;
+
+/**
+ * SWD pins of the probe (BoosterPack header). SWCLK J1.7 PB9, SWDIO J2.15 PB8,
+ * nRESET J2.13 PB6. SysConfig reserves them; the firmware reconfigures them.
+ */
+GPIO1.$name                              = "GPIO_SWD";
+GPIO1.associatedPins.create(3);
+GPIO1.associatedPins[0].$name            = "SWCLK";
+GPIO1.associatedPins[0].initialValue     = "SET";
+GPIO1.associatedPins[0].pin.$assign      = "PB9";
+GPIO1.associatedPins[1].$name            = "SWDIO";
+GPIO1.associatedPins[1].direction        = "INPUT";
+GPIO1.associatedPins[1].internalResistor = "PULL_UP";
+GPIO1.associatedPins[1].pin.$assign      = "PB8";
+GPIO1.associatedPins[2].$name            = "NRESET";
+GPIO1.associatedPins[2].direction        = "INPUT";
+GPIO1.associatedPins[2].internalResistor = "PULL_UP";
+GPIO1.associatedPins[2].pin.$assign      = "PB6";
+
+/**
+ * Debug port of this MCU itself (XDS110 SWD on PA19/PA20).
+ */
+Board.peripheral.$assign          = "DEBUGSS";
+Board.peripheral.swclkPin.$assign = "PA20";
+Board.peripheral.swdioPin.$assign = "PA19";
+
+/**
+ * UART0 to the XDS110 backchannel. The baud rate here is only the initial value; the
+ * firmware applies XRDAP_SERIAL_BAUD (config.hpp) at start-up.
+ */
+UART1.$name                             = "UART_0";
+UART1.targetBaudRate                    = 1000000;
+UART1.enableFIFO                        = true;
+UART1.enableExtend                      = true;
+UART1.rxFifoThreshold                   = "DL_UART_RX_FIFO_LEVEL_ONE_ENTRY";
+UART1.txFifoThreshold                   = "DL_UART_TX_FIFO_LEVEL_ONE_ENTRY";
+UART1.enableDMATX                       = true;
+UART1.enabledDMATXTriggers              = "DL_UART_DMA_INTERRUPT_TX";
+UART1.enableDMARX                       = true;
+UART1.enabledDMARXTriggers              = "DL_UART_DMA_INTERRUPT_RX";
+UART1.peripheral.$assign                = "UART0";
+UART1.peripheral.rxPin.$assign          = "PA11";
+UART1.peripheral.txPin.$assign          = "PA10";
+UART1.DMA_CHANNEL_TX.$name              = "DMA_CH_UART0_TX";
+UART1.DMA_CHANNEL_TX.addressMode        = "b2f";
+UART1.DMA_CHANNEL_TX.srcLength          = "BYTE";
+UART1.DMA_CHANNEL_TX.dstLength          = "BYTE";
+UART1.DMA_CHANNEL_TX.srcIncDec          = "INCREMENT";
+UART1.DMA_CHANNEL_TX.peripheral.$assign = "DMA_CH3";
+UART1.DMA_CHANNEL_RX.$name              = "DMA_CH_UART0_RX";
+UART1.DMA_CHANNEL_RX.addressMode        = "f2b";
+UART1.DMA_CHANNEL_RX.srcLength          = "BYTE";
+UART1.DMA_CHANNEL_RX.dstLength          = "BYTE";
+UART1.DMA_CHANNEL_RX.dstIncDec          = "INCREMENT";
+UART1.DMA_CHANNEL_RX.peripheral.$assign = "DMA_CH0";
