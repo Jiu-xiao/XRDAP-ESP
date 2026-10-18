@@ -674,7 +674,7 @@ class DapVendor
     return ok;
   }
 
-  /// 把全部条目按采样时的访问序列试读一遍，返回第二遍的耗时（第一遍包含读 CSW）。
+  /// 把全部条目按采样时的访问序列试读一遍，返回耗时。各 AP 的 CSW 先读好，不计入耗时。
   /// 试读和采样访问的是同一批地址，副作用相同。
   bool MeasureFrame(const SubItem* items, uint16_t count, uint32_t& us)
   {
@@ -684,30 +684,25 @@ class DapVendor
     }
     ResetApCache();
     bool ok = true;
-    for (int pass = 0; ok && pass < 2; ++pass)
+    for (uint16_t i = 0; ok && i < count; ++i)
     {
-      ApState ap{};
-      ap.ap = 0xFFU;
-      const int64_t t0 = esp_timer_get_time();
-      for (uint16_t i = 0; i < count; ++i)
-      {
-        const Item& it = items[i].item;
-        if (ap.ap != it.ap)
-        {
-          const ApState* st = EnsureAp(it.ap);
-          if (st == nullptr)
-          {
-            ok = false;
-            break;
-          }
-          ap = *st;
-          ap.written = false;
-        }
-        uint8_t value[8];
-        (void)ReadItem(ap, it, value);
-      }
-      us = static_cast<uint32_t>(esp_timer_get_time() - t0);
+      ok = EnsureAp(items[i].item.ap) != nullptr;
     }
+    ApState ap{};
+    ap.ap = 0xFFU;
+    const int64_t t0 = esp_timer_get_time();
+    for (uint16_t i = 0; ok && i < count; ++i)
+    {
+      const Item& it = items[i].item;
+      if (ap.ap != it.ap)
+      {
+        ap = *EnsureAp(it.ap);
+        ap.written = false;
+      }
+      uint8_t value[8];
+      (void)ReadItem(ap, it, value);
+    }
+    us = static_cast<uint32_t>(esp_timer_get_time() - t0);
     swd_.InvalidateSelectCache();
     xSemaphoreGive(swd_mutex_);
     return ok;
@@ -750,7 +745,7 @@ class DapVendor
     {
       return false;
     }
-    const uint32_t csw = (st.base_csw & ~0x3FU) | SizeCode(size);
+    const uint32_t csw = (st.base_csw & ~0x37U) | SizeCode(size);
     if (st.written && st.written_csw == csw)
     {
       return true;

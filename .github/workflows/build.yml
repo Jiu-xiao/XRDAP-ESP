@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  firmware:
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.2
     steps:
@@ -38,9 +38,68 @@ jobs:
           name: xrdap-esp32-s3
           path: out/*
 
+  forwarder:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bin: xrdap-forward.exe
+            asset: xrdap-forward-windows-x86_64.exe
+          - os: ubuntu-latest
+            bin: xrdap-forward
+            asset: xrdap-forward-linux-x86_64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: host/xrdap-forward
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: host/xrdap-forward
+
+      - name: 测试
+        run: cargo test --release
+
+      - name: 编译
+        run: cargo build --release
+
+      - name: 整理转发器文件
+        run: |
+          mkdir -p dist
+          cp target/release/${{ matrix.bin }} dist/${{ matrix.asset }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: host/xrdap-forward/dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [firmware, forwarder]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 整理发布文件
+        run: |
+          mkdir release
+          cp artifacts/xrdap-esp32-s3/xrdap-esp32-s3.bin release/
+          cp artifacts/xrdap-forward-windows-x86_64.exe/xrdap-forward-windows-x86_64.exe release/
+          cp artifacts/xrdap-forward-linux-x86_64/xrdap-forward-linux-x86_64 release/
+          chmod +x release/xrdap-forward-linux-x86_64
+          cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS
+
       - name: 发布 release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: out/*
+          files: release/*
           generate_release_notes: true

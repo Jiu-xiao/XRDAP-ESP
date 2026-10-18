@@ -1,6 +1,6 @@
 # XRDAP-ESP32-S3
 
-ESP32-S3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。可以通过 USB 或 Wi-Fi（TCP）连接，用来烧录和调试 SWD 目标芯片（已测 STM32G431KB）。
+ESP32-S3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。可以通过 USB、串口或 Wi-Fi（TCP）连接，用来烧录和调试 SWD 目标芯片（已测 STM32G431KB）。
 
 ## 接线
 
@@ -24,7 +24,7 @@ python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
 
 ### 自己编译
 
-需要 ESP-IDF v5.5。libxr 以 git 子模块形式放在 `third_party/libxr`，克隆时带上 `--recurse-submodules`（已经克隆的执行 `git submodule update --init`）。
+需要 ESP-IDF v5.5。libxr 以 git 子模块形式放在 `third_party/libxr`，跟踪 libxr 的 `feat/xrdap-serial-transport` 分支。克隆时带上 `--recurse-submodules`（已经克隆的执行 `git submodule update --init`）。
 
 ```
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP32-S3.git
@@ -33,27 +33,68 @@ idf.py build
 idf.py -p COM3 flash
 ```
 
-引脚、核分配、TCP 端口等固定参数在 `firmware/main/config.hpp`。每次推送和 PR 都会由 GitHub Actions 编译，打 `v*` 标签会自动发布 release。
+引脚、核分配、TCP 端口、串口波特率等固定参数在 `firmware/main/config.hpp`。每次推送和 PR 都会由 GitHub Actions 编译，打 `v*` 标签会自动发布 release。
 
 ## 上位机怎么连
+
+探针提供 USB、串口、Wi-Fi（TCP）三种连接，三者共用同一个 DAP 实例，同一时间只用其中一种。有 TCP 客户端连接时 USB 会自动关闭；USB 和串口之间没有这样的切换，不要同时使用。
 
 ### USB
 
 插上 ESP32-S3 的 USB 口（板上标 USB 的那个，不是串口桥那个）。设备名 `XR-DAP-S3`，VID:PID 为 `1D50:6199`（XRUSB 登记的标识），序列号是 `XRobot-XRDAP-` 加芯片唯一 ID。CMSIS-DAP v2（Bulk），Windows 自带 WinUSB，免驱。同时会多出一个 CDC 虚拟串口。
 
-OpenOCD：
+OpenOCD（Espressif v0.12.0-esp32-20260831 实测）：
 
 ```tcl
 adapter driver cmsis-dap
-cmsis-dap vid_pid 0x1d50 0x6199
+adapter usb vid_pid 0x1d50 0x6199
 transport select swd
 source [find target/stm32g4x.cfg]
 adapter speed 4000
 ```
 
-同一台电脑上有多个使用这组 VID:PID 的设备时，用 `adapter serial <序列号>` 指定。
+这一版 OpenOCD 不接受 `cmsis-dap vid_pid`，要用 `adapter usb vid_pid`。同一台电脑上有多个使用这组 VID:PID 的设备时，加一行 `adapter serial <序列号>` 指定。
 
-Keil：调试器选 CMSIS-DAP Debugger，端口选 SW，设备选你的目标芯片。pyOCD、probe-rs 按平常的 CMSIS-DAP 方式用，不需要额外配置。
+Keil：调试器选 CMSIS-DAP Debugger，端口选 SW，设备选目标芯片。pyOCD、probe-rs 按平常的 CMSIS-DAP 方式使用，不需要额外配置。
+
+### 串口
+
+探针在 UART0 上也提供 CMSIS-DAP。UART0 接板上的 USB 转串口芯片（GPIO43 TX，GPIO44 RX），也就是串口桥那个 USB 口，波特率 4 Mbaud。板上的 CH343 在 5 Mbaud 下不能正常工作，所以固定为 4 Mbaud。UART0 用于 DAP 之后，系统日志控制台已关闭。
+
+OpenOCD 不能直接使用这个串口，电脑端用 `host/xrdap-forward` 把它转成 OpenOCD 的 CMSIS-DAP TCP 后端。编译需要 Rust 工具链：
+
+```
+cd host/xrdap-forward
+cargo build --release
+```
+
+生成的程序在 `target/release/` 下。运行时指定探针的串口：
+
+```
+xrdap-forward --serial COM35
+```
+
+| 参数 | 默认值 | 作用 |
+|---|---|---|
+| `--serial` | 无，必填 | 探针的串口，例如 `COM35` 或 `/dev/ttyUSB0` |
+| `--baud` | 4000000 | 串口波特率，与固件一致 |
+| `--listen` | `127.0.0.1:3241` | 给 OpenOCD 连接的 TCP 地址 |
+| `--keep-lines` | 关 | 打开串口后不改 DTR/RTS |
+| `--verbose` | 关 | 打印每个转发的请求和响应 |
+
+打开串口时，USB 转串口芯片的 DTR/RTS 会让 ESP32 复位一次。xrdap-forward 反复查询探针，等它启动完成（最长 10 秒），打印探针报告的 DAP 包长后开始监听。OpenOCD 使用 TCP 后端连接 127.0.0.1：
+
+```tcl
+adapter driver cmsis-dap
+cmsis-dap backend tcp
+cmsis-dap tcp host 127.0.0.1
+cmsis-dap tcp port 3241
+transport select swd
+source [find target/stm32g4x.cfg]
+adapter speed 4000
+```
+
+OpenOCD 一侧用的是 TCP 后端，Windows 上的已知问题见下面的 Wi-Fi（TCP）一节。串口帧格式见 [docs/protocol.md](docs/protocol.md)。
 
 ### Wi-Fi 配网
 
@@ -71,7 +112,7 @@ wifi set 热点名 密码
 | `wifi clear` | 清除已保存的热点参数 |
 | `help` | 列出命令 |
 
-热点参数存在设备的 NVS 里（命名空间 `rmlink`，键 `wifi`），格式和 RMLink 固件一致，用 RMLink 配过网的板子不用重配。没有热点参数时 Wi-Fi 不启动，只能用 USB。
+热点参数存在设备的 NVS 里（命名空间 `rmlink`，键 `wifi`），格式和 RMLink 固件一致，用 RMLink 配过网的板子不用重配。没有热点参数时 Wi-Fi 不启动，只能用 USB 或串口。
 
 ### Wi-Fi（TCP）
 
@@ -94,24 +135,47 @@ adapter speed 4000
 - TCP 只有 OpenOCD 支持。Keil、pyOCD、probe-rs 都不支持 CMSIS-DAP over TCP。
 - 有 TCP 客户端连接时，USB 会关闭（虚拟串口也会消失）；客户端断开后 USB 自动恢复。
 - 同一时间只服务一个 TCP 客户端。客户端异常消失（没有正常断开）时，约 11 秒后连接会被释放。
+- Windows 上要在配置里多加两行：
 
-## 实测速度
+  ```tcl
+  cmsis-dap quirk enable
+  cmsis-dap tcp min_timeout 10
+  ```
 
-目标 STM32G431KB，杜邦线连接，OpenOCD / 自写客户端测得。
+  这一版 OpenOCD 的 TCP 后端在 Windows 上把"暂时没有数据"当成错误（它看 `errno`，Winsock 不写 `errno`）：启动要等约 10 秒、刷屏 `error reading header`，多个请求同时在途时响应会错位，报 `command mismatch`。`quirk enable` 让它一次只发一个请求，`min_timeout 10` 把启动等待缩到约 1 秒，启动时的报错仍会打印，可以忽略。OpenOCD 上游已修复（提交 e89e73839d53），Espressif 还没有带这个修复的发布版。Linux 上不需要这两行。
+
+## XR 厂商扩展
+
+除标准 CMSIS-DAP 命令外，探针还实现了一组厂商命令（0x80 到 0x85）：一次读写多个地址，沿指针链读取变量，以及在探针上按固定周期采样变量、由上位机批量取回。采样由探针定时，频率不受链路往返延迟限制。USB、串口、TCP 下行为相同。
+
+采样期间探针只接受 `DAP_Info`、`DAP_HostStatus` 和这组命令，其他命令回 `0xFF`，所以采样不能和 OpenOCD 调试同时进行。命令格式和采样规则见 [docs/protocol.md](docs/protocol.md)。
+
+目前还没有使用这组命令的上位机工具，只用测试脚本验证过。
+
+## 实测
+
+目标 STM32G431KB，杜邦线连接，OpenOCD / 自写客户端测得。4 MHz 的 OpenOCD 各项和采样一项为 2026-10-18 用本仓库固件测得。
 
 | 项目 | 结果 |
 |---|---|
 | USB 块读（12 MHz，4 个请求同时在途） | 约 970 KiB/s，已到全速 USB 的上限 |
 | USB 块写 | 约 780 KiB/s |
 | USB 下 OpenOCD 读 128 KiB（12 MHz） | 约 690 KiB/s |
+| USB 下 OpenOCD 读 128 KiB（4 MHz） | 0.62 s |
+| USB 下 OpenOCD 烧录 16 KiB 并校验（4 MHz） | 1.09 s |
+| USB 下 OpenOCD 连接、断开 20 次（4 MHz） | 20 次全部成功，平均每次 0.09 s |
 | Wi-Fi 块读 / 块写（12 MHz） | 约 380 / 450 KiB/s |
 | Wi-Fi 最小命令往返 | 约 1.3 ms |
 | Wi-Fi 读 4 到 8 个变量，每秒刷新次数 | 约 500 到 620 次 |
+| 探针端采样 8 个条目（1、2、4、8 字节变量和一条三级指针链，SWD 设为 24 MHz） | 周期 600 µs、450 µs 没有跳拍；400 µs 及以下被 SUB_SET 拒绝 |
+| 探针端采样 8 个条目（含分频），周期 2 ms，连续 5 分钟（USB） | 149999 帧，没有丢帧、跳拍，时间戳与 k × 2 ms 的偏差在 -27 到 +12 µs |
+| Windows 上 OpenOCD 经串口转发读 128 KiB / 烧录 16 KiB 并校验（4 MHz，加上面两行） | 2.1 s / 2.3 s（含约 1 s 连接等待） |
+| Windows 上 OpenOCD 经 Wi-Fi 读 128 KiB / 烧录 16 KiB 并校验（4 MHz，加上面两行） | 2.5 s / 3.0 s（含约 1 s 连接等待） |
 
 ## 已知问题
 
-- SWD 时钟建议不超过 8 MHz，先用 4 MHz。能跑多快取决于外部条件：线的长度和阻抗、目标板的上拉和走线、杜邦线质量等。我们的板子用杜邦线，2 到 8 MHz 下 20 秒的读写测试没有出错，4 MHz 下连续 5 分钟没有出错；10 MHz 及以上写应答经常出 FAULT（20 秒内几十次），OpenOCD 和 probe-rs 会自动重试，所以平时看不到，但速度会下降。需要更高时钟的话，建议用示波器看 SWCLK 和 SWDIO 的波形，调整外围电路（缩短线、串联电阻、上拉等），再试更高的时钟。
-- 无线每个命令有约 0.4 ms 的固定开销，每次读一个包的方式做不到 1 kHz 的采样，需要探针板上采样的协议，目前没有。
+- SWD 时钟建议不超过 8 MHz，先用 4 MHz。能跑多快取决于外部条件：线的长度和阻抗、目标板的上拉和走线、杜邦线质量等。测试板用杜邦线连接，2 到 8 MHz 下 20 秒的读写测试没有出错，4 MHz 下连续 5 分钟没有出错；10 MHz 及以上写应答经常出 FAULT（20 秒内几十次），OpenOCD 和 probe-rs 会自动重试，所以平时看不到，但速度会下降。需要更高时钟时，先用示波器看 SWCLK 和 SWDIO 的波形，调整外围电路（缩短线、串联电阻、上拉等），再试更高的时钟。
+- Windows 上 OpenOCD 的 TCP 后端问题见 Wi-Fi（TCP）一节。
 
 ## 许可证
 
