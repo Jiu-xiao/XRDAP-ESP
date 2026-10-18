@@ -638,7 +638,10 @@ class DapVendor
 
   void ResetApCache()
   {
-    std::memset(ap_, 0, sizeof(ap_));
+    for (ApState& st : ap_)
+    {
+      st = ApState{};
+    }
     ap_count_ = 0U;
   }
 

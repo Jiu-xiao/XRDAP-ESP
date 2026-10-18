@@ -3,7 +3,6 @@
 
 #include <cstdint>
 
-#include "config.hpp"
 #include "driver/dedic_gpio.h"
 #include "driver/gpio.h"
 #include "esp_attr.h"
@@ -17,14 +16,17 @@
 namespace XrDap
 {
 
-/// ESP32-S3 的 CPU 专用 GPIO，以 LibXR::GPIO 接口提供给 SwdGeneralGPIO。
-/// 读写都是单条 CPU 指令，比走 GPIO 矩阵寄存器快得多。
-/// 专用 GPIO 只能在创建它的那个核上使用。
-class S3DedicGpio final : public LibXR::GPIO
+/// CPU 专用 GPIO，以 LibXR::GPIO 接口提供给 SwdGeneralGPIO。
+/// 读写都是单条 CPU 指令（ESP32-S3 是 Xtensa 的 GPIO 指令，ESP32-C3/H2 是 RISC-V 的 CSR 读写），
+/// 比走 GPIO 矩阵寄存器快得多。专用 GPIO 只能在创建它的那个核上使用。
+/// 只支持 GPIO0 到 GPIO31（输出使能用的是 GPIO_ENABLE_REG）。
+class DedicGpioPin final : public LibXR::GPIO
 {
  public:
   /// bidirectional 为 true 时保留输入通路，Read() 才有效。
-  S3DedicGpio(int gpio_num, bool bidirectional, bool pull_up) : gpio_(gpio_num)
+  /// drive_strength：引脚驱动强度，0 最弱，3 最强。
+  DedicGpioPin(int gpio_num, bool bidirectional, bool pull_up, int drive_strength)
+      : gpio_(gpio_num)
   {
     gpio_reset_pin(static_cast<gpio_num_t>(gpio_));
     gpio_set_direction(static_cast<gpio_num_t>(gpio_), GPIO_MODE_INPUT_OUTPUT);
@@ -44,14 +46,15 @@ class S3DedicGpio final : public LibXR::GPIO
     }
 
     // CPU 数据通路一直保留，只用 GPIO_ENABLE 寄存器控制引脚方向，
-    // 这样切换输入输出只需写一次寄存器。
+    // 这样切换输入输出只需写一次寄存器。OEN_SEL 置 1 表示输出使能取自 GPIO_ENABLE，
+    // 不取外设信号；三种芯片上这一位的含义相同，位号不同，用宏取。
     uint32_t sel = REG_READ(GPIO_FUNC0_OUT_SEL_CFG_REG + gpio_ * 4);
     sel = (sel | GPIO_FUNC0_OEN_SEL) & ~GPIO_FUNC0_OEN_INV_SEL;
     REG_WRITE(GPIO_FUNC0_OUT_SEL_CFG_REG + gpio_ * 4, sel);
     OutputEnable(true);
 
     gpio_set_drive_capability(static_cast<gpio_num_t>(gpio_),
-                              static_cast<gpio_drive_cap_t>(Config::kPadDriveStrength));
+                              static_cast<gpio_drive_cap_t>(drive_strength));
   }
 
   bool Read() override { return (dedic_gpio_cpu_ll_read_in() & in_mask_) != 0U; }
@@ -85,14 +88,7 @@ class S3DedicGpio final : public LibXR::GPIO
  private:
   void OutputEnable(bool on)
   {
-    if (on)
-    {
-      ::GPIO.enable_w1ts = 1U << gpio_;
-    }
-    else
-    {
-      ::GPIO.enable_w1tc = 1U << gpio_;
-    }
+    REG_WRITE(on ? GPIO_ENABLE_W1TS_REG : GPIO_ENABLE_W1TC_REG, 1U << gpio_);
   }
 
   int gpio_;
