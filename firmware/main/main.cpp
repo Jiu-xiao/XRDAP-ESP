@@ -23,7 +23,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "libxr.hpp"
-#include "s3_dedic_gpio.hpp"
+#include "dedic_gpio_pin.hpp"
 #include "serial_link.hpp"
 #include "swd_link.hpp"
 #include "wifi_console.hpp"
@@ -42,15 +42,17 @@ alignas(64) uint8_t ep1_dap[4096];
 alignas(64) uint8_t ep2_cdc[1024];
 alignas(64) uint8_t ep3_comm[128];
 
-using SwdLink = LibXR::Debug::SwdGeneralGPIO<S3DedicGpio, S3DedicGpio>;
+using SwdLink = LibXR::Debug::SwdGeneralGPIO<DedicGpioPin, DedicGpioPin>;
 using Dap = LibXR::USB::DapLinkV2Class<SwdWithClock, Config::kDapPacketSize, 4u,
                                        Config::kDapPacketSize>;
 
 // SWD 相关对象。必须在 Config::kSwdCore 这个核上创建，专用 GPIO 只能在创建它的核上使用。
 struct SwdSet
 {
-  S3DedicGpio swclk{Config::kSwclkGpio, /*bidirectional=*/false, /*pull_up=*/false};
-  S3DedicGpio swdio{Config::kSwdioGpio, /*bidirectional=*/true, /*pull_up=*/true};
+  DedicGpioPin swclk{Config::kSwclkGpio, /*bidirectional=*/false, /*pull_up=*/false,
+                     Config::kPadDriveStrength};
+  DedicGpioPin swdio{Config::kSwdioGpio, /*bidirectional=*/true, /*pull_up=*/true,
+                     Config::kPadDriveStrength};
   // 延时参数填 0：SwdGeneralGPIO 走全速路径，SWCLK 频率由 swd_link.hpp 里设定。
   SwdLink link{swclk, swdio, 0u};
   SwdWithClock swd{link, swclk, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000U};
