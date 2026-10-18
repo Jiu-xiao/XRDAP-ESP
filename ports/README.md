@@ -6,6 +6,8 @@ XR 厂商扩展命令（多地址读写、指针链、探针端采样）在两�
 
 目前两个版本只验证了编译，还没有在硬件上运行过。
 
+MSPM0G3507 LaunchPad 版见 [mspm0/README.md](mspm0/README.md)。
+
 ## 接线
 
 两块开发板都用 GPIO5 和 GPIO4，与 S3 版相同。

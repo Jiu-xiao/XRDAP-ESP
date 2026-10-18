@@ -16,7 +16,7 @@ ESP32-S3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobo
 
 ### 直接烧录 release
 
-在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`，这是合并好的完整镜像，从地址 0 烧录：
+在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`，这是合并好的完整镜像，从地址 0 烧录。同一个 release 里还有 ESP32-C3 / ESP32-H2 版的镜像（`xrdap-esp32-c3.bin`、`xrdap-esp32-h2.bin`，见 [ports/README.md](ports/README.md)）和 Windows、Linux 版的串口转发工具 `xrdap-forward`。
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
