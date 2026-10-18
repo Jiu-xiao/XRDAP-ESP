@@ -56,16 +56,16 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            bin: xrdap-forward.exe
-            asset: xrdap-forward-windows-x86_64.exe
+            exe: .exe
+            suffix: windows-x86_64.exe
           - os: ubuntu-latest
-            bin: xrdap-forward
-            asset: xrdap-forward-linux-x86_64
+            exe: ''
+            suffix: linux-x86_64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
-        working-directory: host/xrdap-forward
+        working-directory: host
     steps:
       - uses: actions/checkout@v4
 
@@ -73,23 +73,30 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: host/xrdap-forward
+          workspaces: host
 
       - name: 测试
-        run: cargo test --release
+        run: cargo test --release --workspace
 
       - name: 编译
-        run: cargo build --release
+        run: cargo build --release --workspace
 
-      - name: 整理转发器文件
+      - name: 整理上位机程序
         run: |
           mkdir -p dist
-          cp target/release/${{ matrix.bin }} dist/${{ matrix.asset }}
+          cp target/release/xrdap-forward${{ matrix.exe }} dist/xrdap-forward-${{ matrix.suffix }}
+          cp target/release/xrdap${{ matrix.exe }} dist/xrdap-${{ matrix.suffix }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: host/xrdap-forward/dist/${{ matrix.asset }}
+          name: xrdap-forward-${{ matrix.suffix }}
+          path: host/dist/xrdap-forward-${{ matrix.suffix }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xrdap-${{ matrix.suffix }}
+          path: host/dist/xrdap-${{ matrix.suffix }}
           if-no-files-found: error
 
   release:
@@ -109,7 +116,9 @@ jobs:
           cp artifacts/xrdap-esp32-h2.bin/xrdap-esp32-h2.bin release/
           cp artifacts/xrdap-forward-windows-x86_64.exe/xrdap-forward-windows-x86_64.exe release/
           cp artifacts/xrdap-forward-linux-x86_64/xrdap-forward-linux-x86_64 release/
-          chmod +x release/xrdap-forward-linux-x86_64
+          cp artifacts/xrdap-windows-x86_64.exe/xrdap-windows-x86_64.exe release/
+          cp artifacts/xrdap-linux-x86_64/xrdap-linux-x86_64 release/
+          chmod +x release/xrdap-forward-linux-x86_64 release/xrdap-linux-x86_64
           cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
       - name: 发布 release

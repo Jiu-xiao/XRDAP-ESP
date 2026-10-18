@@ -1,8 +1,9 @@
 [package]
 name = "xrdap-forward"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
-serial2 = "0.2.38"
+xrdap = { workspace = true }
+clap = { workspace = true }
