@@ -12,7 +12,6 @@
 #include "dap_vendor.hpp"
 #include "debug/dap_serial_transport.hpp"
 #include "daplink_v2_profile_swd.hpp"
-#include "debug/swd_general_gpio.hpp"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_mac.h"
@@ -25,7 +24,7 @@
 #include "libxr.hpp"
 #include "dedic_gpio_pin.hpp"
 #include "serial_link.hpp"
-#include "swd_link.hpp"
+#include "swd_engine.hpp"
 #include "wifi_console.hpp"
 #include "wifi_sta.hpp"
 
@@ -42,8 +41,7 @@ alignas(64) uint8_t ep1_dap[4096];
 alignas(64) uint8_t ep2_cdc[1024];
 alignas(64) uint8_t ep3_comm[128];
 
-using SwdLink = LibXR::Debug::SwdGeneralGPIO<DedicGpioPin, DedicGpioPin>;
-using Dap = LibXR::USB::DapLinkV2Class<SwdWithClock, Config::kDapPacketSize, 4u,
+using Dap = LibXR::USB::DapLinkV2Class<SwdEngine, Config::kDapPacketSize, 4u,
                                        Config::kDapPacketSize>;
 
 // SWD 相关对象。必须在 Config::kSwdCore 这个核上创建，专用 GPIO 只能在创建它的核上使用。
@@ -53,9 +51,7 @@ struct SwdSet
                      Config::kPadDriveStrength};
   DedicGpioPin swdio{Config::kSwdioGpio, /*bidirectional=*/true, /*pull_up=*/true,
                      Config::kPadDriveStrength};
-  // 延时参数填 0：SwdGeneralGPIO 走全速路径，SWCLK 频率由 swd_link.hpp 里设定。
-  SwdLink link{swclk, swdio, 0u};
-  SwdWithClock swd{link, swclk, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000U};
+  SwdEngine swd{swclk, swdio, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000U};
 };
 
 SwdSet& GetSwdSet()

@@ -75,6 +75,13 @@ class DedicGpioPin final : public LibXR::GPIO
   /// 每次写沿之后等待的 CPU 周期数，0 表示不等待（全速）。
   void SetEdgeSpinCycles(uint32_t cycles) { edge_spin_cycles_ = cycles; }
 
+  /// 专用 GPIO 输出、输入寄存器里这个引脚对应的位，供 SwdEngine 一条指令同时写两个引脚。
+  uint32_t OutMask() const { return out_mask_; }
+  uint32_t InMask() const { return in_mask_; }
+
+  /// 打开或关闭引脚的输出驱动（写 GPIO_ENABLE 寄存器，生效有十几个 CPU 周期的延迟）。
+  void SetOutputEnable(bool on) { OutputEnable(on); }
+
   LibXR::ErrorCode EnableInterrupt() override { return LibXR::ErrorCode::NOT_SUPPORT; }
   LibXR::ErrorCode DisableInterrupt() override { return LibXR::ErrorCode::NOT_SUPPORT; }
 
@@ -89,6 +96,10 @@ class DedicGpioPin final : public LibXR::GPIO
   void OutputEnable(bool on)
   {
     REG_WRITE(on ? GPIO_ENABLE_W1TS_REG : GPIO_ENABLE_W1TC_REG, 1U << gpio_);
+    // GPIO_ENABLE 在外设总线上，写操作先进写缓冲，总线忙时要几十个 CPU 周期才真正生效（实测过一次两位数据
+    // 之后才生效，前两位被上拉成 1，且两位翻转校验位查不出来）。读回同一个外设的寄存器会等写完成，
+    // 之后调用方再等一小段，引脚就已经切换好了。
+    (void)REG_READ(GPIO_ENABLE_REG);
   }
 
   int gpio_;
