@@ -1,0 +1,6 @@
+# 热路径（SWD 位带、DAP 命令处理、TCP 收发）都在 main.cpp 里实例化。
+# 放进 IRAM 运行，避免从 Flash 取指令时的缓存未命中（与 S3 版相同）。
+[mapping:xrdap_hot]
+archive: libmain.a
+entries:
+    main (noflash)
