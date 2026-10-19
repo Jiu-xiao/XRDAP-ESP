@@ -9,6 +9,7 @@ ESP32-C3 已在硬件上验证（2026-10-19，原生 USB 的 C3 板，目标 STM
 - 串口链路（USB Serial/JTAG）：DAP_Info、厂商 INFO、DPIDR、读写 RAM 的 1/2/4/8 字节（写后读回一致），SWD 时钟 1、4、10、20 MHz 都没有错误。
 - 探针端采样（SWD 20 MHz，经 USB Serial/JTAG 取数据）：4 个变量最短 300 µs（约 3.3 kHz）没有跳拍；1 ms、500 µs、350 µs 各 5 秒都没有跳拍、丢帧；32 个变量 2 ms 没有跳拍。周期接近单帧耗时时跳拍有计数，探针一直能响应。
 - OpenOCD 经 `xrdap-forward`（Windows，带 `cmsis-dap quirk enable` 和 `min_timeout 10`）识别 Cortex-M4、读内存，导出 64 KiB SRAM 0.56 s（约 115 KiB/s，2 MHz）。
+- Wi-Fi（TCP 3241，经芯片 USB 口上的命令行配网）：INFO、读写正常；4 个变量 1 ms 周期 5 秒没有跳拍，500 µs 跳 19 拍（约 0.2%），350 µs 跳得多。采样优先级排在 lwIP 之上之前，500 µs 跳 585 拍。连着 Wi-Fi 时串口采样 350 µs 也会偶尔跳拍（Wi-Fi 驱动在同一个核上）。OpenOCD 直连 C3 的 TCP（Windows，带上面两行）导出 64 KiB SRAM 0.87 s（约 74 KiB/s）。
 - 芯片 USB 口上的命令行和 DAP 链路共用一个口：终端输入、DAP 读写、采样交替进行都正常，二进制数据不会让命令行输出（`tests-repo/mux_test.py`）。
 - 还没有测烧录 Flash。
 
@@ -93,6 +94,6 @@ wifi set 热点名 密码
 ## 与 S3 版的区别
 
 - 没有 USB CMSIS-DAP 接口，Keil、pyOCD、probe-rs 不能直接使用，只能通过 OpenOCD 的 TCP 后端。
-- 单核芯片，SWD、DAP 命令、采样、Wi-Fi 都在同一个核上。任务优先级见 `config.hpp`：采样任务由节拍定时器唤醒、节拍之间阻塞，排在串口和 TCP 的 DAP 任务之上、lwIP 和 Wi-Fi 之下；每个周期至少留 1/8 周期给别的任务。早先采样任务优先级最低时，串口取数据会挤掉节拍（4 个变量 1 ms 周期 5 秒跳 24 拍），调高后为 0。
+- 单核芯片，SWD、DAP 命令、采样、Wi-Fi 都在同一个核上。任务优先级见 `config.hpp`：采样任务由节拍定时器唤醒、节拍之间阻塞，排在串口、TCP 的 DAP 任务和 lwIP 之上，esp_timer 和 Wi-Fi 驱动之下；每个周期至少留 1/8 周期给别的任务。早先采样任务优先级最低时，串口取数据会挤掉节拍（4 个变量 1 ms 周期 5 秒跳 24 拍），调高后为 0。
 - CPU 频率较低（C3 160 MHz，H2 96 MHz），SWCLK 能达到的最高频率比 S3 低。SWCLK 频率的校正值沿用 S3 的实测值，还没有在这两种芯片上量过。
 - 与 S3 版共用 `firmware/main` 下的源文件（厂商扩展、TCP 服务、串口适配、专用 GPIO、Wi-Fi）。ESP32-H2 的 USB Serial/JTAG 驱动是从 libxr 复制的 `esp32c3-h2/main/esp_cdc_jtag_h2.*`，因为 libxr 里的那一份目前只在 C3 和 C6 上编译。

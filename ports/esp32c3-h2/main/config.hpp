@@ -31,12 +31,13 @@ constexpr uint16_t kDapPacketSize = 1024;  // 通告给上位机的 DAP 包长
 constexpr uint16_t kTcpPort = 3241;        // 只有 C3 有 Wi-Fi
 
 // 单核芯片，所有任务都在核 0。优先级从低到高：
-//   空闲任务 0 < libxr 定时器 3 < Wi-Fi 命令行 4 < 串口 DAP 8 < TCP DAP 10 < 采样 12
-//   < lwIP 18 < esp_timer 22 < Wi-Fi 23。
+//   空闲任务 0 < libxr 定时器 3 < Wi-Fi 命令行 4 < 串口 DAP 8 < TCP DAP 10 < lwIP 18
+//   < 采样 19 < esp_timer 22 < Wi-Fi 23。
 // 采样任务由节拍定时器唤醒，节拍之间阻塞，每个周期至少留 1/8 周期给别的任务，所以可以排在
-// 串口和 TCP 之上：取数据时不再挤掉节拍。它仍低于 lwIP 和 Wi-Fi，不拖住无线协议栈。
+// 串口、TCP 和 lwIP 之上：上位机取数据时不再挤掉节拍，lwIP 最多晚一拍处理。它低于 esp_timer
+// 和 Wi-Fi 驱动，不拖住无线协议栈；Wi-Fi 收发仍会偶尔挤掉节拍，这是单核的限制。
 constexpr int kCore = 0;
-constexpr unsigned kSamplingPriority = 12;
+constexpr unsigned kSamplingPriority = 19;
 constexpr unsigned kLibxrTimerPriority = 3;
 constexpr unsigned kSerialPriority = 8;
 
