@@ -453,7 +453,7 @@ est_frame_us 大于 period_us 时返回 0x03，响应里照样填写 max_frame_b
 | 0x05、0x06 | 目标芯片厂商、名称 | 不提供（空） |
 | 0x07 | 板子厂商 | `XRobot` |
 | 0x08 | 板子名 | 与产品相同 |
-| 0x09 | 固件版本 | 当前为 `0.2.0` |
+| 0x09 | 固件版本 | 当前为 `0.3.0` |
 
 序列号对 USB、串口、TCP 三种连接相同，上位机据此认出同一块探针。
 
@@ -468,7 +468,7 @@ est_frame_us 大于 period_us 时返回 0x03，响应里照样填写 max_frame_b
 | 实例名 | 序列号，例如 `XRobot-XRDAP-E8069093EF1C` |
 | TXT `serial` | 序列号 |
 | TXT `chip` | `esp32s3` 或 `esp32c3` |
-| TXT `fw` | 固件版本，例如 `0.2.0` |
+| TXT `fw` | 固件版本，例如 `0.3.0` |
 
 OpenOCD 可以直接把主机名写进 `cmsis-dap tcp host`。上位机枚举 `_xrdap._tcp` 服务即可列出局域网内的探针，用 TXT 的 `serial` 与 USB、串口上的同一块探针对应。mDNS 启动失败只记日志，不影响 TCP 服务。
 
@@ -481,4 +481,30 @@ ESP32-C3 的 USB 口是 USB Serial/JTAG，电脑上是一个 CDC 串口，DAP �
 3. 其余数据逐字节交给命令行。命令行只在收到一行人打的命令并以回车结束后才输出；一行里出现控制字符时整行丢弃。
 
 因此 DAP 帧和命令行的输出不会混在一起：调试工具收到的永远是 DAP 响应帧，终端里 `help`、`wifi set` 等命令照常可用。终端不要改动 DTR/RTS，否则 USB Serial/JTAG 可能复位芯片。ESP32-S3 的串口链路在 UART0 上，不做这种分流；它的命令行在 USB 的 CDC 虚拟串口上。
+
+## 6. USB/IP 虚拟设备
+
+探针在 TCP 3240 端口提供 USB/IP（协议见 Linux 内核文档 `usb/usbip_protocol.rst`，字段大端）。实现在 `firmware/common/usbip_device.hpp`，上位机 xrdap 库的 `usbip` 模块是同一个设备模型。
+
+| 操作 | 处理 |
+|---|---|
+| `OP_REQ_DEVLIST` (0x8005) | 回一个设备，总线号 `1-1`，然后关闭连接 |
+| `OP_REQ_IMPORT` (0x8003) | 总线号为 `1-1` 时回设备信息，之后是 URB；其他总线号回状态 1 |
+| `USBIP_CMD_SUBMIT` (1) | 端点 0：标准请求和描述符；端点 1：Bulk OUT 执行 DAP 命令，Bulk IN 取响应 |
+| `USBIP_CMD_UNLINK` (2) | 取消还在等数据的 IN；找到时回 -ECONNRESET，否则回 0 |
+
+设备：
+
+| 项 | 值 |
+|---|---|
+| VID:PID、bcdDevice | 1D50:6199，0x0200（S3 真 USB 设备是 0x0100；Windows 按这三项缓存描述符） |
+| bcdUSB、速度 | 2.10（带 BOS），高速 |
+| 字符串 | 1 `XRobot`，2 `XR-DAP-S3 CMSIS-DAP` / `XR-DAP-C3 CMSIS-DAP`，3 序列号（同 DAP_Info），4 `CMSIS-DAP v2` |
+| 接口 | 一个，厂商类 0xFF，接口名为字符串 4 |
+| 端点 | Bulk OUT 0x01、Bulk IN 0x81，512 字节 |
+| BOS | MS OS 2.0 平台能力，厂商请求码 0x20；描述符集 162 字节：兼容 ID `WINUSB`，`DeviceInterfaceGUIDs` = `{CDB3B5AD-293B-4663-AA36-1AAE46463776}` |
+
+DAP 命令的配对：每个 Bulk OUT 立即执行，响应排进队列（深度 4，与 DAP_Info 报的包数相同），按到达顺序交给等着的 Bulk IN；IN 先到时排队等响应。没有响应的命令（DAP_TransferAbort）不占 IN。队列满时 URB 回 -EPIPE。
+
+一个命令引起的回复（OUT 的回复和配上的 IN 响应）合成一次 `send()`。分两次发时，第二段要等对方的延迟 ACK，每个来回多出约 40 ms。
 

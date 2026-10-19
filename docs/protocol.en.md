@@ -453,7 +453,7 @@ The firmware returns these strings in `DAP_Info`. The USB device descriptor of t
 | 0x05, 0x06 | Target device vendor, name | Not provided (empty) |
 | 0x07 | Board vendor | `XRobot` |
 | 0x08 | Board name | Same as the product |
-| 0x09 | Firmware version | Currently `0.2.0` |
+| 0x09 | Firmware version | Currently `0.3.0` |
 
 The serial number is the same over USB, serial and TCP, which lets host tools recognise one probe across the three links.
 
@@ -468,7 +468,7 @@ Once the probe has an IP address it advertises itself on the LAN:
 | Instance name | The serial number, e.g. `XRobot-XRDAP-E8069093EF1C` |
 | TXT `serial` | The serial number |
 | TXT `chip` | `esp32s3` or `esp32c3` |
-| TXT `fw` | Firmware version, e.g. `0.2.0` |
+| TXT `fw` | Firmware version, e.g. `0.3.0` |
 
 OpenOCD accepts the host name directly in `cmsis-dap tcp host`. Host tools browse the `_xrdap._tcp` service to list the probes on the LAN and match them with the same probe on USB or serial through the TXT `serial`. An mDNS startup failure is only logged and does not affect the TCP service.
 
@@ -481,3 +481,29 @@ The USB port of the ESP32-C3 is USB Serial/JTAG, which appears on the computer a
 3. Any other data goes to the command line byte by byte. The command line produces output only after a line typed by a person ends with Enter, and a line containing control characters is dropped as a whole.
 
 As a result DAP frames and command-line output never mix: the debug tool always receives DAP response frames, and commands such as `help` and `wifi set` keep working in a terminal. The terminal must not change DTR/RTS, otherwise USB Serial/JTAG may reset the chip. The serial link of the ESP32-S3 is on UART0 and does not use this separation; its command line is on the USB CDC virtual serial port.
+
+## 6. USB/IP virtual device
+
+The probe serves USB/IP on TCP port 3240 (protocol in the Linux kernel document `usb/usbip_protocol.rst`, fields big-endian). The implementation is in `firmware/common/usbip_device.hpp`, and the `usbip` module of the host xrdap library is the same device model.
+
+| Operation | Handling |
+|---|---|
+| `OP_REQ_DEVLIST` (0x8005) | Replies with one device, bus ID `1-1`, then closes the connection |
+| `OP_REQ_IMPORT` (0x8003) | Replies with the device information when the bus ID is `1-1`, followed by URBs; any other bus ID gets status 1 |
+| `USBIP_CMD_SUBMIT` (1) | Endpoint 0: standard requests and descriptors; endpoint 1: Bulk OUT executes a DAP command, Bulk IN fetches the response |
+| `USBIP_CMD_UNLINK` (2) | Cancels an IN that is still waiting for data; replies -ECONNRESET when found, otherwise 0 |
+
+Device:
+
+| Item | Value |
+|---|---|
+| VID:PID, bcdDevice | 1D50:6199, 0x0200 (the real USB device of the S3 uses 0x0100; Windows caches descriptors by these three items) |
+| bcdUSB, speed | 2.10 (with BOS), high speed |
+| Strings | 1 `XRobot`, 2 `XR-DAP-S3 CMSIS-DAP` / `XR-DAP-C3 CMSIS-DAP`, 3 serial number (same as DAP_Info), 4 `CMSIS-DAP v2` |
+| Interface | One, vendor class 0xFF, interface name is string 4 |
+| Endpoints | Bulk OUT 0x01, Bulk IN 0x81, 512 bytes |
+| BOS | MS OS 2.0 platform capability, vendor request code 0x20; descriptor set of 162 bytes: compatible ID `WINUSB`, `DeviceInterfaceGUIDs` = `{CDB3B5AD-293B-4663-AA36-1AAE46463776}` |
+
+DAP command pairing: every Bulk OUT is executed immediately and its response is queued (depth 4, equal to the packet count reported by DAP_Info) and handed to the waiting Bulk IN in order of arrival; an IN that arrives first waits in the queue for a response. A command without a response (DAP_TransferAbort) does not take an IN. When the queue is full the URB is answered with -EPIPE.
+
+The replies caused by one command (the reply to the OUT and the response paired with an IN) are combined into a single `send()`. When sent in two parts, the second part waits for the peer's delayed ACK, which adds about 40 ms to every round trip.

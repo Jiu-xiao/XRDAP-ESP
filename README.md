@@ -10,6 +10,7 @@ ESP32-S3 和 ESP32-C3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://git
 | USB CMSIS-DAP v2（Keil、pyOCD、probe-rs、OpenOCD 直接用） | 有 | 没有（芯片的 USB 是固定功能的 USB Serial/JTAG） |
 | 串口 DAP 链路（经 `xrdap-forward` 给 OpenOCD） | UART0，板上 USB 转串口，4 Mbaud | 芯片的 USB 口（USB Serial/JTAG） |
 | Wi-Fi，TCP 3241 上的 CMSIS-DAP（OpenOCD 的 TCP 后端） | 有 | 有 |
+| Wi-Fi，3240 端口的 USB/IP 虚拟 USB 探针（挂载后 Keil、pyOCD、probe-rs、OpenOCD 直接用） | 有 | 有 |
 | Wi-Fi 命令行（配网） | USB 虚拟串口 | 芯片的 USB 口（与 DAP 链路共用，自动区分）、UART0 |
 | 经 DAP 配网（`xrdap wifi set`，厂商命令 0x86） | USB、串口、TCP | 串口、TCP |
 | mDNS 广播（`xrdap-xxxxxx.local`） | 有 | 有 |
@@ -226,10 +227,35 @@ adapter speed 4000
 
 说明：
 
-- TCP 只有 OpenOCD 支持。Keil、pyOCD、probe-rs 都不支持 CMSIS-DAP over TCP。
+- TCP 只有 OpenOCD 支持。Keil、pyOCD、probe-rs 不支持 CMSIS-DAP over TCP，改用下面的 USB/IP。
 - 同一时间只服务一个 TCP 客户端。客户端异常消失（没有正常断开）时，约 11 秒后连接会被释放。
 - 这一版 OpenOCD 的 TCP 后端在 Windows 上把“暂时没有数据”当成错误（它看 `errno`，Winsock 不写 `errno`）：启动要等约 10 秒、刷屏 `error reading header`，多个请求同时在途时响应会错位，报 `command mismatch`。`quirk enable` 让它一次只发一个请求，`min_timeout 10` 把启动等待缩到约 1 秒，启动时的报错仍会打印，可以忽略。OpenOCD 上游已修复（提交 e89e73839d53），Espressif 还没有带这个修复的发布版。Linux 上不需要这两行。
 - 串口方式（`xrdap-forward` 加 OpenOCD）在 Windows 上同样使用这两行。
+
+### Wi-Fi（USB/IP 虚拟 USB 探针）
+
+固件 0.3.0 起，探针还在 3240 端口提供 USB/IP 设备。电脑用 USB/IP 客户端挂载后，系统里出现一个 USB CMSIS-DAP v2 探针（VID:PID 1D50:6199，bcdDevice 0x0200，产品名 `XR-DAP-S3 CMSIS-DAP` 或 `XR-DAP-C3 CMSIS-DAP`，序列号同 DAP_Info），Keil、pyOCD、probe-rs、OpenOCD 按 USB 探针使用，Windows 自动用 WinUSB 驱动。
+
+Linux（内核自带 USB/IP）：
+
+```
+sudo modprobe vhci-hcd
+usbip list -r xrdap-721384.local
+sudo usbip attach -r xrdap-721384.local -b 1-1
+openocd -f interface/cmsis-dap.cfg -c "adapter serial XRobot-XRDAP-9C139E721384" -f target/stm32f4x.cfg
+sudo usbip port
+sudo usbip detach -p 0
+```
+
+普通用户要能打开设备，需要 udev 规则 `SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6199", MODE="0666"`，否则调试工具用 sudo 运行。Windows 先安装 [usbip-win2](https://github.com/vadimgrn/usbip-win2)，命令同样是 `usbip attach -r <探针地址> -b 1-1`。
+
+说明：
+
+- 3240 和 3241 由同一个任务服务，同一时间只有一个客户端；一个连着时另一个排队等。`usbip list` 只查询设备，不占用探针。
+- 挂载期间 S3 的 USB 设备关闭（与 TCP 3241 相同），断开后恢复。
+- 外部工具没有正常断开时，约 11 秒后连接被释放。
+- 实测（ubuntu24，OpenOCD 读 F401 的 128 KiB）：S3 2.1 s，C3 2.7 s；同样条件下 TCP 3241 为 1.6 s、1.9 s。
+- C3 插在电脑上时，USB 线比 Wi-Fi 延迟小：用 XRDAP-Host 的 `xrdap-forward -p COM7 --usbip` 或 `xrdap-gui` 的“共享为 USB DAP”在本机提供同样的设备，见 [XRDAP-Host 的说明](https://github.com/Jiu-xiao/XRDAP-Host#共享为-usb-dapusbip)。
 
 ### Wi-Fi 配网
 

@@ -10,6 +10,7 @@ A CMSIS-DAP debug probe built on ESP32-S3 and ESP32-C3, based on [libxr](https:/
 | USB CMSIS-DAP v2 (works directly with Keil, pyOCD, probe-rs, OpenOCD) | Yes | No (the chip's USB is the fixed-function USB Serial/JTAG) |
 | Serial DAP link (to OpenOCD through `xrdap-forward`) | UART0 via the on-board USB-to-serial bridge, 4 Mbaud | The chip's USB port (USB Serial/JTAG) |
 | Wi-Fi, CMSIS-DAP on TCP 3241 (OpenOCD TCP backend) | Yes | Yes |
+| Wi-Fi, USB/IP virtual USB probe on port 3240 (works directly with Keil, pyOCD, probe-rs, OpenOCD after attaching) | Yes | Yes |
 | Wi-Fi command line (provisioning) | USB virtual serial port | The chip's USB port (shared with the DAP link, told apart automatically), UART0 |
 | Provisioning over DAP (`xrdap wifi set`, vendor command 0x86) | USB, serial, TCP | Serial, TCP |
 | mDNS advertisement (`xrdap-xxxxxx.local`) | Yes | Yes |
@@ -226,10 +227,35 @@ adapter speed 4000
 
 Notes:
 
-- Only OpenOCD supports TCP. Keil, pyOCD and probe-rs do not support CMSIS-DAP over TCP.
+- Only OpenOCD supports TCP. Keil, pyOCD and probe-rs do not support CMSIS-DAP over TCP; use USB/IP below instead.
 - Only one TCP client is served at a time. When a client disappears without disconnecting properly, the connection is released after about 11 seconds.
 - On Windows this OpenOCD build's TCP backend treats "no data yet" as an error (it checks `errno`, which Winsock does not set): startup waits about 10 seconds, `error reading header` floods the log, and with several requests in flight the responses become misaligned and `command mismatch` is reported. `quirk enable` makes it send one request at a time, and `min_timeout 10` shortens the startup wait to about 1 second; the startup errors are still printed and can be ignored. OpenOCD upstream has fixed this (commit e89e73839d53); Espressif has no release containing the fix yet. Linux does not need these two lines.
 - The serial method (`xrdap-forward` plus OpenOCD) uses the same two lines on Windows.
+
+### Wi-Fi (USB/IP virtual USB probe)
+
+From firmware 0.3.0, the probe also serves a USB/IP device on port 3240. After a computer attaches it with a USB/IP client, the system shows a USB CMSIS-DAP v2 probe (VID:PID 1D50:6199, bcdDevice 0x0200, product name `XR-DAP-S3 CMSIS-DAP` or `XR-DAP-C3 CMSIS-DAP`, serial number the same as in DAP_Info). Keil, pyOCD, probe-rs and OpenOCD use it as a USB probe, and Windows uses the WinUSB driver automatically.
+
+Linux (USB/IP is built into the kernel):
+
+```
+sudo modprobe vhci-hcd
+usbip list -r xrdap-721384.local
+sudo usbip attach -r xrdap-721384.local -b 1-1
+openocd -f interface/cmsis-dap.cfg -c "adapter serial XRobot-XRDAP-9C139E721384" -f target/stm32f4x.cfg
+sudo usbip port
+sudo usbip detach -p 0
+```
+
+For a normal user to open the device, the udev rule `SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6199", MODE="0666"` is needed; otherwise run the debug tool with sudo. On Windows, install [usbip-win2](https://github.com/vadimgrn/usbip-win2) first; the command is the same, `usbip attach -r <probe address> -b 1-1`.
+
+Notes:
+
+- Ports 3240 and 3241 are served by the same task and only one client is served at a time; while one is connected, the other waits in the queue. `usbip list` only queries the device and does not occupy the probe.
+- While attached, the USB device of the S3 is closed (same as for TCP 3241) and restored after the disconnect.
+- When the external tool does not disconnect properly, the connection is released after about 11 seconds.
+- Measured (ubuntu24, OpenOCD reading 128 KiB of an F401): S3 2.1 s, C3 2.7 s; under the same conditions TCP 3241 takes 1.6 s and 1.9 s.
+- With a C3 plugged into the computer, the USB cable has lower latency than Wi-Fi: use `xrdap-forward -p COM7 --usbip` of XRDAP-Host or the "共享为 USB DAP" (share as USB DAP) option of `xrdap-gui` to provide the same device on the local machine, see [the XRDAP-Host documentation](https://github.com/Jiu-xiao/XRDAP-Host/blob/main/README.en.md#share-as-usb-dap-usbip).
 
 ### Wi-Fi provisioning
 
