@@ -31,13 +31,12 @@ constexpr uint16_t kDapPacketSize = 1024;  // 通告给上位机的 DAP 包长
 constexpr uint16_t kTcpPort = 3241;        // 只有 C3 有 Wi-Fi
 
 // 单核芯片，所有任务都在核 0。优先级从低到高：
-//   空闲任务 0 < 采样 2 < libxr 定时器 3 < Wi-Fi 命令行 4 < 串口 DAP 8 < TCP DAP 10
+//   空闲任务 0 < libxr 定时器 3 < Wi-Fi 命令行 4 < 串口 DAP 8 < TCP DAP 10 < 采样 12
 //   < lwIP 18 < esp_timer 22 < Wi-Fi 23。
-// 采样周期短（不到 3 ms）时采样任务一直忙等，比它低的只有空闲任务，所以空闲任务的看门狗检查关掉了
-// （sdkconfig.defaults）。串口和 TCP 任务比采样高，采样期间也能及时取走 SUB_READ；
-// 两个执行 SWD 的任务都比 lwIP 和 Wi-Fi 低，长的 DAP 命令不会拖住无线协议栈。
+// 采样任务由节拍定时器唤醒，节拍之间阻塞，每个周期至少留 1/8 周期给别的任务，所以可以排在
+// 串口和 TCP 之上：取数据时不再挤掉节拍。它仍低于 lwIP 和 Wi-Fi，不拖住无线协议栈。
 constexpr int kCore = 0;
-constexpr unsigned kSamplingPriority = 2;
+constexpr unsigned kSamplingPriority = 12;
 constexpr unsigned kLibxrTimerPriority = 3;
 constexpr unsigned kSerialPriority = 8;
 
