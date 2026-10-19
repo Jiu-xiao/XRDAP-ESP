@@ -143,7 +143,15 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
 
   if (resp.ack != Ack::OK)
   {
-    ReadFast<N, 1>(raw, dm, dm | cm);  // 换向时钟，不进数据阶段
+    if (resp.ack == Ack::NO_ACK || resp.ack == Ack::PROTOCOL)
+    {
+      // 和 CMSIS-DAP 一致：ACK 不是 OK、WAIT、FAULT 时，目标可能仍在数据阶段，换向时钟加 33 个时钟都在释放 SWDIO 下发
+      ReadFast<N, 34>(raw, dm, dm | cm);
+    }
+    else
+    {
+      ReadFast<N, 1>(raw, dm, dm | cm);  // 换向时钟，不进数据阶段
+    }
     Out(dm);
     pins.swdio->SetOutputEnable(true);
     return LibXR::ErrorCode::OK;

@@ -7,7 +7,7 @@
 // - 每个沿只写一次：SWCLK 和 SWDIO 都在专用 GPIO 输出寄存器里，一条指令同时写；数据随 SWCLK 下降沿一起变化。
 // - 原来的做法是"写沿之后再等固定周期数"，写数据、算下一位、采样的时间都加在等待之外，高低电平不等长，
 //   最高频率由较长的那半个周期决定。这里两种做法保证等长：
-//   - 低速（半周期 ≥ kPacedMinHalf 个 CPU 周期）：按周期计数器上的绝对时刻发沿，下一个沿 = 上一个沿 + 半周期，
+//   - 低速（半周期不短于开机实测的下限 min_half_）：按周期计数器上的绝对时刻发沿，下一个沿 = 上一个沿 + 半周期，
 //     两个沿之间的计算都在等待时间里做完。频率准，占空比 50%。
 //   - 高速（只在 ESP32-S3 上）：汇编写死每个半周期的指令：一次写沿 + 一次取数或存数 + N 个 nop，
 //     高低两个半周期指令数相同。每一位要输出的值事先算好放进数组，读到的原始值先存进数组，传输完再拼。
@@ -77,10 +77,14 @@ class SwdEngine final : public LibXR::Debug::Swd
     {
       hz = kDefaultHz;
     }
-    const uint32_t want_x16 = (cpu_hz_ * 16U) / (2U * hz);  // 想要的半周期，单位 1/16 CPU 周期
+    // 主机发来的是任意 32 位数，先限制在 1 kHz 到半个 CPU 时钟之内，用 64 位算，避免乘法回绕和除 0
+    const uint64_t hz64 = (hz < 1000U) ? 1000U : (hz > cpu_hz_ / 2U ? cpu_hz_ / 2U : hz);
+    const uint32_t want_x16 =
+        static_cast<uint32_t>((static_cast<uint64_t>(cpu_hz_) * 16U) / (2U * hz64));  // 想要的半周期，单位 1/16 CPU 周期
     fast_ = nullptr;
 #if XRDAP_SWD_FAST_PATH
-    if (want_x16 < kPacedMinHalf * 16U)
+    // 按时刻发沿的路径做不到的快时钟（想要的半周期比它的下限还短）走汇编路径
+    if (want_x16 < min_half_ * 16U)
     {
       // 选实际半周期不短于想要值的最快一档；请求比最快一档还快时用最快一档
       size_t pick = 0;
@@ -100,8 +104,8 @@ class SwdEngine final : public LibXR::Debug::Swd
       return LibXR::ErrorCode::OK;
     }
 #endif
-    // 半周期 = 设定值 + 等待循环的平均迟到量，所以设定值要减去它；四舍五入到整数个 CPU 周期
-    const uint32_t half = (want_x16 > late_x16_ + 8U) ? (want_x16 - late_x16_ + 8U) / 16U : 0U;
+    // 四舍五入到整数个 CPU 周期；Advance 不累计迟到量，平均半周期就是 half_
+    const uint32_t half = (want_x16 + 8U) / 16U;
     half_ = (half < min_half_) ? min_half_ : half;
     return LibXR::ErrorCode::OK;
   }
@@ -115,7 +119,7 @@ class SwdEngine final : public LibXR::Debug::Swd
       return (cpu_hz_ * 8U) / fast_half_x16_[fast_idx_];
     }
 #endif
-    return (cpu_hz_ * 8U) / (half_ * 16U + late_x16_);
+    return cpu_hz_ / (2U * half_);
   }
 
   void Close() override
@@ -210,9 +214,7 @@ class SwdEngine final : public LibXR::Debug::Swd
   static constexpr uint32_t kJtagToSwd = 0xE79EU;  // 低位先发：0x9E、0xE7
   // 输出使能是 APB 寄存器写，十几个 CPU 周期后才生效，切到输出后等这么久再发第一位数据
   static constexpr uint32_t kOutputEnableSettle = 16U;
-  // 按时刻发沿的路径里，一个半周期内最长的那段计算实测约 17 个 CPU 周期（240 MHz），
-  // 半周期短于这个值时高低电平就不等长了，改走汇编路径。
-  static constexpr uint32_t kPacedMinHalf = 20U;
+  static constexpr int32_t kLateSlack = 4;
 
   // ------------------------------------------------------------ 按时刻发沿
 
@@ -245,10 +247,11 @@ class SwdEngine final : public LibXR::Debug::Swd
     return now;
   }
 
-  /// 沿发晚了（等待循环的粒度，或被中断打断）时下一个沿从实际时刻起算，不去"追"，保证半周期不短于设定值。
+  /// 下一个沿 = 这个沿的目标时刻 + 半周期：等待循环的粒度造成的几个周期的迟到不累计，平均半周期正好是设定值。
+  /// 迟到超过 kLateSlack（计算没做完，或被中断打断）时从实际时刻起算，不去"追"，避免出现很短的半周期。
   static inline __attribute__((always_inline)) void Advance(Pacer& p, uint32_t now)
   {
-    p.t = ((static_cast<int32_t>(now - p.t) > 0) ? now : p.t) + p.half;
+    p.t = ((static_cast<int32_t>(now - p.t) > kLateSlack) ? now : p.t) + p.half;
   }
 
   static inline __attribute__((always_inline)) void Edge(Pacer& p, uint32_t value)
@@ -312,6 +315,14 @@ class SwdEngine final : public LibXR::Debug::Swd
     if (resp.ack != Ack::OK)
     {
       ClockIn(p);  // 换向时钟，不进数据阶段
+      if (resp.ack == Ack::NO_ACK || resp.ack == Ack::PROTOCOL)
+      {
+        // 和 CMSIS-DAP 一致：ACK 不是 OK、WAIT、FAULT 时，目标可能仍在数据阶段，释放 SWDIO 再空转 33 个时钟
+        for (uint32_t i = 0; i < 33U; ++i)
+        {
+          ClockIn(p);
+        }
+      }
       End(p);
       Drive();
       return LibXR::ErrorCode::OK;
@@ -393,14 +404,13 @@ class SwdEngine final : public LibXR::Debug::Swd
   void Calibrate()
   {
     Release();
-    constexpr uint32_t kHalves = 129U;
-    constexpr uint32_t kLong = 60U;
-    const uint32_t jitter = TimeBits(kLong) - kHalves * kLong;
-    late_x16_ = (jitter * 16U + kHalves / 2U) / kHalves;
+    // 32 个读时钟 + 32 个写时钟 = 128 个半周期。半周期够长时总耗时 = 128 × h（外加开头结尾几个周期的迟到）；
+    // 取总耗时不超过这个值太多的最小 h 作下限。
+    constexpr uint32_t kHalves = 128U;
     uint32_t h = 2U;
-    for (; h < kLong; ++h)
+    for (; h < 60U; ++h)
     {
-      if (TimeBits(h) <= kHalves * h + jitter + 8U)
+      if (TimeBits(h) <= kHalves * h + 16U)
       {
         break;
       }
@@ -449,7 +459,6 @@ class SwdEngine final : public LibXR::Debug::Swd
   uint32_t im_;
   uint32_t half_ = 0U;
   uint32_t min_half_ = 2U;
-  uint32_t late_x16_ = 0U;  // 等待循环的平均迟到量，单位 1/16 CPU 周期
 
 };
 

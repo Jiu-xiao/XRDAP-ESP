@@ -172,6 +172,9 @@ class DapVendor
       return HandleVendor(cmd, req, len, resp, cap, out);
     }
 
+    // 采样刚被停掉时，采样任务可能还在读最后一拍：等它读完，否则两个任务同时驱动 SWD，线上的时序会乱。
+    WaitTickDone();
+
     // 跟踪 DAP_Connect / DAP_Disconnect，扩展命令要求先连接到 SWD 目标。
     if (cmd == 0x02U)
     {
@@ -185,6 +188,15 @@ class DapVendor
       swd_.InvalidateSelectCache();
     }
     return false;
+  }
+
+  /// 等采样任务读完手头这一拍（最多 50 ms）。
+  void WaitTickDone()
+  {
+    for (int i = 0; i < 50 && in_tick_.load(std::memory_order_acquire); ++i)
+    {
+      vTaskDelay(1);
+    }
   }
 
   bool HandleVendor(uint8_t cmd, const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
@@ -554,6 +566,7 @@ class DapVendor
     {
       case 0U:
         StopSampling();
+        WaitTickDone();
         return Reply(resp, kStatusOk, out);
       case 1U:
         if (active_.load(std::memory_order_acquire) || !config_valid_)
@@ -677,7 +690,7 @@ class DapVendor
     return ok;
   }
 
-  /// 把全部条目按采样时的访问序列试读一遍，返回耗时。各 AP 的 CSW 先读好，不计入耗时。
+  /// 把全部条目按采样时的访问序列试读（两遍，返回第二遍的耗时）。各 AP 的 CSW 先读好，不计入耗时。
   /// 试读和采样访问的是同一批地址，副作用相同。
   bool MeasureFrame(const SubItem* items, uint16_t count, uint32_t& us)
   {
@@ -691,36 +704,46 @@ class DapVendor
     {
       ok = EnsureAp(items[i].item.ap) != nullptr;
     }
-    ApState ap{};
-    ap.ap = 0xFFU;
-    const int64_t t0 = esp_timer_get_time();
-    for (uint16_t i = 0; ok && i < count; ++i)
+    // 跑两遍，只计第二遍：第一遍会把指令缓存、数据缓存预热，偶尔会慢很多，估计值会偏大导致订阅被拒
+    for (int pass = 0; ok && pass < 2; ++pass)
     {
-      const Item& it = items[i].item;
-      if (ap.ap != it.ap)
+      ApState ap{};
+      ap.ap = 0xFFU;
+      const int64_t t0 = esp_timer_get_time();
+      for (uint16_t i = 0; i < count; ++i)
       {
-        ap = *EnsureAp(it.ap);
-        ap.written = false;
+        const Item& it = items[i].item;
+        if (ap.ap != it.ap)
+        {
+          ap = *EnsureAp(it.ap);
+          ap.written = false;
+        }
+        uint8_t value[8];
+        (void)ReadItem(ap, it, value);
       }
-      uint8_t value[8];
-      (void)ReadItem(ap, it, value);
+      us = static_cast<uint32_t>(esp_timer_get_time() - t0);
     }
-    us = static_cast<uint32_t>(esp_timer_get_time() - t0);
     swd_.InvalidateSelectCache();
     xSemaphoreGive(swd_mutex_);
     return ok;
   }
 
+  /// 读一个 AP 的 CSW。失败时清掉粘滞错误再试一次：刚重新连接、或上一次访问被打断（例如采样被停掉）之后，
+  /// 第一次 AP 访问偶尔会因为 DP 里残留的粘滞错误失败。
   bool ReadCsw(uint8_t ap, uint32_t& csw)
   {
-    Ack ack;
-    if (!TxnOk(swd_.SetSelectCached(static_cast<uint32_t>(ap) << 24, ack), ack) ||
-        !TxnOk(swd_.ApReadTxn(0x00U, csw, ack), ack))
+    for (int attempt = 0; attempt < 2; ++attempt)
     {
+      Ack ack;
+      if (TxnOk(swd_.SetSelectCached(static_cast<uint32_t>(ap) << 24, ack), ack) &&
+          TxnOk(swd_.ApReadTxn(0x00U, csw, ack), ack))
+      {
+        return true;
+      }
       ClearSticky();
-      return false;
+      swd_.InvalidateSelectCache();
     }
-    return true;
+    return false;
   }
 
   /// 本命令里第一次用到某个 AP 时读一次它的 CSW。
@@ -1120,6 +1143,7 @@ class DapVendor
       }
       return;
     }
+    in_tick_.store(true, std::memory_order_release);
     ApState ap{};
     ap.ap = 0xFFU;
     for (uint16_t i = 0; i < due; ++i)
@@ -1140,6 +1164,7 @@ class DapVendor
       values += it.size;
     }
     swd_.InvalidateSelectCache();
+    in_tick_.store(false, std::memory_order_release);
     xSemaphoreGive(swd_mutex_);
   }
 
@@ -1217,6 +1242,7 @@ class DapVendor
   uint16_t max_packet_;
 
   std::atomic<bool> active_{false};
+  std::atomic<bool> in_tick_{false};  // 采样任务正在读一拍
   std::atomic<uint32_t> gen_{0};
   std::atomic<uint32_t> last_serial_ms_{0};
   Transport transport_ = Transport::USB;
