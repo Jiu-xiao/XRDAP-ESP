@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// SwdEngine 的高速路径（只在 ESP32-S3 上）：汇编写死每个半周期的指令，高低两个半周期指令数相同。
-// 每一档展开后代码量较大，放在 flash 里（linker.lf 只把 main.cpp 放进 IRAM）。指令缓存未命中时
-// 只会把某一个半周期拉长，SWD 是同步协议，不影响正确性。
+// SwdEngine 的高速路径（仅 ESP32-S3）：汇编写死每个半周期的指令，高低半周期指令数相同。
+// 每一档展开后代码量较大，放在 flash 里（linker.lf 只把 main.cpp 放进 IRAM）。指令缓存
+// 未命中只会拉长某一个半周期，SWD 是同步协议，不影响正确性。
+//
+// SwdEngine fast path (ESP32-S3 only): the instructions of every half period are fixed
+// in assembly, with the same count in the high and low halves. Each unrolled level is
+// large, so it lives in flash (linker.lf puts only main.cpp in IRAM). An instruction
+// cache miss only stretches one half period, which SWD, being synchronous, tolerates.
 
 #include "swd_engine.hpp"
 
@@ -15,7 +20,7 @@ using Request = LibXR::Debug::SwdProtocol::Request;
 using Response = LibXR::Debug::SwdProtocol::Response;
 using Ack = LibXR::Debug::SwdProtocol::Ack;
 
-// 输出使能是 APB 寄存器写，十几个 CPU 周期后才生效，切到输出后等这么久再发第一位数据
+// 输出使能是 APB 寄存器写，十几个 CPU 周期后才生效；切到输出后等这么久再发第一位数据。
 constexpr uint32_t kOutputEnableSettle = 16U;
 
 inline uint32_t Now() { return esp_cpu_get_cycle_count(); }
@@ -30,13 +35,13 @@ inline void Spin(uint32_t cycles)
 
 inline void Out(uint32_t value) { dedic_gpio_cpu_ll_write_all(value); }
 
-/// 输出 BITS 位数据（val 的低 BITS 位，低位先发），PAR 为 1 时再输出一位校验位 pb。
-/// 低半周期：写沿（SWCLK 低，SWDIO 为这一位）、算高电平值、N 个 nop；
-/// 高半周期：写沿（SWCLK 高）、用空闲的指令位算下一位要输出的值、凑够 N + 2 条指令。
-/// 下一位的值直接从 val 里取（extui 取一位，movnez 选 SWDIO 的位），不用先展开成数组。
+// 输出 BITS 位数据（val 低 BITS 位，低位先发），PAR 为 1 时再输出一位校验位 pb。
+// 低半周期：写沿（SWCLK 低，SWDIO 为这一位）、算高电平值、N 个 nop；
+// 高半周期：写沿（SWCLK 高）、在空闲指令位算下一位要输出的值、凑够 N + 2 条指令。
+// 下一位直接从 val 取（extui 取一位，movnez 选 SWDIO 的位），不先展开成数组。
 template <int N, int BITS, int PAR>
-inline __attribute__((always_inline)) void WriteBits(uint32_t val, uint32_t dm, uint32_t cm,
-                                                    uint32_t pb)
+inline __attribute__((always_inline)) void WriteBits(uint32_t val, uint32_t dm,
+                                                     uint32_t cm, uint32_t pb)
 {
   uint32_t a;
   uint32_t h;
@@ -71,13 +76,13 @@ inline __attribute__((always_inline)) void WriteBits(uint32_t val, uint32_t dm, 
       : "memory");
 }
 
-/// 读 COUNT 位。前 32 位在高半周期里直接拼进 acc（srl 移到最低位、extui 取一位、slli 放回原位、or 合并，
-/// 都放在空闲的指令位里）；第 32 位起的原始输入寄存器值存进 raw[]。
-/// 低半周期：写沿、N 个 nop、采样；高半周期：写沿、处理采到的这一位、凑够 N + 2 条指令。
-/// 采样是低半周期的最后一条指令，紧挨着上升沿。
+// 读 COUNT 位。前 32 位在高半周期里直接拼进 acc（srl 移到最低位、extui 取一位、slli
+// 放回原位、or 合并，都放在空闲指令位里）；第 32 位起的原始输入寄存器值存进 raw[]。
+// 低半周期：写沿、N 个 nop、采样；高半周期：写沿、处理采到的这一位、凑够 N + 2 条指令。
+// 采样是低半周期的最后一条指令，紧挨着上升沿。
 template <int N, int COUNT>
-inline __attribute__((always_inline)) uint32_t ReadBits(uint32_t* raw, uint32_t vlo, uint32_t vhi,
-                                                       uint32_t shift)
+inline __attribute__((always_inline)) uint32_t ReadBits(uint32_t* raw, uint32_t vlo,
+                                                        uint32_t vhi, uint32_t shift)
 {
   uint32_t acc;
   uint32_t x;
@@ -108,7 +113,8 @@ inline __attribute__((always_inline)) uint32_t ReadBits(uint32_t* raw, uint32_t 
       ".set xr_i, xr_i + 1\n"
       ".endr\n"
       : [acc] "=&r"(acc), [x] "=&r"(x), [t] "=&r"(t)
-      : [p] "r"(raw), [lo] "r"(vlo), [hi] "r"(vhi), [sh] "r"(shift), [cnt] "i"(COUNT), [n] "i"(N)
+      : [p] "r"(raw), [lo] "r"(vlo), [hi] "r"(vhi), [sh] "r"(shift), [cnt] "i"(COUNT),
+        [n] "i"(N)
       : "memory");
   return acc;
 }
@@ -163,7 +169,8 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
   {
     if (resp.ack == Ack::NO_ACK || resp.ack == Ack::PROTOCOL)
     {
-      // 和 CMSIS-DAP 一致：ACK 不是 OK、WAIT、FAULT 时，目标可能仍在数据阶段，换向时钟加 33 个时钟都在释放 SWDIO 下发
+      // 与 CMSIS-DAP 一致：ACK 不是 OK、WAIT、FAULT 时目标可能仍在数据阶段，换向时钟加
+      // 33 个时钟都在释放 SWDIO 的状态下发出。
       (void)ReadBits<N, 34>(raw, dm, dm | cm, sh);
     }
     else
@@ -205,7 +212,7 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
   return LibXR::ErrorCode::OK;
 }
 
-/// 用这一档读 32 位（64 个半周期），取 4 次里最少的一次。调用前 SWDIO 应已释放。
+// 用这一档读 32 位（64 个半周期），取 4 次里最少的一次。调用前 SWDIO 应已释放。
 template <int N>
 uint32_t MeasureHalfX16(const SwdFastPins& pins)
 {
@@ -223,9 +230,9 @@ uint32_t MeasureHalfX16(const SwdFastPins& pins)
   return (best * 16U + 32U) / 64U;
 }
 
-// 档位：每个半周期 N + 2 条指令。240 MHz 下 N = 3 约 23.7 MHz，N = 4 约 19.8 MHz，N = 16 约 6.7 MHz。
-// N = 2（约 29.5 MHz）在测试板上读写都收到协议错误（ACK 全 1 以外的值），不提供：目标在上升沿后约 45 ns 才让数据有效，
-// 半周期短于约 4.5 个 CPU 周期就采不到。N = 3 在测试板上 3000 轮写读比较和 OpenOCD 烧录都没有错误，但裕量很小。
+// 档位：每个半周期 N + 2 条指令。240 MHz 下 N = 3 约 23.7 MHz，N = 4 约 19.8 MHz，
+// N = 16 约 6.7 MHz。不提供 N = 2（约 29.5 MHz）：目标在上升沿后约 45 ns 才让数据有效，
+// 半周期短于约 4.5 个 CPU 周期就采不到。N = 3 裕量很小。
 struct Level
 {
   SwdFastXferFn xfer;
@@ -233,13 +240,12 @@ struct Level
 };
 
 constexpr Level kLevels[kSwdFastLevels] = {
-    {&Xfer<3>, &MeasureHalfX16<3>},
-    {&Xfer<4>, &MeasureHalfX16<4>},   {&Xfer<5>, &MeasureHalfX16<5>},
-    {&Xfer<6>, &MeasureHalfX16<6>},   {&Xfer<7>, &MeasureHalfX16<7>},
-    {&Xfer<8>, &MeasureHalfX16<8>},   {&Xfer<9>, &MeasureHalfX16<9>},
-    {&Xfer<10>, &MeasureHalfX16<10>}, {&Xfer<11>, &MeasureHalfX16<11>},
-    {&Xfer<12>, &MeasureHalfX16<12>}, {&Xfer<14>, &MeasureHalfX16<14>},
-    {&Xfer<16>, &MeasureHalfX16<16>},
+    {&Xfer<3>, &MeasureHalfX16<3>},   {&Xfer<4>, &MeasureHalfX16<4>},
+    {&Xfer<5>, &MeasureHalfX16<5>},   {&Xfer<6>, &MeasureHalfX16<6>},
+    {&Xfer<7>, &MeasureHalfX16<7>},   {&Xfer<8>, &MeasureHalfX16<8>},
+    {&Xfer<9>, &MeasureHalfX16<9>},   {&Xfer<10>, &MeasureHalfX16<10>},
+    {&Xfer<11>, &MeasureHalfX16<11>}, {&Xfer<12>, &MeasureHalfX16<12>},
+    {&Xfer<14>, &MeasureHalfX16<14>}, {&Xfer<16>, &MeasureHalfX16<16>},
 };
 }  // namespace
 

@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+// Wi-Fi STA 实现：热点参数存在 NVS，掉线后在事件回调里无限重连。
+// Wi-Fi STA implementation: credentials live in NVS; the event handler reconnects forever
+// after a drop.
 #include "wifi_sta.hpp"
 
 #include <cstdint>
@@ -25,7 +28,6 @@ struct Credentials
   char ssid[33];
   char password[64];
 };
-
 
 constexpr const char* kNvsNamespace = "rmlink";  // 与 RMLink 固件相同
 constexpr const char* kNvsKey = "wifi";
@@ -96,8 +98,10 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   esp_netif_create_default_wifi_sta();
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, OnEvent, nullptr));
-  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, OnEvent, nullptr));
+  ESP_ERROR_CHECK(
+      esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, OnEvent, nullptr));
+  ESP_ERROR_CHECK(
+      esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, OnEvent, nullptr));
   ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
   wifi_config_t wifi = {};
@@ -180,7 +184,8 @@ WifiStatus WifiStaGetStatus()
   {
     esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     esp_netif_ip_info_t ip = {};
-    if (netif != nullptr && esp_netif_get_ip_info(netif, &ip) == ESP_OK && ip.ip.addr != 0)
+    if (netif != nullptr && esp_netif_get_ip_info(netif, &ip) == ESP_OK &&
+        ip.ip.addr != 0)
     {
       st.connected = true;
       memcpy(st.ip, &ip.ip.addr, 4);

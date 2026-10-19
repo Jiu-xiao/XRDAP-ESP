@@ -2,14 +2,26 @@
 #pragma once
 
 // 配置 Wi-Fi 的文本命令行。ConsoleCore 按字节处理输入（行编辑、执行命令），输出交给回调；
-// WifiConsole 让它独占一个串口（S3 的 USB 虚拟串口、C3 的 UART0）；SerialMux（serial_mux.hpp）
-// 让它和串口 DAP 链路共用一个口。
+// WifiConsole 让它独占一个串口（S3 的 USB 虚拟串口、C3 的 UART0）；SerialMux
+// （serial_mux.hpp）让它与串口 DAP 链路共用一个口。
 //   help                         列出命令
-//   wifi set <热点> [<密码>]     保存热点参数后重启。热点或密码里有空格时用双引号括起来；
+//   wifi set <热点> [<密码>]     保存热点参数后重启。热点或密码含空格时用双引号括起来；
 //                                不填密码表示开放网络
 //   wifi status                  查看热点、是否连接、IP、信号强度
 //   wifi clear                   清除热点参数后重启
-// 串口终端设置：波特率任意，换行用 CR 或 LF 都可以。输入的字符会回显，密码也会显示在你自己的终端上。
+// 串口终端：波特率任意，换行用 CR 或 LF 均可。输入会回显，密码也会显示在你自己的终端上。
+//
+// Text console for configuring Wi-Fi. ConsoleCore processes input byte by byte (line
+// editing, command execution) and sends output through a callback; WifiConsole gives it
+// a whole serial port (S3 USB CDC, C3 UART0); SerialMux (serial_mux.hpp) shares one port
+// with the serial DAP link.
+//   help                         list commands
+//   wifi set <ssid> [<password>] save credentials and restart. Quote values containing
+//                                spaces; omit the password for an open network
+//   wifi status                  show SSID, connection state, IP, RSSI
+//   wifi clear                   clear credentials and restart
+// Serial terminal: any baud rate, CR or LF line ending. Input is echoed, including the
+// password, on your own terminal.
 
 #include <cstdint>
 #include <cstdio>
@@ -24,17 +36,26 @@
 namespace XrDap
 {
 
-/// 命令行核心：一次喂一个字节。只在收到一行合法的命令并回车后才输出，所以和二进制协议
-/// 共用一个口时不会往里插字：一行里出现控制字符（DAP 帧头必然带 0x00）或以 'Z'（帧起始字节）
-/// 开头时，整行丢弃，不回显、不提示。
+/// 命令行核心，一次喂一个字节 / Console core fed one byte at a time.
+/// 只在收到一行合法命令并回车后才输出，与二进制协议共用一个口时不会往里插字：行内出现
+/// 控制字符（DAP 帧头必带 0x00）或以 'Z'（帧起始字节）开头时整行丢弃，不回显、不提示。
+/// Prints only after a valid line ends with Enter, so it never injects bytes into a
+/// shared binary protocol: a line containing control characters (a DAP header always has
+/// 0x00) or starting with 'Z' (frame start byte) is dropped silently, without echo or
+/// prompt.
+/// @note 非线程安全，只能由同一个任务调用 / Not thread-safe; use from a single task.
 class ConsoleCore
 {
  public:
+  /// 输出回调，由命令行所在任务同步调用 / Output callback, invoked synchronously from the
+  /// task that feeds the console.
   using WriteFn = void (*)(void* ctx, const char* text, size_t len);
 
+  /// @param write 输出回调 / Output callback.
+  /// @param ctx 传给回调的参数 / Argument passed to the callback.
   ConsoleCore(WriteFn write, void* ctx) : write_(write), ctx_(ctx) {}
 
-  /// 丢弃正在输入的一行（不输出）。
+  /// 丢弃正在输入的一行，不产生输出 / Discard the line being typed without any output.
   void Reset()
   {
     len_ = 0;
@@ -42,6 +63,12 @@ class ConsoleCore
     last_was_cr_ = false;
   }
 
+  /// @brief 处理一个输入字节：行编辑，遇到换行则执行命令 / Handle one input byte: edit
+  ///        the line and run the command on a line ending.
+  /// @param c 输入字节 / Input byte.
+  /// @note 保存或清除热点参数的命令会延时约 0.5 秒后重启设备 / Commands that save or
+  /// clear
+  ///       the credentials restart the device after about 0.5 s.
   void OnByte(uint8_t c)
   {
     if (c == '\n' && last_was_cr_)  // CR LF 只算一次换行
@@ -156,9 +183,11 @@ class ConsoleCore
     }
     if (strcmp(cmd, "help") == 0 || strcmp(cmd, "?") == 0)
     {
-      Print("wifi set <热点> [<密码>]   保存热点参数并重启（有空格的用双引号括起来，不填密码为开放网络）\r\n"
-            "wifi status               查看连接状态\r\n"
-            "wifi clear                清除热点参数并重启\r\n");
+      Print(
+          "wifi set <热点> [<密码>]   "
+          "保存热点参数并重启（有空格的用双引号括起来，不填密码为开放网络）\r\n"
+          "wifi status               查看连接状态\r\n"
+          "wifi clear                清除热点参数并重启\r\n");
       return;
     }
     char* sub = nullptr;
@@ -226,7 +255,8 @@ class ConsoleCore
     }
     if (!st.started)
     {
-      snprintf(buf, sizeof(buf), "热点：%s\r\nWi-Fi 没有启动（刚保存的参数要重启后才生效）\r\n", st.ssid);
+      snprintf(buf, sizeof(buf),
+               "热点：%s\r\nWi-Fi 没有启动（刚保存的参数要重启后才生效）\r\n", st.ssid);
     }
     else if (!st.connected)
     {
@@ -234,15 +264,15 @@ class ConsoleCore
     }
     else
     {
-      snprintf(buf, sizeof(buf), "热点：%s\r\n已连接，IP %u.%u.%u.%u，信号 %d dBm\r\n", st.ssid, st.ip[0],
-               st.ip[1], st.ip[2], st.ip[3], (int)st.rssi);
+      snprintf(buf, sizeof(buf), "热点：%s\r\n已连接，IP %u.%u.%u.%u，信号 %d dBm\r\n",
+               st.ssid, st.ip[0], st.ip[1], st.ip[2], st.ip[3], (int)st.rssi);
     }
     Print(buf);
   }
 
   void Restart()
   {
-    vTaskDelay(pdMS_TO_TICKS(500));  // 等提示发出去
+    vTaskDelay(pdMS_TO_TICKS(500));  // 让提示先发出去
     esp_restart();
   }
 
@@ -254,17 +284,22 @@ class ConsoleCore
   bool last_was_cr_ = false;
 };
 
-/// 独占一个串口的命令行：自己开一个任务读这个口。
+/// 独占一个串口的命令行，自带读取任务 / Console that owns a serial port and runs its own
+/// reader task.
+/// @tparam UartT libxr UART 类型 / libxr UART type.
 template <typename UartT>
 class WifiConsole
 {
  public:
+  /// @param uart 串口，生命周期需长于本对象 / Serial port; must outlive this object.
   explicit WifiConsole(UartT& uart) : uart_(uart), core_(&WifiConsole::Write, this) {}
 
-  /// 在指定的核上启动命令行任务。
+  /// @brief 在指定的核上启动命令行任务 / Start the console task on a core.
+  /// @param core 任务所在的核 / Core that runs the task.
   void Start(int core)
   {
-    xTaskCreatePinnedToCore(&WifiConsole::TaskEntry, "wifi_cli", 4096, this, 4, nullptr, core);
+    xTaskCreatePinnedToCore(&WifiConsole::TaskEntry, "wifi_cli", 4096, this, 4, nullptr,
+                            core);
   }
 
  private:
@@ -274,7 +309,7 @@ class WifiConsole
   {
     for (;;)
     {
-      // 队列里没有数据时等一会，避免占 CPU；USB 被关闭期间读端口里始终没有数据。
+      // 队列为空时睡眠让出 CPU；USB 关闭期间读端口一直没有数据。
       if (uart_.read_port_->Size() == 0)
       {
         vTaskDelay(pdMS_TO_TICKS(20));

@@ -5,31 +5,58 @@
 
 #include "esp_err.h"
 
+// Wi-Fi STA 连接，以及热点参数在 NVS 中的存取。
+//
+// Wi-Fi STA connection and NVS storage of the access-point credentials.
+
 namespace XrDap
 {
-/// 以 STA 模式连接 Wi-Fi，热点参数从 NVS 读取（命名空间 "rmlink"，键 "wifi"）。
-/// 等到拿到 IP 或超时才返回：
-///   ESP_OK          已连接；
-///   ESP_ERR_TIMEOUT 协议栈已启动但还没连上，会在后台继续重连；
-///   其他            没有可用的热点参数，Wi-Fi 没有启动。
-/// SSID 和密码不会打印。
+/// @brief 以 STA 模式连接 Wi-Fi，热点参数从 NVS 读取（命名空间 "rmlink"，键 "wifi"）/
+///        Connect in STA mode using credentials from NVS (namespace "rmlink", key
+///        "wifi").
+/// @param timeout_ms 等待拿到 IP 的时间 / Time to wait for an IP.
+/// @return ESP_OK：已连接 / connected.
+/// @return ESP_ERR_TIMEOUT：协议栈已启动但未连上，后台继续重连 / Stack started but not
+///         connected; reconnecting in the background.
+/// @return 其他 / Other：无可用热点参数，Wi-Fi 未启动 / No usable credentials, Wi-Fi not
+///         started.
+/// @note 只调用一次，阻塞调用任务至多 timeout_ms；SSID 和密码不会打印 / Call once;
+///       blocks the calling task for up to timeout_ms. SSID and password are never
+///       logged.
 esp_err_t WifiStaStart(uint32_t timeout_ms);
 
-/// 保存热点参数。SSID 1 到 32 字节，密码 8 到 63 字节，或为空（开放网络）。
-/// 格式与 RMLink 固件一致，用 RMLink 配过网的板子不用重配。
+/// @brief 保存热点参数到 NVS，重启后生效 / Save the credentials to NVS; they take effect
+///        after a restart.
+/// @param ssid 热点名，1 到 32 字节 / SSID, 1 to 32 bytes.
+/// @param password 密码，8 到 63 字节，空串表示开放网络 / Password, 8 to 63 bytes; empty
+///        means an open network.
+/// @return ESP_ERR_INVALID_ARG 长度不合法 / invalid length；其他非 ESP_OK 为 NVS 错误 /
+///         other non-OK values are NVS errors.
+/// @note 格式与 RMLink 固件一致，用 RMLink 配过网的板子无需重配 / Same format as the
+///       RMLink firmware, so boards provisioned by RMLink need no reconfiguration.
 esp_err_t WifiStaSave(const char* ssid, const char* password);
 
-/// 清除已保存的热点参数。
+/// @brief 清除已保存的热点参数；本来就没有也返回 ESP_OK / Erase the saved credentials;
+///        returns ESP_OK even if none exist.
 esp_err_t WifiStaClear();
 
+/// Wi-Fi 状态快照 / Wi-Fi status snapshot.
 struct WifiStatus
 {
-  bool started;     // Wi-Fi 是否已启动（有热点参数才会启动）
-  bool connected;   // 是否已拿到 IP
-  char ssid[33];    // 已保存的热点名，没有则为空串
-  uint8_t ip[4];    // 已拿到的 IPv4 地址
-  int8_t rssi;      // 信号强度，没连上时为 0
+  /// Wi-Fi 是否已启动（有热点参数才会启动） / Wi-Fi started (only with saved
+  /// credentials).
+  bool started;
+  /// 是否已拿到 IP / An IP has been obtained.
+  bool connected;
+  /// 已保存的热点名，没有则为空串 / Saved SSID; empty if none.
+  char ssid[33];
+  /// 已拿到的 IPv4 地址 / Obtained IPv4 address.
+  uint8_t ip[4];
+  /// 信号强度，未连接时为 0 / Signal strength; 0 when not connected.
+  int8_t rssi;
 };
 
+/// 读取当前 Wi-Fi 状态，可在任意任务调用 / Read the current Wi-Fi status; callable from
+/// any task.
 WifiStatus WifiStaGetStatus();
 }  // namespace XrDap

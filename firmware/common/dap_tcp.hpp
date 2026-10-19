@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// CMSIS-DAP over TCP。帧格式：8 字节头 + DAP 数据。
-//   头：'D' 'A' 'P' 0，2 字节长度（小端），类型（1 请求、2 响应），1 字节保留。
-// 与 OpenOCD 的 cmsis_dap_tcp.c 一致。同一时间只服务一个客户端，请求按顺序执行并应答。
+// CMSIS-DAP over TCP。帧为 8 字节头加 DAP 数据：'D' 'A' 'P' 0，2 字节小端长度，类型
+// （1 请求、2 响应），1 字节保留。与 OpenOCD 的 cmsis_dap_tcp.c 一致。同一时间只服务
+// 一个客户端，请求按顺序执行并应答。
+//
+// CMSIS-DAP over TCP. A frame is an 8-byte header plus DAP data: 'D' 'A' 'P' 0, a 2-byte
+// little-endian length, a type (1 request, 2 response) and 1 reserved byte. Compatible
+// with OpenOCD cmsis_dap_tcp.c. Only one client is served at a time; requests are
+// executed and answered in order.
 
 #include <cstdint>
 #include <cstring>
@@ -16,14 +21,27 @@
 namespace XrDap
 {
 
+/// DAP over TCP 服务 / DAP over TCP server.
+/// @tparam DapT 需提供 ExecuteExternal() / Must provide ExecuteExternal().
 template <typename DapT>
 class DapTcpServer
 {
  public:
+  /// @brief 构造服务对象，不创建任务 / Construct the server without creating a task.
+  /// @param dap 执行请求的 DAP 实例，生命周期需长于本对象 / DAP instance that runs the
+  ///        requests; must outlive this object.
+  /// @param port 监听端口 / Listening port.
   DapTcpServer(DapT& dap, uint16_t port) : dap_(dap), port_(port) {}
 
-  /// 客户端连上时、客户端走后各调用一次。USB 和 TCP 共用同一个 DAP 实例，
-  /// 应用用这两个回调把它在两种传输之间交接。
+  /// @brief 设置连接交接回调，需在 Start() 之前调用 / Set the handover hooks; call before
+  ///        Start().
+  /// @param on_connect 客户端连上时在服务任务中调用 / Called in the server task when a
+  ///        client connects.
+  /// @param on_disconnect 客户端断开后在服务任务中调用 / Called in the server task after
+  ///        the client is gone.
+  /// @param ctx 传给两个回调的参数 / Argument passed to both hooks.
+  /// @note USB 和 TCP 共用同一个 DAP 实例，应用用这两个回调在传输之间交接 / USB and TCP
+  ///       share one DAP instance; the hooks let the application hand it over.
   void SetHooks(void (*on_connect)(void*), void (*on_disconnect)(void*), void* ctx)
   {
     on_connect_ = on_connect;
@@ -31,10 +49,14 @@ class DapTcpServer
     hook_ctx_ = ctx;
   }
 
-  /// 在指定的核上启动服务任务。
+  /// @brief 在指定的核上启动服务任务（不会返回，bind/listen 失败时自行删除）/ Start the
+  ///        server task pinned to a core (never returns; deletes itself if bind/listen
+  ///        fails).
+  /// @param core 服务任务所在的核 / Core that runs the server task.
   void Start(int core)
   {
-    xTaskCreatePinnedToCore(&DapTcpServer::TaskEntry, "xrdap_tcp", 12288, this, 10, nullptr, core);
+    xTaskCreatePinnedToCore(&DapTcpServer::TaskEntry, "xrdap_tcp", 12288, this, 10,
+                            nullptr, core);
   }
 
  private:
@@ -139,7 +161,7 @@ class DapTcpServer
         continue;
       }
       setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-      // 客户端不发 FIN 就消失（Wi-Fi 掉线、主机死机）时，没有 keepalive 的话连接会一直占着
+      // 客户端不发 FIN 就消失（Wi-Fi 掉线、主机死机）时，没有 keepalive 连接会一直占着
       // 唯一的位置。空闲 5 秒开始探测，每 2 秒一次，3 次无应答就断开（约 11 秒）。
       const int keep_idle = 5, keep_interval = 2, keep_count = 3;
       setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &one, sizeof(one));

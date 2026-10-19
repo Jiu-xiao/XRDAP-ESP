@@ -1,12 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// XR 厂商扩展命令（0x80 到 0x85）：多地址读写、指针链解引用、探针端周期采样。
-// 协议见 docs/protocol.md。
+// XR 厂商扩展命令（0x80 到 0x85）：多地址读写、指针链解引用、探针端周期采样。还可挂一条
+// 附加命令（SetExtraCommand，例如 0x86 Wi-Fi 配置），本类不依赖它。协议见
+// docs/protocol.md。
 //
-// 这些命令要直接访问 MEM-AP，所以自己管理 SELECT、CSW、TAR，不走 DAP 的传输流水线。
-// 执行完会让 SWD 的 SELECT 缓存失效；上位机要把 SELECT、CSW、TAR 当作未知。
-// 通过 libxr DAP 类的命令钩子接入，USB、TCP、串口三种传输行为一致。
+// 这些命令直接访问 MEM-AP，自己管理 SELECT、CSW、TAR，不走 DAP 的传输流水线；执行完让
+// SWD 的 SELECT 缓存失效，上位机须把 SELECT、CSW、TAR 视为未知。通过 libxr DAP 类的
+// 命令钩子接入，USB、TCP、串口三种传输行为一致。
+//
+// XR vendor extension commands (0x80 to 0x85): multi-address read/write, pointer-chain
+// dereference and probe-side periodic sampling. One extra command can be attached
+// (SetExtraCommand, e.g. 0x86 Wi-Fi configuration); this class does not depend on it. See
+// docs/protocol.md.
+//
+// The commands access the MEM-AP directly and manage SELECT, CSW and TAR themselves,
+// bypassing the DAP transfer pipeline. Afterwards the SWD SELECT cache is invalidated, so
+// the host must treat SELECT, CSW and TAR as unknown. They plug in through the libxr DAP
+// class command hook and behave identically over USB, TCP and serial.
 
 #include <atomic>
 #include <cstdint>
@@ -22,73 +33,149 @@
 namespace XrDap
 {
 
+/// XR 厂商扩展命令处理器 / XR vendor extension command handler.
+/// @note 命令在 DAP 命令线程中执行，采样在 Begin() 创建的任务中执行；两者通过内部互斥量
+///       串行访问 SWD / Commands run on the DAP command thread and sampling runs in the
+///       task created by Begin(); an internal mutex serialises their SWD access.
 class DapVendor
 {
  public:
   using Ack = LibXR::Debug::SwdProtocol::Ack;
   using DpReadReg = LibXR::Debug::SwdProtocol::DpReadReg;
 
+  /// 协议版本 / Protocol version.
   static constexpr uint8_t kVersion = 1;
-  static constexpr uint32_t kFeatures = 0x0F;  // READ | WRITE | 采样 | 8 字节访问
+  /// 功能位：READ | WRITE | 采样 | 8 字节访问 / Feature bits: READ | WRITE | sampling |
+  /// 8-byte access.
+  static constexpr uint32_t kFeatures = 0x0F;
+  /// 一条命令最多的条目数 / Maximum items per command.
   static constexpr uint16_t kMaxItems = 32;
+  /// 指针链最大深度 / Maximum pointer-chain depth.
   static constexpr uint8_t kMaxDepth = 8;
-  static constexpr uint32_t kRingBytes = 16384;  // 必须是 2 的幂
+  /// 采样环形缓冲字节数，必须是 2 的幂 / Sampling ring buffer size in bytes; must be a
+  /// power of two.
+  static constexpr uint32_t kRingBytes = 16384;
+  /// 一帧采样数据的最大字节数 / Maximum bytes of one sample frame.
   static constexpr uint16_t kMaxFrameBytes = 10U + (kMaxItems + 7U) / 8U + kMaxItems * 8U;
-  // 串口没有"连接"的概念：串口发起的采样在这么久收不到任何请求后自动停止。
+  /// 串口没有连接的概念：串口发起的采样在这么久收不到任何请求后自动停止 / A serial link
+  /// has no notion of connection: serial-started sampling stops after this long without
+  /// any request.
   static constexpr uint32_t kSerialLeaseMs = 5000U;
 
+  /// 命令状态：成功 / Command status: success.
   static constexpr uint8_t kStatusOk = 0x00;
+  /// 命令状态：参数错误 / Command status: bad argument.
   static constexpr uint8_t kStatusArg = 0x01;
+  /// 命令状态：当前状态不允许 / Command status: not allowed in the current state.
   static constexpr uint8_t kStatusState = 0x02;
+  /// 命令状态：资源不足 / Command status: insufficient resources.
   static constexpr uint8_t kStatusResource = 0x03;
+  /// 命令状态：未连接目标 / Command status: no target connected.
   static constexpr uint8_t kStatusNoTarget = 0x04;
 
+  /// 条目状态：成功 / Item status: success.
   static constexpr uint8_t kItemOk = 0x00;
+  /// 条目状态 0x10 + k：第 k 级读指针时 SWD 出错或超时 / Item status 0x10 + k: SWD
+  /// error or timeout reading the pointer at level k.
   static constexpr uint8_t kItemSwdChain = 0x10;
+  /// 条目状态：最后一次读或写时 SWD 失败 / Item status: SWD failed on the final access.
   static constexpr uint8_t kItemSwdLast = 0x1F;
+  /// 条目状态 0x20 + k：第 k 级的读地址未 4 字节对齐 / Item status 0x20 + k: the read
+  /// address at level k is not 4-byte aligned.
   static constexpr uint8_t kItemAlignChain = 0x20;
+  /// 条目状态：最后访问的地址未按 size 对齐 / Item status: the final address is not
+  /// aligned to size.
   static constexpr uint8_t kItemAlignLast = 0x2F;
+  /// 条目状态 0x30 + k：第 k 级读出的指针为 0，链终止 / Item status 0x30 + k: the pointer
+  /// read at level k is 0 and the chain stops.
   static constexpr uint8_t kItemNull = 0x30;
 
-  /// 当前驱动 DAP 的传输。采样归发起它的传输所有，那个传输断开时采样停止。
+  /// 当前驱动 DAP 的传输。采样归发起它的传输所有，该传输断开时采样停止 / Transport
+  /// currently driving the DAP. Sampling belongs to the transport that started it and
+  /// stops when that transport goes away.
   enum class Transport : uint8_t
   {
-    USB = 0,
-    TCP = 1,
-    SERIAL = 2,
+    USB = 0,     ///< USB 接口 / USB interface.
+    TCP = 1,     ///< TCP 连接 / TCP connection.
+    SERIAL = 2,  ///< 串口链路 / Serial link.
   };
 
+  /// 一个读/采样条目：沿指针链解引用后读取 size 字节 / One read or sampling item:
+  /// dereference along a pointer chain, then read size bytes.
   struct Item
   {
+    /// AP 号 / AP index.
     uint8_t ap = 0;
+    /// 主机分配的条目号 / Host-assigned item id.
     uint16_t id = 0;
+    /// 读取字节数，1、2、4 或 8 / Bytes to read: 1, 2, 4 or 8.
     uint8_t size = 0;
+    /// 起始地址 / Start address.
     uint32_t base = 0;
+    /// 指针链深度，不超过 kMaxDepth / Pointer-chain depth, at most kMaxDepth.
     uint8_t n = 0;
+    /// 每级解引用前加的偏移 / Offset added before each dereference.
     int16_t deref[kMaxDepth] = {};
+    /// 最后一次读取前加的偏移 / Offset added before the final read.
     int16_t final_off = 0;
   };
 
-  DapVendor(LibXR::Debug::Swd& swd, uint16_t max_packet) : swd_(swd), max_packet_(max_packet)
+  /// @param swd SWD 实现，生命周期需长于本对象 / SWD implementation; must outlive this
+  ///        object.
+  /// @param max_packet DAP 包长 / DAP packet size.
+  DapVendor(LibXR::Debug::Swd& swd, uint16_t max_packet)
+      : swd_(swd), max_packet_(max_packet)
   {
   }
 
-  /// 在指定的核上启动采样任务（必须是 SWD 所在的核）。只调用一次。
+  /// @brief 在指定的核上启动采样任务 / Start the sampling task on a core.
+  /// @param core 必须是 SWD 所在的核 / Must be the core that owns the SWD pins.
+  /// @param task_prio 采样任务优先级，应为该核上最高 / Sampling task priority; should be
+  ///        the highest on that core.
+  /// @note 只调用一次，且在命令钩子开始使用之前 / Call once, before the command hook is
+  ///       used.
   void Begin(int core, uint32_t task_prio)
   {
     swd_mutex_ = xSemaphoreCreateMutex();
     wake_ = xSemaphoreCreateBinary();
-    xTaskCreatePinnedToCore(&DapVendor::TaskEntry, "dap_vendor", 8192, this, task_prio, &task_,
-                            core);
+    xTaskCreatePinnedToCore(&DapVendor::TaskEntry, "dap_vendor", 8192, this, task_prio,
+                            &task_, core);
   }
 
-  /// 传输在执行 DAP 命令之前设置。
+  /// 附加命令处理函数，返回 true 表示已填好回复 / Extra command handler; returns true
+  /// once the reply is filled in.
+  using ExtraHandler = bool (*)(void* ctx, const uint8_t* req, uint16_t len,
+                                uint8_t* resp, uint16_t cap, uint16_t& out);
+
+  /// @brief 挂一条附加命令，其 feature 并入 INFO 功能位 / Attach one extra command whose
+  ///        feature bit is merged into INFO.
+  /// @param cmd 命令字节，应在 0x85 之后 / Command byte, expected above 0x85.
+  /// @param feature INFO 功能位 / INFO feature bit.
+  /// @param handler 处理函数 / Handler.
+  /// @param ctx 传给处理函数的参数 / Argument passed to the handler.
+  /// @note 在 Begin() 之前调用，只能挂一条 / Call before Begin(); only one is supported.
+  void SetExtraCommand(uint8_t cmd, uint32_t feature, ExtraHandler handler, void* ctx)
+  {
+    extra_cmd_ = cmd;
+    extra_feature_ = feature;
+    extra_handler_ = handler;
+    extra_ctx_ = ctx;
+  }
+
+  /// 由传输在执行 DAP 命令之前设置当前传输 / Set by a transport before it executes DAP
+  /// commands.
   void SetTransport(Transport t) { transport_ = t; }
 
-  /// 串口收到一个请求：刷新串口采样的租期。
-  void NotifySerialActivity() { last_serial_ms_.store(NowMs(), std::memory_order_release); }
+  /// 串口收到一个请求时调用，刷新串口采样的租期 / Called on every serial request to
+  /// refresh the serial sampling lease.
+  void NotifySerialActivity()
+  {
+    last_serial_ms_.store(NowMs(), std::memory_order_release);
+  }
 
-  /// 拥有探针的传输断开了（TCP 客户端关闭、USB 复位等）：停止采样，释放连接状态。
+  /// 拥有探针的传输断开（TCP 客户端关闭、USB 复位等）时调用：停止采样并清除连接状态 /
+  /// Call when the transport owning the probe goes away (TCP client closed, USB reset,
+  /// ...): stops sampling and clears the connection state.
   void OnTransportClosed()
   {
     StopSampling();
@@ -98,17 +185,22 @@ class DapVendor
     swd_.InvalidateSelectCache();
   }
 
-  /// USB 总线复位计数。USB 发起的采样在计数变化（拔出、主机复位）时停止。
+  /// 读取 USB 总线复位计数的函数 / Function returning the USB bus-reset count.
   using ResetCountFn = uint32_t (*)(void*);
+  /// 设置 USB 复位计数来源；USB 发起的采样在计数变化（拔出、主机复位）时停止 / Set the
+  /// USB reset-count source; USB-started sampling stops when the count changes (unplug,
+  /// host reset).
   void SetUsbResetSource(ResetCountFn fn, void* ctx)
   {
     usb_reset_fn_ = fn;
     usb_reset_ctx_ = ctx;
   }
 
-  /// libxr DAP 类的命令钩子入口。返回 true 表示命令已处理。
-  static bool Hook(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
-                   uint16_t& out)
+  /// libxr DAP 类的命令钩子入口，返回 true 表示命令已处理（回复在 resp/out）/ Entry for
+  /// the libxr DAP class command hook; returns true when the command was handled (reply
+  /// in resp/out).
+  static bool Hook(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
+                   uint16_t cap, uint16_t& out)
   {
     return static_cast<DapVendor*>(ctx)->OnCommand(req, len, resp, cap, out);
   }
@@ -144,7 +236,8 @@ class DapVendor
 
   static uint32_t NowMs() { return static_cast<uint32_t>(esp_timer_get_time() / 1000); }
 
-  bool OnCommand(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap, uint16_t& out)
+  bool OnCommand(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
+                 uint16_t& out)
   {
     if (req == nullptr || resp == nullptr || len < 1U || cap < 1U)
     {
@@ -154,12 +247,12 @@ class DapVendor
 
     if (active_.load(std::memory_order_acquire))
     {
-      // 采样期间探针被订阅独占：只放行 DAP_Info、DAP_HostStatus 和 0x80 到 0x85。
+      // 采样期间探针被订阅独占：只放行 DAP_Info、DAP_HostStatus 和厂商命令。
       if (cmd == 0x00U || cmd == 0x01U)
       {
         return false;
       }
-      if (cmd < 0x80U || cmd > 0x85U)
+      if (!IsVendor(cmd))
       {
         resp[0] = 0xFFU;
         out = 1U;
@@ -168,12 +261,13 @@ class DapVendor
       return HandleVendor(cmd, req, len, resp, cap, out);
     }
 
-    if (cmd >= 0x80U && cmd <= 0x85U)
+    if (IsVendor(cmd))
     {
       return HandleVendor(cmd, req, len, resp, cap, out);
     }
 
-    // 采样刚被停掉时，采样任务可能还在读最后一拍：等它读完，否则两个任务同时驱动 SWD，线上的时序会乱。
+    // 采样刚被停掉时，采样任务可能还在读最后一拍：等它读完，否则两个任务同时驱动
+    // SWD，线上的时序会乱。
     WaitTickDone();
 
     // 跟踪 DAP_Connect / DAP_Disconnect，扩展命令要求先连接到 SWD 目标。
@@ -191,7 +285,7 @@ class DapVendor
     return false;
   }
 
-  /// 等采样任务读完手头这一拍（最多 50 ms）。
+  // 等采样任务读完手头这一拍（最多 50 ms）。
   void WaitTickDone()
   {
     for (int i = 0; i < 50 && in_tick_.load(std::memory_order_acquire); ++i)
@@ -200,9 +294,19 @@ class DapVendor
     }
   }
 
-  bool HandleVendor(uint8_t cmd, const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
-                    uint16_t& out)
+  bool IsVendor(uint8_t cmd) const
   {
+    return (cmd >= 0x80U && cmd <= 0x85U) ||
+           (extra_handler_ != nullptr && cmd == extra_cmd_);
+  }
+
+  bool HandleVendor(uint8_t cmd, const uint8_t* req, uint16_t len, uint8_t* resp,
+                    uint16_t cap, uint16_t& out)
+  {
+    if (extra_handler_ != nullptr && cmd == extra_cmd_)
+    {
+      return extra_handler_(extra_ctx_, req, len, resp, cap, out);
+    }
     switch (cmd)
     {
       case 0x80U:
@@ -250,7 +354,10 @@ class DapVendor
       p[i] = static_cast<uint8_t>(v >> (8 * i));
     }
   }
-  static uint16_t Get16(const uint8_t* p) { return static_cast<uint16_t>(p[0] | (p[1] << 8)); }
+  static uint16_t Get16(const uint8_t* p)
+  {
+    return static_cast<uint16_t>(p[0] | (p[1] << 8));
+  }
   static uint32_t Get32(const uint8_t* p)
   {
     return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
@@ -280,7 +387,7 @@ class DapVendor
     }
     resp[1] = kStatusOk;
     resp[2] = kVersion;
-    Put32(&resp[3], kFeatures);
+    Put32(&resp[3], kFeatures | extra_feature_);
     Put16(&resp[7], kMaxItems);
     resp[9] = kMaxDepth;
     Put32(&resp[10], kRingBytes);
@@ -290,7 +397,7 @@ class DapVendor
     return true;
   }
 
-  /// 解析一个条目；sampling 为 true 时条目后面还有 div 和 phase。
+  // 解析一个条目；sampling 为 true 时条目后面还有 div 和 phase。
   static bool ParseItem(const uint8_t*& p, const uint8_t* end, Item& it, bool sampling,
                         uint16_t* div, uint16_t* phase)
   {
@@ -332,9 +439,13 @@ class DapVendor
     return true;
   }
 
-  static bool SizeValid(uint8_t size) { return size == 1U || size == 2U || size == 4U || size == 8U; }
+  static bool SizeValid(uint8_t size)
+  {
+    return size == 1U || size == 2U || size == 4U || size == 8U;
+  }
 
-  bool CmdRead(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap, uint16_t& out)
+  bool CmdRead(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
+               uint16_t& out)
   {
     resp[0] = 0x81U;
     if (len < 2U || req[1] == 0U)
@@ -352,7 +463,8 @@ class DapVendor
     uint32_t resp_size = 3U;
     for (uint8_t i = 0; i < count; ++i)
     {
-      if (!ParseItem(p, end, items[i], false, nullptr, nullptr) || !SizeValid(items[i].size))
+      if (!ParseItem(p, end, items[i], false, nullptr, nullptr) ||
+          !SizeValid(items[i].size))
       {
         return Reply(resp, kStatusArg, out);
       }
@@ -395,7 +507,8 @@ class DapVendor
     return true;
   }
 
-  bool CmdWrite(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap, uint16_t& out)
+  bool CmdWrite(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
+                uint16_t& out)
   {
     resp[0] = 0x82U;
     if (len < 2U || req[1] == 0U)
@@ -413,8 +526,8 @@ class DapVendor
     const uint8_t* end = req + len;
     for (uint8_t i = 0; i < count; ++i)
     {
-      if (!ParseItem(p, end, items[i], false, nullptr, nullptr) || !SizeValid(items[i].size) ||
-          static_cast<size_t>(end - p) < items[i].size)
+      if (!ParseItem(p, end, items[i], false, nullptr, nullptr) ||
+          !SizeValid(items[i].size) || static_cast<size_t>(end - p) < items[i].size)
       {
         return Reply(resp, kStatusArg, out);
       }
@@ -455,7 +568,8 @@ class DapVendor
     return true;
   }
 
-  bool CmdSubSet(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap, uint16_t& out)
+  bool CmdSubSet(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
+                 uint16_t& out)
   {
     if (cap < 8U)
     {
@@ -493,8 +607,8 @@ class DapVendor
       Item it;
       uint16_t div = 0U;
       uint16_t phase = 0U;
-      if (!ParseItem(p, end, it, true, &div, &phase) || !SizeValid(it.size) || div == 0U ||
-          phase >= div)
+      if (!ParseItem(p, end, it, true, &div, &phase) || !SizeValid(it.size) ||
+          div == 0U || phase >= div)
       {
         return Reply(resp, kStatusArg, out);
       }
@@ -523,16 +637,16 @@ class DapVendor
     {
       return Reply(resp, kStatusNoTarget, out);
     }
-    // 按当前 SWD 时钟实测：标定单次访问耗时（INFO 里报告），再把全部条目试读一遍，
-    // 得到"所有条目都到期"时一帧的耗时。开机后第一次订阅也能得到准确的估计。
+    // 按当前 SWD 时钟实测：先标定单次访问耗时（INFO 会报告），再把全部条目试读一遍，得到
+    // 所有条目都到期时一帧的耗时。
     uint32_t frame_us = 0U;
     if (!Calibrate(items[0].item.ap) || !MeasureFrame(items, count, frame_us))
     {
       return Reply(resp, kStatusNoTarget, out);
     }
 
-    // 乘 1.6：采样时同一个核上的 DAP 线程还要处理 SUB_READ，会抢占采样任务。
-    // 实测（8 个条目、试读约 265 µs）每帧实际要约 1.5 倍的时间，周期再短就开始跳拍。
+    // 乘 1.6：采样时同一个核上的 DAP 线程还要处理 SUB_READ，会抢占采样任务，每帧实际
+    // 耗时约为试读的 1.5 倍，周期再短就开始跳拍。
     const uint32_t est = 10U + (frame_us * 8U) / 5U;
     if (max_frame + 2U > kRingBytes || est > period)
     {
@@ -587,7 +701,8 @@ class DapVendor
     }
   }
 
-  bool CmdSubRead(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap, uint16_t& out)
+  bool CmdSubRead(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
+                  uint16_t& out)
   {
     if (cap < 24U)
     {
@@ -643,7 +758,10 @@ class DapVendor
 
   // ------------------------------------------------------------------ SWD 访问
 
-  static uint8_t SizeCode(uint8_t size) { return (size == 1U) ? 0U : (size == 2U) ? 1U : 2U; }
+  static uint8_t SizeCode(uint8_t size)
+  {
+    return (size == 1U) ? 0U : (size == 2U) ? 1U : 2U;
+  }
 
   static bool TxnOk(LibXR::ErrorCode ec, Ack ack)
   {
@@ -659,8 +777,8 @@ class DapVendor
     ap_count_ = 0U;
   }
 
-  /// 标定一次访问（写 TAR + 读 AP 寄存器，与读一个字的事务数相同）的耗时。
-  /// 读的是 CSW，不访问目标内存，没有副作用。
+  // 标定一次访问（写 TAR + 读 AP 寄存器，与读一个字的事务数相同）的耗时。
+  // 读的是 CSW，不访问目标内存，没有副作用。
   bool Calibrate(uint8_t ap)
   {
     constexpr uint32_t kRounds = 16U;
@@ -674,7 +792,8 @@ class DapVendor
     const int64_t t0 = esp_timer_get_time();
     for (uint32_t i = 0; ok && i < kRounds; ++i)
     {
-      ok = TxnOk(swd_.ApWriteTxn(0x01U, 0U, ack), ack) && TxnOk(swd_.ApReadTxn(0x00U, v, ack), ack);
+      ok = TxnOk(swd_.ApWriteTxn(0x01U, 0U, ack), ack) &&
+           TxnOk(swd_.ApReadTxn(0x00U, v, ack), ack);
     }
     const int64_t t1 = esp_timer_get_time();
     if (!ok)
@@ -691,8 +810,8 @@ class DapVendor
     return ok;
   }
 
-  /// 把全部条目按采样时的访问序列试读（两遍，返回第二遍的耗时）。各 AP 的 CSW 先读好，不计入耗时。
-  /// 试读和采样访问的是同一批地址，副作用相同。
+  // 把全部条目按采样时的访问序列试读（两遍，返回第二遍的耗时）。各 AP 的 CSW 先读好，
+  // 不计入耗时。试读和采样访问同一批地址，副作用相同。
   bool MeasureFrame(const SubItem* items, uint16_t count, uint32_t& us)
   {
     if (xSemaphoreTake(swd_mutex_, pdMS_TO_TICKS(2000)) != pdTRUE)
@@ -705,7 +824,7 @@ class DapVendor
     {
       ok = EnsureAp(items[i].item.ap) != nullptr;
     }
-    // 跑两遍，只计第二遍：第一遍会把指令缓存、数据缓存预热，偶尔会慢很多，估计值会偏大导致订阅被拒
+    // 跑两遍只计第二遍：第一遍在预热指令和数据缓存，偶尔慢很多，会让估计偏大而误拒订阅。
     for (int pass = 0; ok && pass < 2; ++pass)
     {
       ApState ap{};
@@ -729,8 +848,8 @@ class DapVendor
     return ok;
   }
 
-  /// 读一个 AP 的 CSW。失败时清掉粘滞错误再试一次：刚重新连接、或上一次访问被打断（例如采样被停掉）之后，
-  /// 第一次 AP 访问偶尔会因为 DP 里残留的粘滞错误失败。
+  // 读一个 AP 的 CSW。失败时清掉粘滞错误再试一次：刚重新连接，或上一次访问被打断（例如
+  // 采样被停掉）之后，第一次 AP 访问偶尔会因 DP 里残留的粘滞错误失败。
   bool ReadCsw(uint8_t ap, uint32_t& csw)
   {
     for (int attempt = 0; attempt < 2; ++attempt)
@@ -747,7 +866,7 @@ class DapVendor
     return false;
   }
 
-  /// 本命令里第一次用到某个 AP 时读一次它的 CSW。
+  // 本命令里第一次用到某个 AP 时读一次它的 CSW。
   ApState* EnsureAp(uint8_t ap)
   {
     for (size_t i = 0; i < ap_count_; ++i)
@@ -765,7 +884,7 @@ class DapVendor
     return st->valid ? st : nullptr;
   }
 
-  /// 写 CSW：保留原值里 Size（位 2:0）和 AddrInc（位 5:4）以外的位，关闭自增。
+  // 写 CSW：保留原值里 Size（位 2:0）和 AddrInc（位 5:4）以外的位，关闭自增。
   bool SetSize(ApState& st, uint8_t size)
   {
     if (!st.valid)
@@ -801,13 +920,14 @@ class DapVendor
     return true;
   }
 
-  /// 写是 posted 的，写完读一次 CTRL/STAT 看有没有粘滞错误。
+  // 写是 posted 的，写完读一次 CTRL/STAT 看有没有粘滞错误。
   bool CheckCtrlStat()
   {
     Ack ack;
     uint32_t cs = 0U;
     if (!TxnOk(swd_.DpReadTxn(DpReadReg::CTRL_STAT, cs, ack), ack) ||
-        (cs & ((1U << 1) | (1U << 5) | (1U << 7))) != 0U)  // STICKYORUN、STICKYERR、WDATAERR
+        (cs & ((1U << 1) | (1U << 5) | (1U << 7))) !=
+            0U)  // STICKYORUN、STICKYERR、WDATAERR
     {
       ClearSticky();
       return false;
@@ -827,14 +947,15 @@ class DapVendor
     return CheckCtrlStat();
   }
 
-  /// 写 DP ABORT 清除 STKCMPCLR、STKERRCLR、WDERRCLR、ORUNERRCLR，否则后面的访问会连续失败。
+  // 写 DP ABORT 清除 STKCMPCLR、STKERRCLR、WDERRCLR、ORUNERRCLR，否则后面的访问会
+  // 连续失败。
   void ClearSticky()
   {
     Ack ack;
     (void)swd_.WriteAbortTxn(0x1EU, ack);
   }
 
-  /// 沿指针链求出最后要访问的地址；失败时 st 给出条目状态。
+  // 沿指针链求出最后要访问的地址；失败时 st 给出条目状态。
   bool Resolve(const Item& it, uint32_t& addr, uint8_t& st)
   {
     uint32_t cur = it.base;
@@ -871,7 +992,8 @@ class DapVendor
     return true;
   }
 
-  /// 按 size 和地址取出值：1、2 字节在 DRW 的对应字节通道里，8 字节是两次 32 位读（不是原子的）。
+  // 按 size 和地址取出值：1、2 字节在 DRW 的对应字节通道里，8 字节是两次 32 位读，
+  // 不是原子的。
   uint8_t ReadValue(ApState& ap, uint8_t size, uint32_t addr, uint8_t* out)
   {
     if (!SetSize(ap, (size == 8U) ? 4U : size))
@@ -912,7 +1034,7 @@ class DapVendor
     return kItemOk;
   }
 
-  /// 读一个条目。解引用前 CSW 必须是 32 位访问：上一个条目可能把它改成了 1 或 2 字节。
+  // 读一个条目。解引用前 CSW 必须是 32 位访问：上一个条目可能把它改成了 1 或 2 字节。
   uint8_t ReadItem(ApState& ap, const Item& it, uint8_t* out)
   {
     if (it.n != 0U && !SetSize(ap, 4U))
@@ -1041,7 +1163,7 @@ class DapVendor
 
   void TaskLoop()
   {
-    // 节拍定时器在采样任务里创建，它的中断就分配在采样所在的核上
+    // 节拍定时器在采样任务里创建，它的中断就分配在采样所在的核上。
     CreateTickTimer();
     for (;;)
     {
@@ -1056,7 +1178,8 @@ class DapVendor
 
   // 节拍定时器：每个周期在节拍时刻发一次中断唤醒采样任务。采样任务在节拍之间阻塞，
   // 不再忙等，所以它可以是这个核上优先级最高的任务：节拍准时，别的任务在节拍之间运行。
-  static constexpr uint32_t kSpinUs = 30U;    // 被唤醒后离节拍不到这么久时忙等，补上中断和切换的延迟
+  static constexpr uint32_t kSpinUs =
+      30U;  // 被唤醒后离节拍不到这么久时忙等，补上中断和切换的延迟
   static constexpr uint32_t kMinGapUs = 15U;  // 每个周期至少留给别的任务的时间
 
   static bool IRAM_ATTR OnTickAlarm(gptimer_handle_t, const gptimer_alarm_event_data_t*,
@@ -1083,7 +1206,7 @@ class DapVendor
     }
   }
 
-  /// 让定时器从现在起在 start + k × period 时刻发中断。
+  // 让定时器从现在起在 start + k × period 时刻发中断。
   void StartTickTimer(uint64_t start, uint32_t period)
   {
     if (tick_timer_ == nullptr)
@@ -1108,12 +1231,12 @@ class DapVendor
     }
   }
 
-  /// 等到 deadline：阻塞等节拍中断。被中断唤醒后离 deadline 还差不到 kSpinUs（定时器和
-  /// esp_timer 之间的偏差）时忙等补上。没被唤醒过之前一律阻塞，不忙等：采样任务优先级最高，
-  /// 一拍做完离下一拍很近时忙等会把这个核占满，别的任务连停止命令都收不到。
+  // 等到 deadline：阻塞等节拍中断。被中断唤醒后离 deadline 还差不到 kSpinUs（定时器与
+  // esp_timer 之间的偏差）时忙等补上。没被唤醒过之前一律阻塞、不忙等：采样任务优先级
+  // 最高，一拍做完离下一拍很近时忙等会占满这个核，别的任务连停止命令都收不到。
   void SleepUntil(uint64_t deadline_us)
   {
-    // 上一拍做得慢时，中途经过的节拍边界留下了通知；先清掉，只认这次阻塞之后的唤醒
+    // 上一拍做得慢时，中途经过的节拍边界留下了通知；先清掉，只认这次阻塞之后的唤醒。
     (void)ulTaskNotifyTake(pdTRUE, 0);
     bool woke = false;
     for (;;)
@@ -1132,13 +1255,15 @@ class DapVendor
         continue;
       }
       // 超时只是为了定期检查 active_；没有定时器时就是每 1 ms 醒一次
-      woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(tick_timer_ != nullptr ? 20U : 1U)) != 0U;
+      woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(tick_timer_ != nullptr ? 20U : 1U)) !=
+             0U;
     }
   }
 
   uint16_t RingFrameLen(uint32_t pos) const
   {
-    return static_cast<uint16_t>(ring_[pos] | (ring_[(pos + 1U) & (kRingBytes - 1U)] << 8));
+    return static_cast<uint16_t>(ring_[pos] |
+                                 (ring_[(pos + 1U) & (kRingBytes - 1U)] << 8));
   }
 
   void CopyFromRing(uint32_t at, uint8_t* dst, uint32_t len) const
@@ -1194,7 +1319,7 @@ class DapVendor
     return nullptr;
   }
 
-  /// 读一拍里到期的条目，失败的在 marks 里置位。
+  // 读一拍里到期的条目，失败的在 marks 里置位。
   void SampleTick(const uint16_t* order, uint16_t due, uint8_t* values, uint8_t* marks)
   {
     if (xSemaphoreTake(swd_mutex_, pdMS_TO_TICKS(1000)) != pdTRUE)
@@ -1230,7 +1355,8 @@ class DapVendor
     xSemaphoreGive(swd_mutex_);
   }
 
-  /// 采样主循环：第 k 拍的目标时刻为 start + k × period，不累计漂移；来不及时跳过节拍，不补做。
+  // 采样主循环：第 k 拍的目标时刻为 start + k × period，不累计漂移；来不及时跳过节拍，
+  // 不补做。
   void RunSampling(uint32_t gen)
   {
     uint64_t k = 0U;
@@ -1241,10 +1367,12 @@ class DapVendor
     uint16_t order[kMaxItems];
     StartTickTimer(start, period);
 
-    while (active_.load(std::memory_order_acquire) && gen_.load(std::memory_order_acquire) == gen)
+    while (active_.load(std::memory_order_acquire) &&
+           gen_.load(std::memory_order_acquire) == gen)
     {
       SleepUntil(start + k * period);
-      if (!active_.load(std::memory_order_acquire) || gen_.load(std::memory_order_acquire) != gen)
+      if (!active_.load(std::memory_order_acquire) ||
+          gen_.load(std::memory_order_acquire) != gen)
       {
         break;
       }
@@ -1281,8 +1409,8 @@ class DapVendor
         // 来不及：跳到下一个还没过去的节拍
         next_k = (done - start) / period + 1U;
       }
-      // 离下一拍太近时再跳一拍。采样任务是这个核上优先级最高的任务，每个周期至少要给
-      // 别的任务（DAP 命令、TCP、串口，包括收停止命令的那个）留出 1/8 周期、最少 kMinGapUs
+      // 离下一拍太近时再跳一拍。采样任务是这个核上优先级最高的任务，每个周期至少给别的
+      // 任务（DAP 命令、TCP、串口，包括收停止命令的那个）留出 1/8 周期、最少 kMinGapUs。
       const uint64_t min_gap = (period / 8U > kMinGapUs) ? period / 8U : kMinGapUs;
       if (start + next_k * period - done < min_gap)
       {
@@ -1328,6 +1456,11 @@ class DapVendor
   SemaphoreHandle_t swd_mutex_ = nullptr;
   SemaphoreHandle_t wake_ = nullptr;
   TaskHandle_t task_ = nullptr;
+
+  uint8_t extra_cmd_ = 0U;
+  uint32_t extra_feature_ = 0U;
+  ExtraHandler extra_handler_ = nullptr;
+  void* extra_ctx_ = nullptr;
   gptimer_handle_t tick_timer_ = nullptr;
 
   ResetCountFn usb_reset_fn_ = nullptr;

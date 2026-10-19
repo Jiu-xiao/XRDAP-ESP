@@ -10,6 +10,15 @@ permissions:
   contents: write
 
 jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 格式检查（clang-format 21.1.8，配置与 libxr 相同）
+        run: |
+          pip install clang-format==21.1.8
+          git ls-files 'firmware/*.hpp' 'firmware/*.cpp' 'firmware/*.c' | xargs clang-format --dry-run --Werror
+
   firmware:
     strategy:
       fail-fast: false
