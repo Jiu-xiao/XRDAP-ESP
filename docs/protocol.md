@@ -10,7 +10,7 @@
 
 ## 1. 串口帧
 
-串口使用 libxr 的 Topic 打包帧，固件端由 libxr 的 `DapSerialTransport`（`src/driver/debug/dap_serial_transport.hpp`）实现，电脑端由 `host/xrdap-forward` 实现。
+串口使用 libxr 的 Topic 打包帧，固件端由 libxr 的 `DapSerialTransport`（`src/driver/debug/dap_serial_transport.hpp`）实现，电脑端由 XRDAP-Host 的 `xrdap` 库（`transport::serial`）实现。
 
 ```
 prefix 0x5A(1) + data_len(3) + topic_crc32(4) + timestamp_us(6) + version(1) + header_crc8(1) + payload(data_len) + crc8(1)
@@ -40,7 +40,7 @@ CRC8 为反射多项式 `0x8C`、初值 `0xFF`；CRC32 为反射多项式 `0xEDB
 - 帧头 CRC8 错、version 不是 1、topic 不是 `dap_req`、data_len 小于 2 或大于 2 + 1024 时，丢弃当前候选帧，从缓冲里的下一个 `0x5A` 重新开始解析。
 - 尾 CRC8 错时同样丢弃并重新同步。
 - n 大于 1024 或 n + 2 大于 data_len 时丢弃该帧，不回响应。
-- 被丢弃的请求没有响应，由上位机超时重发。xrdap-forward 等待 2 秒（`--timeout-ms`），超时后向 OpenOCD 回一个字节 `0xFF`。
+- 被丢弃的请求没有响应，由上位机超时重发。`xrdap share` 等待 2 秒（`--timeout-ms`），超时后向调试工具回一个字节 `0xFF`。
 
 请求和响应一一对应。上位机每次发一个请求，收到响应后再发下一个。没有响应内容的命令，响应帧的 n 为 0。
 
@@ -50,7 +50,7 @@ CRC8 为反射多项式 `0x8C`、初值 `0xFF`；CRC32 为反射多项式 `0xEDB
 
 ## 2. TCP 帧
 
-探针的 TCP 3241 端口和 xrdap-forward 的监听端口使用同一种帧，与 OpenOCD 的 `cmsis-dap backend tcp` 一致：
+探针的 TCP 3241 端口和 `xrdap share openocd` 的监听端口使用同一种帧，与 OpenOCD 的 `cmsis-dap backend tcp` 一致：
 
 ```
 "DAP\0"(4) + 长度(2) + 类型(1) + 保留(1) + DAP 包
@@ -61,7 +61,7 @@ CRC8 为反射多项式 `0x8C`、初值 `0xFF`；CRC32 为反射多项式 `0xEDB
 - 同一时间只服务一个客户端，请求按顺序执行并应答。
 - 探针收到的帧头无效（magic 不对、类型不是 1、长度为 0 或大于 1024）时关闭连接。
 - 没有响应内容的命令（例如 `DAP_TransferAbort`）不回 TCP 帧。
-- xrdap-forward 把 TCP 帧去掉 8 字节头后换成串口帧发给探针，响应反向转换，不解析 DAP 内容。客户端断开后，它向探针发送一次 `84 00`（停止采样）。
+- `xrdap share openocd` 把 TCP 帧去掉 8 字节头后交给探针（经串口时换成串口帧），响应反向转换，不解析 DAP 内容。客户端断开后，它向探针发送一次 `84 00`（停止采样）。
 
 ## USB 主机的注意事项
 

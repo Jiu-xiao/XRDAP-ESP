@@ -10,7 +10,7 @@ Contents: 1 Serial frames; 2 TCP frames; 3 XR vendor extension (3.1 to 3.6 cover
 
 ## 1. Serial frames
 
-The serial link uses libxr Topic packed frames. On the firmware side it is implemented by libxr `DapSerialTransport` (`src/driver/debug/dap_serial_transport.hpp`); on the host side by `xrdap-forward`.
+The serial link uses libxr Topic packed frames. On the firmware side it is implemented by libxr `DapSerialTransport` (`src/driver/debug/dap_serial_transport.hpp`); on the host side by the `xrdap` library of XRDAP-Host (`transport::serial`).
 
 ```
 prefix 0x5A(1) + data_len(3) + topic_crc32(4) + timestamp_us(6) + version(1) + header_crc8(1) + payload(data_len) + crc8(1)
@@ -40,7 +40,7 @@ The probe parses frames by these rules:
 - If the header CRC8 is wrong, version is not 1, the topic is not `dap_req`, or data_len is smaller than 2 or larger than 2 + 1024, the current candidate frame is discarded and parsing restarts at the next `0x5A` in the buffer.
 - A wrong trailing CRC8 likewise discards the frame and resynchronises.
 - A frame with n larger than 1024 or n + 2 larger than data_len is discarded without a response.
-- A discarded request gets no response; the host retries after a timeout. `xrdap-forward` waits 2 seconds (`--timeout-ms`) and then returns a single byte `0xFF` to OpenOCD.
+- A discarded request gets no response; the host retries after a timeout. `xrdap share` waits 2 seconds (`--timeout-ms`) and then returns a single byte `0xFF` to the debug tool.
 
 Requests and responses correspond one to one. The host sends one request at a time and sends the next after receiving the response. For a command with no response content, n in the response frame is 0.
 
@@ -50,7 +50,7 @@ A serial port has no notion of connecting or disconnecting. The probe handles sa
 
 ## 2. TCP frames
 
-The probe's TCP port 3241 and the listening port of `xrdap-forward` use the same frame, matching OpenOCD `cmsis-dap backend tcp`:
+The probe's TCP port 3241 and the listening port of `xrdap share openocd` use the same frame, matching OpenOCD `cmsis-dap backend tcp`:
 
 ```
 "DAP\0"(4) + length(2) + type(1) + reserved(1) + DAP packet
@@ -61,7 +61,7 @@ Type 1 is a request, type 2 is a response; the reserved byte is 0. The length is
 - Only one client is served at a time; requests are executed and answered in order.
 - The probe closes the connection when it receives an invalid header (wrong magic, type other than 1, length 0 or larger than 1024).
 - A command with no response content (for example `DAP_TransferAbort`) gets no TCP frame back.
-- `xrdap-forward` strips the 8-byte header from a TCP frame, wraps the DAP packet in a serial frame for the probe, and converts responses back; it does not interpret DAP content. After the client disconnects it sends `84 00` (stop sampling) to the probe once.
+- `xrdap share openocd` strips the 8-byte header from a TCP frame, hands the DAP packet to the probe (wrapped in a serial frame when the link is serial), and converts responses back; it does not interpret DAP content. After the client disconnects it sends `84 00` (stop sampling) to the probe once.
 
 ## Notes for USB hosts
 
