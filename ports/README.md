@@ -11,7 +11,7 @@ ESP32-C3 已在硬件上验证（2026-10-19，原生 USB 的 C3 板，目标 STM
 - OpenOCD 经 `xrdap-forward`（Windows，带 `cmsis-dap quirk enable` 和 `min_timeout 10`）识别 Cortex-M4、读内存，导出 64 KiB SRAM 0.56 s（约 115 KiB/s，2 MHz）。
 - Wi-Fi（TCP 3241，经芯片 USB 口上的命令行配网）：INFO、读写正常；4 个变量 1 ms 周期 5 秒没有跳拍，500 µs 跳 19 拍（约 0.2%），350 µs 跳得多。采样优先级排在 lwIP 之上之前，500 µs 跳 585 拍。连着 Wi-Fi 时串口采样 350 µs 也会偶尔跳拍（Wi-Fi 驱动在同一个核上）。OpenOCD 直连 C3 的 TCP（Windows，带上面两行）导出 64 KiB SRAM 0.87 s（约 74 KiB/s）。
 - 芯片 USB 口上的命令行和 DAP 链路共用一个口：终端输入、DAP 读写、采样交替进行都正常，二进制数据不会让命令行输出（`tests-repo/mux_test.py`）。
-- 还没有测烧录 Flash。
+- 烧录 Flash：OpenOCD `program ... verify reset` 写一个 420 字节的测试程序（与 G431 的测试程序同一份源码，换 F401 的链接脚本），经串口链路 + `xrdap-forward` 1.9 s，经 Wi-Fi 直连 2.9 s，都校验通过；复位后程序运行，变量和计数器读数正确，1 ms 采样 3 秒没有跳拍。
 
 ESP32-H2 只验证了编译，还没有在硬件上运行过。
 
