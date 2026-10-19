@@ -13,6 +13,7 @@
 #include <cstring>
 
 #include "debug/swd.hpp"
+#include "driver/gptimer.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -1040,6 +1041,8 @@ class DapVendor
 
   void TaskLoop()
   {
+    // 节拍定时器在采样任务里创建，它的中断就分配在采样所在的核上
+    CreateTickTimer();
     for (;;)
     {
       if (!active_.load(std::memory_order_acquire))
@@ -1051,12 +1054,71 @@ class DapVendor
     }
   }
 
-  /// 等到 deadline：剩余超过 3 ms 时让出 CPU，最后一段忙等，保证节拍精度。
-  static void SleepUntil(uint64_t deadline_us, const std::atomic<bool>& active)
+  // 节拍定时器：每个周期在节拍时刻发一次中断唤醒采样任务。采样任务在节拍之间阻塞，
+  // 不再忙等，所以它可以是这个核上优先级最高的任务：节拍准时，别的任务在节拍之间运行。
+  static constexpr uint32_t kSpinUs = 30U;    // 被唤醒后离节拍不到这么久时忙等，补上中断和切换的延迟
+  static constexpr uint32_t kMinGapUs = 15U;  // 每个周期至少留给别的任务的时间
+
+  static bool IRAM_ATTR OnTickAlarm(gptimer_handle_t, const gptimer_alarm_event_data_t*,
+                                    void* ctx)
   {
+    BaseType_t woken = pdFALSE;
+    vTaskNotifyGiveFromISR(static_cast<DapVendor*>(ctx)->task_, &woken);
+    return woken == pdTRUE;
+  }
+
+  void CreateTickTimer()
+  {
+    gptimer_config_t cfg = {};
+    cfg.clk_src = GPTIMER_CLK_SRC_DEFAULT;
+    cfg.direction = GPTIMER_COUNT_UP;
+    cfg.resolution_hz = 1000000U;
+    gptimer_event_callbacks_t cbs = {};
+    cbs.on_alarm = &DapVendor::OnTickAlarm;
+    if (gptimer_new_timer(&cfg, &tick_timer_) != ESP_OK ||
+        gptimer_register_event_callbacks(tick_timer_, &cbs, this) != ESP_OK ||
+        gptimer_enable(tick_timer_) != ESP_OK)
+    {
+      tick_timer_ = nullptr;  // 退回到每 1 ms 醒一次再忙等
+    }
+  }
+
+  /// 让定时器从现在起在 start + k × period 时刻发中断。
+  void StartTickTimer(uint64_t start, uint32_t period)
+  {
+    if (tick_timer_ == nullptr)
+    {
+      return;
+    }
+    const uint64_t now = static_cast<uint64_t>(esp_timer_get_time());
+    gptimer_alarm_config_t alarm = {};
+    alarm.alarm_count = period;
+    alarm.reload_count = 0U;
+    alarm.flags.auto_reload_on_alarm = true;
+    gptimer_set_alarm_action(tick_timer_, &alarm);
+    gptimer_set_raw_count(tick_timer_, (now - start) % period);
+    gptimer_start(tick_timer_);
+  }
+
+  void StopTickTimer()
+  {
+    if (tick_timer_ != nullptr)
+    {
+      gptimer_stop(tick_timer_);
+    }
+  }
+
+  /// 等到 deadline：阻塞等节拍中断。被中断唤醒后离 deadline 还差不到 kSpinUs（定时器和
+  /// esp_timer 之间的偏差）时忙等补上。没被唤醒过之前一律阻塞，不忙等：采样任务优先级最高，
+  /// 一拍做完离下一拍很近时忙等会把这个核占满，别的任务连停止命令都收不到。
+  void SleepUntil(uint64_t deadline_us)
+  {
+    // 上一拍做得慢时，中途经过的节拍边界留下了通知；先清掉，只认这次阻塞之后的唤醒
+    (void)ulTaskNotifyTake(pdTRUE, 0);
+    bool woke = false;
     for (;;)
     {
-      if (!active.load(std::memory_order_relaxed))
+      if (!active_.load(std::memory_order_relaxed))
       {
         return;
       }
@@ -1065,12 +1127,12 @@ class DapVendor
       {
         return;
       }
-      const uint64_t remain = deadline_us - now;
-      if (remain > 3000U)
+      if (woke && deadline_us - now <= kSpinUs)
       {
-        const uint32_t ms = static_cast<uint32_t>((remain - 2000U) / 1000U);
-        vTaskDelay(pdMS_TO_TICKS(ms == 0U ? 1U : ms));
+        continue;
       }
+      // 超时只是为了定期检查 active_；没有定时器时就是每 1 ms 醒一次
+      woke = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(tick_timer_ != nullptr ? 20U : 1U)) != 0U;
     }
   }
 
@@ -1177,10 +1239,11 @@ class DapVendor
     const uint16_t count = sub_count_;
     uint8_t frame[kMaxFrameBytes];
     uint16_t order[kMaxItems];
+    StartTickTimer(start, period);
 
     while (active_.load(std::memory_order_acquire) && gen_.load(std::memory_order_acquire) == gen)
     {
-      SleepUntil(start + k * period, active_);
+      SleepUntil(start + k * period);
       if (!active_.load(std::memory_order_acquire) || gen_.load(std::memory_order_acquire) != gen)
       {
         break;
@@ -1212,9 +1275,21 @@ class DapVendor
 
       const uint64_t done = static_cast<uint64_t>(esp_timer_get_time());
       ++k;
+      uint64_t next_k = k;
       if (done > start + k * period)
       {
-        const uint64_t next_k = (done - start) / period + 1U;
+        // 来不及：跳到下一个还没过去的节拍
+        next_k = (done - start) / period + 1U;
+      }
+      // 离下一拍太近时再跳一拍。采样任务是这个核上优先级最高的任务，每个周期至少要给
+      // 别的任务（DAP 命令、TCP、串口，包括收停止命令的那个）留出 1/8 周期、最少 kMinGapUs
+      const uint64_t min_gap = (period / 8U > kMinGapUs) ? period / 8U : kMinGapUs;
+      if (start + next_k * period - done < min_gap)
+      {
+        ++next_k;
+      }
+      if (next_k != k)
+      {
         taskENTER_CRITICAL(&ring_mux_);
         skipped_ += static_cast<uint32_t>(next_k - k);
         taskEXIT_CRITICAL(&ring_mux_);
@@ -1236,6 +1311,7 @@ class DapVendor
         break;
       }
     }
+    StopTickTimer();
   }
 
   LibXR::Debug::Swd& swd_;
@@ -1252,6 +1328,7 @@ class DapVendor
   SemaphoreHandle_t swd_mutex_ = nullptr;
   SemaphoreHandle_t wake_ = nullptr;
   TaskHandle_t task_ = nullptr;
+  gptimer_handle_t tick_timer_ = nullptr;
 
   ResetCountFn usb_reset_fn_ = nullptr;
   void* usb_reset_ctx_ = nullptr;

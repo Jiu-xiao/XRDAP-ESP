@@ -27,8 +27,9 @@ constexpr char kUsbSerialPrefix[] = "XRobot-XRDAP-";
 // 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档是为了减小边沿过冲和振铃；0 档在 10 MHz 以上错得更多。
 constexpr int kPadDriveStrength = 1;
 
-// 厂商扩展的采样任务：放在 SWD 核上，优先级低于 DAP 命令线程，周期短时会在这个核上忙等。
-constexpr unsigned kSamplingPriority = 9;
+// 厂商扩展的采样任务：放在 SWD 核上，是这个核上优先级最高的任务。它由节拍定时器唤醒，
+// 节拍之间阻塞，DAP 命令、TCP、串口在节拍之间运行；USB/TCP 取数据时不会挤掉节拍。
+constexpr unsigned kSamplingPriority = 14;
 
 // 串口 DAP 链路（libxr Topic 帧）。用板上 USB 转串口芯片接的 UART0，所以系统日志控制台关掉了。
 // 板上的 CH343 在 4 Mbaud 下实测可靠，5 Mbaud 不行。

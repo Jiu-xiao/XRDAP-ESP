@@ -2,7 +2,7 @@
 # 本目录在包含路径里排在前面，所以 config.hpp 用的是本目录的。
 set(shared "${CMAKE_CURRENT_LIST_DIR}/../../../firmware/main")
 set(srcs "main.cpp")
-set(reqs libxr esp_driver_gpio esp_driver_uart esp_timer)
+set(reqs libxr esp_driver_gpio esp_driver_gptimer esp_driver_uart esp_timer)
 if(IDF_TARGET STREQUAL "esp32c3")
   list(APPEND srcs "${shared}/wifi_sta.cpp")
   list(APPEND reqs esp_wifi esp_netif esp_event nvs_flash lwip)
