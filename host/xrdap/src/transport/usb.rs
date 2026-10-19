@@ -167,6 +167,14 @@ impl Transport for UsbTransport {
             .ep_out
             .transfer_blocking(Buffer::from(request.to_vec()), self.timeout);
         done.status.map_err(|e| usb_err("USB 发送失败", e))?;
+        // 请求长度正好是端点最大包长的整数倍时，没有短包标志传输结束，探针会一直等；补一个零长度包。
+        let mps = self.ep_out.max_packet_size().max(1);
+        if !request.is_empty() && request.len() % mps == 0 {
+            let zlp = self
+                .ep_out
+                .transfer_blocking(Buffer::from(Vec::<u8>::new()), self.timeout);
+            zlp.status.map_err(|e| usb_err("USB 发送失败", e))?;
+        }
 
         let done = self
             .ep_in
