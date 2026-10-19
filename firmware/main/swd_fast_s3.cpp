@@ -194,7 +194,9 @@ uint32_t MeasureHalfX16(const SwdFastPins& pins)
   return (best * 16U + 32U) / 64U;
 }
 
-// 档位：每个半周期 N + 2 条指令。240 MHz 下 N = 4 约 20 MHz，N = 16 约 6.7 MHz。
+// 档位：每个半周期 N + 2 条指令。240 MHz 下 N = 3 约 23.7 MHz，N = 4 约 19.8 MHz，N = 16 约 6.7 MHz。
+// N = 2（约 29.5 MHz）在测试板上读写都收到协议错误（ACK 全 1 以外的值），不提供：目标在上升沿后约 45 ns 才让数据有效，
+// 半周期短于约 4.5 个 CPU 周期就采不到。N = 3 在测试板上 3000 轮写读比较和 OpenOCD 烧录都没有错误，但裕量很小。
 struct Level
 {
   SwdFastXferFn xfer;
@@ -202,6 +204,7 @@ struct Level
 };
 
 constexpr Level kLevels[kSwdFastLevels] = {
+    {&Xfer<3>, &MeasureHalfX16<3>},
     {&Xfer<4>, &MeasureHalfX16<4>},   {&Xfer<5>, &MeasureHalfX16<5>},
     {&Xfer<6>, &MeasureHalfX16<6>},   {&Xfer<7>, &MeasureHalfX16<7>},
     {&Xfer<8>, &MeasureHalfX16<8>},   {&Xfer<9>, &MeasureHalfX16<9>},

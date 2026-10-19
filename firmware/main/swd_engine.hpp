@@ -46,7 +46,7 @@ struct SwdFastPins
 };
 
 /// 汇编路径的档位数，以及每一档的传输函数和实测半周期（1/16 CPU 周期）。代码量大，放在 flash 里，见 swd_fast_s3.cpp。
-constexpr size_t kSwdFastLevels = 11;
+constexpr size_t kSwdFastLevels = 12;
 using SwdFastXferFn = LibXR::ErrorCode (*)(const SwdFastPins&, const LibXR::Debug::SwdProtocol::Request&,
                                            LibXR::Debug::SwdProtocol::Response&);
 SwdFastXferFn SwdFastTransferFn(size_t level);
