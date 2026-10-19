@@ -136,9 +136,11 @@ extern "C" void app_main(void)
   {
     static DapTcpServer<Dap> server(dap, Config::kTcpPort);
     server.SetHooks(&TcpHandover::OnConnect, &TcpHandover::OnDisconnect, &vendor);
+    server.EnableUsbip(Config::kUsbipPort, "XR-DAP-C3 CMSIS-DAP");
     server.Start(Config::kCore);
     MdnsStart("esp32c3", Config::kTcpPort);
-    ESP_LOGI(TAG, "TCP 服务已启动，端口 %u，剩余堆 %u 字节", (unsigned)Config::kTcpPort,
+    ESP_LOGI(TAG, "TCP 服务已启动，DAP 端口 %u，USB/IP 端口 %u，剩余堆 %u 字节",
+             (unsigned)Config::kTcpPort, (unsigned)Config::kUsbipPort,
              (unsigned)esp_get_free_heap_size());
   }
   else

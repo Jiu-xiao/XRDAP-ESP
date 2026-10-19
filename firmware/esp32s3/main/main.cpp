@@ -270,9 +270,11 @@ extern "C" void app_main(void)
     static TcpHandover handover{usb_switch, vendor};
     static DapTcpServer<Dap> server(dap, Config::kTcpPort);
     server.SetHooks(&TcpHandover::OnConnect, &TcpHandover::OnDisconnect, &handover);
+    server.EnableUsbip(Config::kUsbipPort, "XR-DAP-S3 CMSIS-DAP");
     server.Start(Config::kSwdCore);
     MdnsStart("esp32s3", Config::kTcpPort);
-    ESP_LOGI(TAG, "TCP 服务已启动，端口 %u，剩余堆 %u 字节", (unsigned)Config::kTcpPort,
+    ESP_LOGI(TAG, "TCP 服务已启动，DAP 端口 %u，USB/IP 端口 %u，剩余堆 %u 字节",
+             (unsigned)Config::kTcpPort, (unsigned)Config::kUsbipPort,
              (unsigned)esp_get_free_heap_size());
   }
   else

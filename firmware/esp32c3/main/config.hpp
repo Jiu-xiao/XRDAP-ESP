@@ -39,6 +39,8 @@ constexpr uint32_t kEdgeWriteCycles = 13U;
 constexpr uint16_t kDapPacketSize = 1024;
 /// TCP DAP 监听端口 / TCP DAP listening port.
 constexpr uint16_t kTcpPort = 3241;
+/// USB/IP 虚拟 USB 探针的监听端口 / USB/IP virtual USB probe listening port.
+constexpr uint16_t kUsbipPort = 3240;
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
 /// 优先级从低到高：空闲 0 < libxr 定时器 3 < Wi-Fi 命令行 4 < 串口 DAP 8 < TCP DAP 10 <

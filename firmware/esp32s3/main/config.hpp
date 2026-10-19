@@ -26,6 +26,8 @@ constexpr unsigned kStepPriority = 10;
 constexpr uint16_t kDapPacketSize = 1024;
 /// TCP DAP 监听端口 / TCP DAP listening port.
 constexpr uint16_t kTcpPort = 3241;
+/// USB/IP 虚拟 USB 探针的监听端口 / USB/IP virtual USB probe listening port.
+constexpr uint16_t kUsbipPort = 3240;
 
 /// USB 厂商号，XRUSB 登记的 VID:PID 之 VID。同一 VID:PID 靠序列号区分设备，序列号规则见
 /// probe_info.hpp 与 xrobot.work「VID/PID 与 Serial 使用约定」 / USB vendor ID from the
