@@ -5,21 +5,17 @@
 
 #include "sdkconfig.h"
 
-// ESP32-C3 / ESP32-H2 版 XR-DAP 的固定参数。
+// ESP32-C3 版 XR-DAP 的固定参数。
 
 namespace XrDap::Config
 {
-// SWD 引脚。两块开发板（ESP32-C3-DevKitM-1、ESP32-H2-DevKitM-1）都用 GPIO5 / GPIO4，和 S3 版相同。
-// 避开的引脚：
-//   C3：GPIO2/8/9 是启动配置引脚（GPIO8 还接了板上 RGB 灯，GPIO9 是 BOOT 键），
-//       GPIO12 到 17 接 Flash，GPIO18/19 是 USB，GPIO20/21 是 UART0（板上 USB 转串口）。
-//   H2：GPIO2/3/8/9/25 是启动配置引脚（GPIO8 接 RGB 灯，GPIO9 是 BOOT 键），
-//       GPIO15 到 21 接内部 Flash，GPIO23/24 是 UART0，GPIO26/27 是 USB。
-// C3 的 GPIO4 到 7、H2 的 GPIO2 到 5 也是 JTAG 引脚，只有烧了 eFuse 改用引脚 JTAG 时才被占用，默认空闲。
+// SWD 引脚，和 S3 版相同。避开的引脚：GPIO2/8/9 是启动配置引脚（不少开发板 GPIO8 接 RGB 灯，
+// GPIO9 是 BOOT 键），GPIO12 到 17 接 Flash，GPIO18/19 是 USB，GPIO20/21 是 UART0。
+// GPIO4 到 7 也是 JTAG 引脚，只有烧了 eFuse 改用引脚 JTAG 时才被占用，默认空闲。
 constexpr int kSwclkGpio = 5;
 constexpr int kSwdioGpio = 4;
 
-// 引脚驱动强度，0 最弱，3 最强。沿用 S3 版的 1（S3 上实测减小过冲）；C3/H2 上没有实测。
+// 引脚驱动强度，0 最弱，3 最强。沿用 S3 版的 1（S3 上实测减小过冲）。
 constexpr int kPadDriveStrength = 1;
 
 // 写一次 SWCLK 沿本身在每个时钟周期里多出的 CPU 周期数，用来校正 SWCLK 频率。
@@ -28,7 +24,7 @@ constexpr int kPadDriveStrength = 1;
 constexpr uint32_t kEdgeWriteCycles = 13U;
 
 constexpr uint16_t kDapPacketSize = 1024;  // 通告给上位机的 DAP 包长
-constexpr uint16_t kTcpPort = 3241;        // 只有 C3 有 Wi-Fi
+constexpr uint16_t kTcpPort = 3241;
 
 // 单核芯片，所有任务都在核 0。优先级从低到高：
 //   空闲任务 0 < libxr 定时器 3 < Wi-Fi 命令行 4 < 串口 DAP 8 < TCP DAP 10 < lwIP 18
@@ -45,16 +41,10 @@ constexpr unsigned kSerialPriority = 8;
 // 波特率对 USB Serial/JTAG 没有意义，xrdap-forward 的 --baud 填什么都行。
 constexpr uint32_t kSerialBaud = 4000000;
 
-#if CONFIG_IDF_TARGET_ESP32C3
-// C3：UART0（GPIO21 TX、GPIO20 RX，开发板上接 USB 转串口芯片）给 Wi-Fi 命令行用，
+// UART0（GPIO21 TX、GPIO20 RX，有的开发板接了 USB 转串口芯片）上也有一个 Wi-Fi 命令行，
 // 系统日志控制台因此关闭（libxr 的 UART 驱动不能和控制台共用一个 UART）。
-constexpr bool kHasWifi = true;
 constexpr int kConsoleUart = 0;
 constexpr int kConsoleTxGpio = 21;
 constexpr int kConsoleRxGpio = 20;
 constexpr uint32_t kConsoleBaud = 115200;
-#else
-// H2：没有 Wi-Fi，UART0（GPIO24 TX、GPIO23 RX）是普通的系统日志控制台。
-constexpr bool kHasWifi = false;
-#endif
 }  // namespace XrDap::Config

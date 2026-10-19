@@ -17,7 +17,7 @@ namespace XrDap
 {
 
 /// CPU 专用 GPIO，以 LibXR::GPIO 接口提供给 SwdGeneralGPIO。
-/// 读写都是单条 CPU 指令（ESP32-S3 是 Xtensa 的 GPIO 指令，ESP32-C3/H2 是 RISC-V 的 CSR 读写），
+/// 读写都是单条 CPU 指令（ESP32-S3 是 Xtensa 的 GPIO 指令，ESP32-C3 是 RISC-V 的 CSR 读写），
 /// 比走 GPIO 矩阵寄存器快得多。专用 GPIO 只能在创建它的那个核上使用。
 /// 只支持 GPIO0 到 GPIO31（输出使能用的是 GPIO_ENABLE_REG）。
 class DedicGpioPin final : public LibXR::GPIO
