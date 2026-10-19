@@ -208,9 +208,10 @@ extern "C" void app_main(void)
                                  LibXR::USB::Endpoint::EPNumber::EP2,
                                  LibXR::USB::Endpoint::EPNumber::EP3, 1024, 1024, 8);
   // USB 序列号 = 前缀 + 出厂 MAC（6 字节），协议栈把它转成十六进制接在前缀后面，和
-  // DAP_Info 的序列号相同。
+  // DAP_Info 的序列号相同。产品名带 "CMSIS-DAP"：probe-rs、pyOCD 等按产品名认 CMSIS-DAP
+  // 设备。
   static constexpr auto lang = LibXR::USB::DescriptorStrings::MakeLanguagePack(
-      LibXR::USB::DescriptorStrings::Language::EN_US, "XRobot", "XR-DAP-S3",
+      LibXR::USB::DescriptorStrings::Language::EN_US, "XRobot", "XR-DAP-S3 CMSIS-DAP",
       kSerialPrefix);
   static LibXR::ESP32USBDevice usb(
       {
