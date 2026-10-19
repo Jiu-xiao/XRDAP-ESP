@@ -1,6 +1,6 @@
 # XR-DAP 的 ESP32-C3 / ESP32-H2 版
 
-`esp32c3-h2/` 是 ESP32-C3 和 ESP32-H2 共用的 ESP-IDF 工程，编译时选芯片。两种芯片的 USB 口是固定功能的 USB Serial/JTAG，电脑上显示为一个 CDC 串口。探针在这个串口上用 libxr Topic 帧提供 CMSIS-DAP（与 S3 版 UART0 上的串口链路相同），电脑上由 `host/xrdap-forward` 把串口转成 TCP，OpenOCD 用 cmsis-dap 的 TCP 后端连接。ESP32-C3 另外可以连 Wi-Fi，在 TCP 3241 端口直接提供 CMSIS-DAP，与 S3 版相同。ESP32-H2 没有 Wi-Fi，只有串口链路。
+`esp32c3-h2/` 是 ESP32-C3 和 ESP32-H2 共用的 ESP-IDF 工程，编译时选芯片。两种芯片的 USB 口是固定功能的 USB Serial/JTAG，电脑上显示为一个 CDC 串口。探针在这个串口上用 libxr Topic 帧提供 CMSIS-DAP（与 S3 版 UART0 上的串口链路相同），电脑上由 `xrdap-forward`（XRDAP-Host 仓库） 把串口转成 TCP，OpenOCD 用 cmsis-dap 的 TCP 后端连接。ESP32-C3 另外可以连 Wi-Fi，在 TCP 3241 端口直接提供 CMSIS-DAP，与 S3 版相同。ESP32-H2 没有 Wi-Fi，只有串口链路。
 
 XR 厂商扩展命令（多地址读写、指针链、探针端采样）在两种芯片上都可用，行为与 S3 版一致。
 
@@ -45,11 +45,10 @@ idf.py -B build-esp32h2 -D SDKCONFIG=build-esp32h2/sdkconfig -p COM6 flash
 
 ### 串口（C3 和 H2）
 
-在仓库根目录下编译并运行 `xrdap-forward`（需要 Rust），用 `--serial` 指定 USB Serial/JTAG 的串口：
+运行 [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host) 里的 `xrdap-forward`，用 `--serial` 指定 USB Serial/JTAG 的串口：
 
 ```
-cd host/xrdap-forward
-cargo run --release -- --serial COM7 --keep-lines
+xrdap-forward --serial COM7 --keep-lines
 ```
 
 `xrdap-forward` 默认打开串口后设置 DTR 和 RTS，这是给 USB 转串口芯片加自动下载电路的板子用的。USB Serial/JTAG 自己根据 DTR、RTS 复位芯片（esptool 就是这样复位它的），所以这里加 `--keep-lines`，不改这两根线。`--baud` 对 USB Serial/JTAG 没有作用，保持默认即可。

@@ -61,26 +61,11 @@ Keil：调试器选 CMSIS-DAP Debugger，端口选 SW，设备选目标芯片。
 
 探针在 UART0 上也提供 CMSIS-DAP。UART0 接板上的 USB 转串口芯片（GPIO43 TX，GPIO44 RX），也就是串口桥那个 USB 口，波特率 4 Mbaud。板上的 CH343 在 5 Mbaud 下不能正常工作，所以固定为 4 Mbaud。UART0 用于 DAP 之后，系统日志控制台已关闭。
 
-OpenOCD 不能直接使用这个串口，电脑端用 `host/xrdap-forward` 把它转成 OpenOCD 的 CMSIS-DAP TCP 后端。`host/` 是一个 Cargo 工作区，包含 `xrdap-forward`、命令行工具 `xrdap` 和二者共用的库 `xrdap`，编译需要 Rust 工具链：
-
-```
-cd host
-cargo build --release
-```
-
-生成的程序在 `host/target/release/` 下。运行时指定探针的串口：
+OpenOCD 不能直接使用这个串口，电脑端用 [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host) 里的 `xrdap-forward` 把它转成 OpenOCD 的 CMSIS-DAP TCP 后端（在那个仓库的 Releases 下载，或用 `cargo build --release` 编译）。运行时指定探针的串口，其他参数见那个仓库的说明：
 
 ```
 xrdap-forward --serial COM35
 ```
-
-| 参数 | 默认值 | 作用 |
-|---|---|---|
-| `--serial` | 无，必填 | 探针的串口，例如 `COM35` 或 `/dev/ttyUSB0` |
-| `--baud` | 4000000 | 串口波特率，与固件一致 |
-| `--listen` | `127.0.0.1:3241` | 给 OpenOCD 连接的 TCP 地址 |
-| `--keep-lines` | 关 | 打开串口后不改 DTR/RTS |
-| `--verbose` | 关 | 打印每个转发的请求和响应 |
 
 打开串口时，USB 转串口芯片的 DTR/RTS 会让 ESP32 复位一次。xrdap-forward 反复查询探针，等它启动完成（最长 10 秒），打印探针报告的 DAP 包长后开始监听。OpenOCD 使用 TCP 后端连接 127.0.0.1：
 
@@ -152,44 +137,7 @@ adapter speed 4000
 
 ### 命令行工具 xrdap
 
-`xrdap`（源码在 `host/xrdap-cli`，编译方法见上面的串口一节）用这组命令按变量名读写目标内存，以及在探针上采样。变量的地址和类型取自目标程序 ELF 里的 DWARF 调试信息（编译时加 `-g`），可以写结构体成员、数组下标、指针和类型转换，例如 `state.speed`、`motor[1].pid->out`、`head->next->value`、`(uint32_t***)p`；没有 ELF 时直接写地址和类型，例如 `0x20000010:u32`。xrdap 先完成 SWD 连接和调试域上电，再发送厂商命令。
-
-连接方式用 `--usb`、`--serial COM35` 或 `--tcp 192.168.1.50` 指定，不写时用 USB；插着多个探针时用 `--usb <序列号>` 选择，`xrdap list` 列出序列号。SWD 时钟用 `--clock` 设置，默认 4 MHz。
-
-以测试程序 [g431-test.c](host/xrdap/tests/fixtures/g431-test.c) 为例，读几个变量，其中 `chain_p1` 是三级指针链，`null_p1` 是空指针：
-
-```
-> xrdap --elf g431-test.elf read v_u16 "***(uint32_t***)chain_p1" "*null_p1"
-v_u16                    = 4660 (0x1234)
-***(uint32_t***)chain_p1 = 3405691582 (0xCAFEBABE)
-*null_p1                   读取失败：第 1 级指针 null_p1 为空（NULL）（地址 [0x20000038]）
-
-> xrdap --elf g431-test.elf write v_u8=0x5A
-v_u8 ← 0x5A，读回 90 (0x5A)
-```
-
-数值按 DWARF 类型显示：有符号数、浮点、枚举名和指针分别按各自的格式输出。结构体和数组展开成各个成员读取。探针按 1、2、4、8 字节访问内存，访问位域成员时 xrdap 报错，并给出它所在字节的地址写法（如 `0x20000043:u8`）。
-
-采样用 `watch`。`变量@分频` 表示每几拍采一次，各个分频变量的相位由 xrdap 错开，尽量不落在同一拍：
-
-```
-> xrdap --elf g431-test.elf watch cnt_a cnt_b@10 v_u32@100 --period 1ms --csv log.csv
-采样 3 个变量，周期 1000 µs，估计每帧耗时 163 µs，一帧最多 23 字节
-  cnt_b 每 10 拍采一次，相位 1
-  v_u32 每 100 拍采一次，相位 0
-写入 log.csv，按 Ctrl-C 停止
-```
-
-CSV 每帧一行，`host_time` 列是按 SUB_READ 往返时间换算到电脑时钟的 Unix 时间，`t` 列是相对第一帧的探针时间，该拍没有采的变量为空，读取失败为 `ERR`：
-
-```
-host_time,t,tick,cnt_a,cnt_b,v_u32
-1792345704.807567,0.000000,0,0,,2309737967
-1792345704.808567,0.001000,1,1,,
-1792345704.809567,0.002000,2,2,,
-```
-
-不写 `--csv` 时在终端里每 0.1 秒打印一行。按 Ctrl-C 或 `--duration` 指定的秒数到了之后，xrdap 停止采样、读完缓冲，打印探针报告的跳过节拍数和缓冲丢帧数。周期短于探针估计的单帧耗时时，SUB_SET 被拒绝，xrdap 给出估计值和可用的周期。全部命令和选项见 `xrdap --help`。
+[XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host) 里的命令行工具 `xrdap` 用这组命令按变量名读写目标内存，以及在探针上采样；变量的地址和类型取自目标程序 ELF 里的 DWARF 调试信息。用法、例子和 CSV 格式见那个仓库的说明。
 
 ## 实测
 

@@ -2,7 +2,7 @@
 
 TI LP-MSPM0G3507 LaunchPad 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)，用来烧录和调试 SWD 目标芯片。
 
-MSPM0G3507 没有 USB，CMSIS-DAP 命令走串口：探针的 UART0 接板载 XDS110 的反向通道串口，电脑上出现一个虚拟串口，再由 `host/xrdap-forward` 把它转成 TCP，给 OpenOCD 的 `cmsis-dap` TCP 后端使用。串口上的帧格式和 ESP32-S3 版的串口链路相同（libxr Topic 帧，请求 topic `dap_req`，响应 topic `dap_resp`，载荷为 u16 长度加 DAP 包）。
+MSPM0G3507 没有 USB，CMSIS-DAP 命令走串口：探针的 UART0 接板载 XDS110 的反向通道串口，电脑上出现一个虚拟串口，再由 `xrdap-forward`（XRDAP-Host 仓库） 把它转成 TCP，给 OpenOCD 的 `cmsis-dap` TCP 后端使用。串口上的帧格式和 ESP32-S3 版的串口链路相同（libxr Topic 帧，请求 topic `dap_req`，响应 topic `dap_resp`，载荷为 u16 长度加 DAP 包）。
 
 固件是裸机程序（libxr 的 `none` 系统层，SysTick 作时基），只有标准 CMSIS-DAP 命令。ESP32-S3 版的 XR 厂商扩展（0x80 到 0x85：多地址读写、指针链、探针端采样）依赖 FreeRTOS 任务和 `esp_timer`，这一版没有移植，厂商命令回 0xFF（不支持）。
 
@@ -77,10 +77,10 @@ openocd -f interface/xds110.cfg -c "transport select swd" -f target/ti/mspm0.cfg
 
 LaunchPad 插上电脑后，XDS110 提供两个虚拟串口，反向通道是名为 `XDS110 Class Application/User UART` 的那一个。
 
-在仓库的 `host/xrdap-forward` 下启动转发工具，波特率和固件一致：
+启动 [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host) 里的转发工具 `xrdap-forward`，波特率和固件一致：
 
 ```
-cargo run --release -- --serial COM5 --baud 1000000 --keep-lines
+xrdap-forward --serial COM5 --baud 1000000 --keep-lines
 ```
 
 `COM5` 换成实际的串口号。`--keep-lines` 让工具不改 DTR/RTS（默认值是为 ESP32 开发板的自动下载电路设的）。工具启动后反复发送 DAP_Info 直到探针应答，然后在 `127.0.0.1:3241` 等待 OpenOCD 连接。同一时间只服务一个客户端，串口上一次只有一条请求，所以探针通告的包数为 1，包长为 1024 字节。
