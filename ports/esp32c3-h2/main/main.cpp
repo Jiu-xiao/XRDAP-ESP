@@ -27,6 +27,7 @@
 #include "dap_tcp.hpp"
 #include "esp_cdc_jtag.hpp"
 #include "esp_uart.hpp"
+#include "serial_mux.hpp"
 #include "wifi_console.hpp"
 #include "wifi_sta.hpp"
 #elif CONFIG_IDF_TARGET_ESP32H2
@@ -99,6 +100,12 @@ extern "C" void app_main(void)
       LibXR::UART::Configuration{Config::kSerialBaud, LibXR::UART::Parity::NO_PARITY, 8, 1});
   static SerialAdapter adapter(dap, vendor);
   static SerialLink link(adapter, usj);
+#if CONFIG_IDF_TARGET_ESP32C3
+  // C3：这个 USB 口同时是 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令（serial_mux.hpp）。
+  // 用串口终端打开它就能 wifi set；没有引出 UART0 的板子也能配网。
+  static SerialMux<SerialLink, LibXR::ESP32CDCJtag> mux(link, usj);
+  mux.Start(Config::kCore, Config::kSerialPriority);
+#else
   link.SetThreadStarter(
       [](void*, const SerialLink::ThreadConfig&, void (*entry)(void*), void* arg)
       {
@@ -109,6 +116,7 @@ extern "C" void app_main(void)
   {
     ESP_LOGE(TAG, "串口 DAP 链路启动失败");
   }
+#endif
   ESP_LOGI(TAG, "USB Serial/JTAG 上的串口 DAP 链路已启动，SWCLK GPIO%d，SWDIO GPIO%d",
            Config::kSwclkGpio, Config::kSwdioGpio);
 
@@ -116,7 +124,7 @@ extern "C" void app_main(void)
   // Wi-Fi 和 TCP。Wi-Fi 最多等 20 秒；没连上时 Wi-Fi 仍会在后台重连，TCP 服务照常启动。
   // 没有热点参数时 Wi-Fi 不启动，只提供串口。
   const esp_err_t wifi = WifiStaStart(20000);
-  // 通过 UART0 配置 Wi-Fi。没有热点参数时也能用它来设置。
+  // UART0 上也保留一个命令行，给引出了 UART0 的开发板用。没有热点参数时也能用它来设置。
   static LibXR::ESP32UART console_uart(
       static_cast<uart_port_t>(Config::kConsoleUart), Config::kConsoleTxGpio,
       Config::kConsoleRxGpio, LibXR::ESP32UART::PIN_NO_CHANGE, LibXR::ESP32UART::PIN_NO_CHANGE,

@@ -9,7 +9,8 @@ ESP32-C3 已在硬件上验证（2026-10-19，原生 USB 的 C3 板，目标 STM
 - 串口链路（USB Serial/JTAG）：DAP_Info、厂商 INFO、DPIDR、读写 RAM 的 1/2/4/8 字节（写后读回一致），SWD 时钟 1、4、10、20 MHz 都没有错误。
 - 探针端采样（SWD 20 MHz，经 USB Serial/JTAG 取数据）：4 个变量最短 300 µs（约 3.3 kHz）没有跳拍；1 ms、500 µs、350 µs 各 5 秒都没有跳拍、丢帧；32 个变量 2 ms 没有跳拍。周期接近单帧耗时时跳拍有计数，探针一直能响应。
 - OpenOCD 经 `xrdap-forward`（Windows，带 `cmsis-dap quirk enable` 和 `min_timeout 10`）识别 Cortex-M4、读内存，导出 64 KiB SRAM 0.56 s（约 115 KiB/s，2 MHz）。
-- 还没有测 Wi-Fi（这块板子的 UART0 没有引出 USB 转串口，暂时没法配网）和烧录 Flash。
+- 芯片 USB 口上的命令行和 DAP 链路共用一个口：终端输入、DAP 读写、采样交替进行都正常，二进制数据不会让命令行输出（`tests-repo/mux_test.py`）。
+- 还没有测烧录 Flash。
 
 ESP32-H2 只验证了编译，还没有在硬件上运行过。
 
@@ -74,7 +75,12 @@ adapter speed 4000
 
 ### Wi-Fi（只有 C3）
 
-C3 的 Wi-Fi 命令行在 UART0 上，也就是 ESP32-C3-DevKitM-1 的 Micro-USB 口，串口终端用 115200 波特率。命令和 S3 版相同：
+C3 的 Wi-Fi 命令行在两个地方都能用：
+
+- 芯片的 USB 口（USB Serial/JTAG，也就是 DAP 串口链路那个口）。用任意串口终端打开它直接输入命令，不需要切换模式：探针自动区分 DAP 帧和人打的命令（`firmware/main/serial_mux.hpp`）。命令行只在收到一行命令并回车后才回答，一行里有控制字符时整行丢弃；最近 2 秒有 DAP 帧时不理会文字输入，所以调试工具不会收到命令行的输出。终端不要改 DTR/RTS（例如 `python -m serial.tools.miniterm COM7 115200 --dtr 0 --rts 0`），否则 USB Serial/JTAG 可能复位芯片。
+- UART0（ESP32-C3-DevKitM-1 的 Micro-USB 口），115200 波特率。
+
+命令和 S3 版相同：
 
 ```
 wifi set 热点名 密码

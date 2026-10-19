@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 通过 USB 虚拟串口（CDC）配置 Wi-Fi 的文本命令行。
+// 配置 Wi-Fi 的文本命令行。ConsoleCore 按字节处理输入（行编辑、执行命令），输出交给回调；
+// WifiConsole 让它独占一个串口（S3 的 USB 虚拟串口、C3 的 UART0）；SerialMux（serial_mux.hpp）
+// 让它和串口 DAP 链路共用一个口。
 //   help                         列出命令
 //   wifi set <热点> [<密码>]     保存热点参数后重启。热点或密码里有空格时用双引号括起来；
 //                                不填密码表示开放网络
@@ -22,74 +24,84 @@
 namespace XrDap
 {
 
-template <typename UartT>
-class WifiConsole
+/// 命令行核心：一次喂一个字节。只在收到一行合法的命令并回车后才输出，所以和二进制协议
+/// 共用一个口时不会往里插字：一行里出现控制字符（DAP 帧头必然带 0x00）或以 'Z'（帧起始字节）
+/// 开头时，整行丢弃，不回显、不提示。
+class ConsoleCore
 {
  public:
-  explicit WifiConsole(UartT& uart) : uart_(uart) {}
+  using WriteFn = void (*)(void* ctx, const char* text, size_t len);
 
-  /// 在指定的核上启动命令行任务。
-  void Start(int core)
+  ConsoleCore(WriteFn write, void* ctx) : write_(write), ctx_(ctx) {}
+
+  /// 丢弃正在输入的一行（不输出）。
+  void Reset()
   {
-    xTaskCreatePinnedToCore(&WifiConsole::TaskEntry, "wifi_cli", 4096, this, 4, nullptr, core);
+    len_ = 0;
+    junk_ = false;
+    last_was_cr_ = false;
+  }
+
+  void OnByte(uint8_t c)
+  {
+    if (c == '\n' && last_was_cr_)  // CR LF 只算一次换行
+    {
+      last_was_cr_ = false;
+      return;
+    }
+    last_was_cr_ = (c == '\r');
+
+    if (c == '\r' || c == '\n')
+    {
+      const bool run = !junk_ && len_ > 0;
+      const bool show = !junk_;
+      line_[len_] = 0;
+      len_ = 0;
+      junk_ = false;
+      if (show)
+      {
+        Print("\r\n");
+        if (run)
+        {
+          Handle(line_);
+        }
+        Print("> ");
+      }
+      return;
+    }
+    if (junk_)
+    {
+      return;
+    }
+    if (c == 0x08 || c == 0x7F)  // 退格
+    {
+      if (len_ > 0)
+      {
+        --len_;
+        Print("\b \b");
+      }
+      return;
+    }
+    if (c < 0x20 || (len_ == 0 && c == 'Z'))
+    {
+      // 不是人打的字，多半是二进制协议：整行作废，到下一个换行之前什么也不输出
+      if (len_ > 0)
+      {
+        Print("\r\n");
+      }
+      len_ = 0;
+      junk_ = true;
+      return;
+    }
+    if (c < 0x7F && len_ < kLineMax)
+    {
+      line_[len_++] = static_cast<char>(c);
+      Print(reinterpret_cast<const char*>(&c), 1);
+    }
   }
 
  private:
   static constexpr size_t kLineMax = 160;
-
-  static void TaskEntry(void* arg) { static_cast<WifiConsole*>(arg)->Run(); }
-
-  void Run()
-  {
-    char line[kLineMax + 1];
-    size_t len = 0;
-    bool last_was_cr = false;
-    for (;;)
-    {
-      // 队列里没有数据时等一会，避免占 CPU；USB 被关闭期间读端口里始终没有数据。
-      if (uart_.read_port_->Size() == 0)
-      {
-        vTaskDelay(pdMS_TO_TICKS(20));
-        continue;
-      }
-      uint8_t c = 0;
-      LibXR::Semaphore sem;
-      LibXR::ReadOperation op(sem, 100);
-      if (uart_.Read(LibXR::RawData{&c, 1}, op) != LibXR::ErrorCode::OK)
-      {
-        continue;
-      }
-
-      if (c == '\n' && last_was_cr)  // CR LF 只算一次换行
-      {
-        last_was_cr = false;
-        continue;
-      }
-      last_was_cr = (c == '\r');
-
-      if (c == '\r' || c == '\n')
-      {
-        Print("\r\n");
-        line[len] = 0;
-        Handle(line);
-        len = 0;
-        Print("> ");
-      }
-      else if (c == 0x08 || c == 0x7F)  // 退格
-      {
-        if (len > 0)
-        {
-          --len;
-          Print("\b \b");
-        }
-      }
-      else if (c >= 0x20 && c < 0x7F && len < kLineMax)
-      {
-        line[len++] = static_cast<char>(c);
-        Print(reinterpret_cast<const char*>(&c), 1);
-      }
-    }
-  }
 
   void Print(const char* text, size_t len = 0)
   {
@@ -97,9 +109,7 @@ class WifiConsole
     {
       len = strlen(text);
     }
-    LibXR::Semaphore sem;
-    LibXR::WriteOperation op(sem, 200);
-    (void)uart_.Write(LibXR::ConstRawData{text, len}, op);
+    write_(ctx_, text, len);
   }
 
   // 取下一个词：以空格分隔，可以用双引号括起带空格的词。返回 false 表示没有更多的词。
@@ -236,7 +246,60 @@ class WifiConsole
     esp_restart();
   }
 
+  WriteFn write_;
+  void* ctx_;
+  char line_[kLineMax + 1] = {};
+  size_t len_ = 0;
+  bool junk_ = false;
+  bool last_was_cr_ = false;
+};
+
+/// 独占一个串口的命令行：自己开一个任务读这个口。
+template <typename UartT>
+class WifiConsole
+{
+ public:
+  explicit WifiConsole(UartT& uart) : uart_(uart), core_(&WifiConsole::Write, this) {}
+
+  /// 在指定的核上启动命令行任务。
+  void Start(int core)
+  {
+    xTaskCreatePinnedToCore(&WifiConsole::TaskEntry, "wifi_cli", 4096, this, 4, nullptr, core);
+  }
+
+ private:
+  static void TaskEntry(void* arg) { static_cast<WifiConsole*>(arg)->Run(); }
+
+  void Run()
+  {
+    for (;;)
+    {
+      // 队列里没有数据时等一会，避免占 CPU；USB 被关闭期间读端口里始终没有数据。
+      if (uart_.read_port_->Size() == 0)
+      {
+        vTaskDelay(pdMS_TO_TICKS(20));
+        continue;
+      }
+      uint8_t c = 0;
+      LibXR::Semaphore sem;
+      LibXR::ReadOperation op(sem, 100);
+      if (uart_.Read(LibXR::RawData{&c, 1}, op) == LibXR::ErrorCode::OK)
+      {
+        core_.OnByte(c);
+      }
+    }
+  }
+
+  static void Write(void* ctx, const char* text, size_t len)
+  {
+    auto* self = static_cast<WifiConsole*>(ctx);
+    LibXR::Semaphore sem;
+    LibXR::WriteOperation op(sem, 200);
+    (void)self->uart_.Write(LibXR::ConstRawData{text, len}, op);
+  }
+
   UartT& uart_;
+  ConsoleCore core_;
 };
 
 }  // namespace XrDap
