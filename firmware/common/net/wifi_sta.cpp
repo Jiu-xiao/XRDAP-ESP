@@ -4,6 +4,7 @@
 // after a drop.
 #include "wifi_sta.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 
@@ -19,8 +20,8 @@ namespace
 {
 constexpr const char* TAG = "xrdap_wifi";
 constexpr EventBits_t kGotIp = BIT0;
-EventGroupHandle_t g_events;
-bool g_started = false;
+EventGroupHandle_t s_events = nullptr;
+std::atomic<bool> s_started{false};
 
 struct Credentials
 {
@@ -29,7 +30,8 @@ struct Credentials
   char password[64];
 };
 
-constexpr const char* kNvsNamespace = "rmlink";  // 与 RMLink 固件相同
+// 命名空间沿用早期固件的名字，已经配过网的板子升级后不用重配
+constexpr const char* kNvsNamespace = "rmlink";
 constexpr const char* kNvsKey = "wifi";
 
 esp_err_t LoadCredentials(Credentials& cred)
@@ -62,14 +64,14 @@ void OnEvent(void*, esp_event_base_t base, int32_t id, void* data)
   }
   else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED)
   {
-    xEventGroupClearBits(g_events, kGotIp);
+    xEventGroupClearBits(s_events, kGotIp);
     esp_wifi_connect();
   }
   else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP)
   {
     auto* ev = static_cast<ip_event_got_ip_t*>(data);
     ESP_LOGI(TAG, "已获得 IP " IPSTR, IP2STR(&ev->ip_info.ip));
-    xEventGroupSetBits(g_events, kGotIp);
+    xEventGroupSetBits(s_events, kGotIp);
   }
 }
 }  // namespace
@@ -92,7 +94,7 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   }
   ESP_LOGI(TAG, "使用已保存的热点，SSID 长度 %u", (unsigned)strlen(cred.ssid));
 
-  g_events = xEventGroupCreate();
+  s_events = xEventGroupCreate();
   ESP_ERROR_CHECK(esp_netif_init());
   ESP_ERROR_CHECK(esp_event_loop_create_default());
   esp_netif_create_default_wifi_sta();
@@ -115,10 +117,10 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   memset(&wifi, 0, sizeof(wifi));
   ESP_ERROR_CHECK(esp_wifi_start());
   esp_wifi_set_ps(WIFI_PS_NONE);
-  g_started = true;
+  s_started = true;
 
   const EventBits_t bits =
-      xEventGroupWaitBits(g_events, kGotIp, pdFALSE, pdTRUE, pdMS_TO_TICKS(timeout_ms));
+      xEventGroupWaitBits(s_events, kGotIp, pdFALSE, pdTRUE, pdMS_TO_TICKS(timeout_ms));
   return (bits & kGotIp) ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
@@ -179,8 +181,8 @@ WifiStatus WifiStaGetStatus()
     memcpy(st.ssid, cred.ssid, sizeof(st.ssid));
   }
   memset(&cred, 0, sizeof(cred));
-  st.started = g_started;
-  if (g_started)
+  st.started = s_started;
+  if (st.started)
   {
     esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     esp_netif_ip_info_t ip = {};

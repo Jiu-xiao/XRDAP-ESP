@@ -277,7 +277,7 @@ wifi set 热点名 密码
 
 #### C3：与 DAP 链路共用的 USB 口
 
-C3 的命令行在芯片的 USB 口上，也就是 DAP 串口链路那个口，不需要切换模式：探针自动区分 DAP 帧和人打的命令（`firmware/common/serial_mux.hpp`，机制见 [docs/protocol.md](docs/protocol.md) 第 5 节）。命令行只在收到一行命令并回车后才回答，一行里有控制字符时整行丢弃；最近 2 秒有 DAP 帧时不理会文字输入，所以调试工具不会收到命令行的输出。终端不要改 DTR/RTS，否则可能复位芯片：
+C3 的命令行在芯片的 USB 口上，也就是 DAP 串口链路那个口，不需要切换模式：探针自动区分 DAP 帧和人打的命令（`firmware/common/serial/serial_mux.hpp`，机制见 [docs/protocol.md](docs/protocol.md) 第 5 节）。命令行只在收到一行命令并回车后才回答，一行里有控制字符时整行丢弃；最近 2 秒有 DAP 帧时不理会文字输入，所以调试工具不会收到命令行的输出。终端不要改 DTR/RTS，否则可能复位芯片：
 
 ```
 python -m serial.tools.miniterm COM7 115200 --dtr 0 --rts 0

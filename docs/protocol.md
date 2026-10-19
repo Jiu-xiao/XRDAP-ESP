@@ -474,7 +474,7 @@ OpenOCD 可以直接把主机名写进 `cmsis-dap tcp host`。上位机枚举 `_
 
 ## 5. ESP32-C3 的 USB 口
 
-ESP32-C3 的 USB 口是 USB Serial/JTAG，电脑上是一个 CDC 串口，DAP 链路（第 1 节的串口帧）和 Wi-Fi 命令行共用这个口，不需要切换模式。固件（`firmware/common/serial_mux.hpp`）对每块收到的数据这样处理：
+ESP32-C3 的 USB 口是 USB Serial/JTAG，电脑上是一个 CDC 串口，DAP 链路（第 1 节的串口帧）和 Wi-Fi 命令行共用这个口，不需要切换模式。固件（`firmware/common/serial/serial_mux.hpp`）对每块收到的数据这样处理：
 
 1. 先交给 DAP 链路。链路自己查找帧头 `0x5A`、校验 CRC，非帧字节直接丢弃。
 2. 这一块数据执行了至少一个 DAP 帧，或者最近 2 秒内执行过 DAP 帧时，数据不交给命令行。
@@ -484,7 +484,7 @@ ESP32-C3 的 USB 口是 USB Serial/JTAG，电脑上是一个 CDC 串口，DAP �
 
 ## 6. USB/IP 虚拟设备
 
-探针在 TCP 3240 端口提供 USB/IP（协议见 Linux 内核文档 `usb/usbip_protocol.rst`，字段大端）。实现在 `firmware/common/usbip_device.hpp`，上位机 xrdap 库的 `usbip` 模块是同一个设备模型。
+探针在 TCP 3240 端口提供 USB/IP（协议见 Linux 内核文档 `usb/usbip_protocol.rst`，字段大端）。实现在 `firmware/common/net/usbip_device.hpp`，上位机 xrdap 库的 `usbip` 模块是同一个设备模型。
 
 | 操作 | 处理 |
 |---|---|

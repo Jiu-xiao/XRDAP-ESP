@@ -277,7 +277,7 @@ wifi set <ssid> <password>
 
 #### C3: the USB port shared with the DAP link
 
-The command line of the C3 is on the chip's USB port, the same port as the DAP serial link, and no mode switch is needed: the probe tells DAP frames and typed commands apart automatically (`firmware/common/serial_mux.hpp`; the mechanism is described in section 5 of [docs/protocol.en.md](docs/protocol.en.md)). The command line answers only after a line has been entered with Enter, and drops a whole line that contains control characters; while a DAP frame was seen within the last 2 seconds, text input is ignored, so debug tools never receive command-line output. The terminal must not change DTR/RTS, otherwise the chip may be reset:
+The command line of the C3 is on the chip's USB port, the same port as the DAP serial link, and no mode switch is needed: the probe tells DAP frames and typed commands apart automatically (`firmware/common/serial/serial_mux.hpp`; the mechanism is described in section 5 of [docs/protocol.en.md](docs/protocol.en.md)). The command line answers only after a line has been entered with Enter, and drops a whole line that contains control characters; while a DAP frame was seen within the last 2 seconds, text input is ignored, so debug tools never receive command-line output. The terminal must not change DTR/RTS, otherwise the chip may be reset:
 
 ```
 python -m serial.tools.miniterm COM7 115200 --dtr 0 --rts 0

@@ -2,10 +2,9 @@
 #pragma once
 
 // 串口 DAP 链路与本探针 DAP 实例之间的适配层。libxr 的 DapSerialTransport 负责 Topic
-// 帧、CRC、重新同步和工作线程，只要求一个带 ExecuteExternal
-// 的对象。本适配器在每个请求前后
-// 告诉厂商扩展当前传输是串口，并刷新串口采样的租期。厂商命令仍由 DAP 实例自己的命令钩子
-// （USB、TCP 共用）处理，不再挂第二个钩子。
+// 帧、CRC、重新同步和工作线程，只要求一个带 ExecuteExternal 的对象。本适配器在每个
+// 请求前后告诉厂商扩展当前传输是串口，并刷新串口采样的租期。厂商命令仍由 DAP 实例自己的
+// 命令钩子（USB、TCP 共用）处理，不再挂第二个钩子。
 //
 // Adapter between the serial DAP link and this probe's DAP instance. libxr's
 // DapSerialTransport handles Topic frames, CRC, resync and the worker thread, and only

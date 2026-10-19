@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 // XR-DAP-S3：基于 libxr 的 ESP32-S3 CMSIS-DAP 调试探针。
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
-//   Wi-Fi：连上热点后在 TCP 端口提供 CMSIS-DAP；有 TCP 客户端时 USB 关闭，客户端走后
-//          USB 恢复。
+//   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针；有网络客户端时
+//          USB 关闭，客户端走后 USB 恢复。
 //   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap-forward 给 OpenOCD。
 // 三种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。
 //
 // XR-DAP-S3: a CMSIS-DAP debug probe for the ESP32-S3 built on libxr.
 //   USB:    a Bulk v2 DAP interface plus a CDC virtual serial port.
-//   Wi-Fi:  once joined, CMSIS-DAP is served on a TCP port; USB is shut down while a TCP
-//           client is connected and restored when it leaves.
+//   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe;
+//           USB is shut down while a network client is connected and restored after.
 //   Serial: CMSIS-DAP in libxr Topic frames on UART0, used by OpenOCD through the
 //           PC-side xrdap-forward.
 // All three transports share one DAP instance and the XR vendor extension (multi-address
@@ -18,14 +18,11 @@
 
 #include "cdc_uart.hpp"
 #include "config.hpp"
-#include "dap_tcp.hpp"
 #include "dap_vendor.hpp"
 #include "daplink_v2_profile_swd.hpp"
 #include "debug/dap_serial_transport.hpp"
 #include "dedic_gpio_pin.hpp"
-#include "esp_heap_caps.h"
 #include "esp_log.h"
-#include "esp_mac.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
 #include "esp_usb_dev.hpp"
@@ -33,13 +30,11 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "libxr.hpp"
-#include "mdns_service.hpp"
+#include "probe_app.hpp"
 #include "probe_info.hpp"
 #include "serial_link.hpp"
 #include "swd_engine.hpp"
-#include "wifi_command.hpp"
-#include "wifi_console.hpp"
-#include "wifi_sta.hpp"
+#include "uart_console.hpp"
 
 namespace
 {
@@ -54,8 +49,8 @@ alignas(64) uint8_t ep1_dap[4096];
 alignas(64) uint8_t ep2_cdc[1024];
 alignas(64) uint8_t ep3_comm[128];
 
-using Dap = LibXR::USB::DapLinkV2Class<SwdEngine, Config::kDapPacketSize, 4u,
-                                       Config::kDapPacketSize>;
+using Dap = LibXR::USB::DapLinkV2Class<SwdEngine, Config::kDapPacketSize,
+                                       Config::kDapPacketCount, Config::kDapPacketSize>;
 
 // SWD 相关对象。必须在 Config::kSwdCore 上创建：专用 GPIO 只能在创建它的核上访问。
 struct SwdSet
@@ -73,8 +68,8 @@ SwdSet& GetSwdSet()
   return set;
 }
 
-// TCP 客户端连接期间关闭 USB，断开后重新打开。USB 栈的开关在核 0（USB 中断所在核）的
-// 专用任务里做，TCP 任务只等它完成。
+// 网络客户端连接期间关闭 USB，断开后重新打开，两条路不会同时驱动 DAP。USB 栈的开关在
+// 核 0（USB 中断所在核）的专用任务里做，网络服务任务只等它完成。
 class UsbSwitch
 {
  public:
@@ -85,8 +80,11 @@ class UsbSwitch
     xTaskCreatePinnedToCore(&UsbSwitch::TaskEntry, "usbctl", 4096, this, 6, nullptr, 0);
   }
 
-  void Down() { Request(Command::DOWN); }
-  void Up() { Request(Command::UP); }
+  /// StartNetwork 的 on_client 回调 / on_client callback for StartNetwork.
+  static void OnNetworkClient(bool connected, void* ctx)
+  {
+    static_cast<UsbSwitch*>(ctx)->Request(connected ? Command::DOWN : Command::UP);
+  }
 
  private:
   enum class Command
@@ -114,14 +112,14 @@ class UsbSwitch
         usb_.Stop(false);
         usb_.Deinit(false);
         active_ = false;
-        ESP_LOGI(TAG, "TCP 客户端已连接，USB 关闭");
+        ESP_LOGI(TAG, "网络客户端已连接，USB 关闭");
       }
       else if (command_ == Command::UP && !active_)
       {
         usb_.Init(false);
         usb_.Start(false);
         active_ = true;
-        ESP_LOGI(TAG, "TCP 客户端已断开，USB 恢复");
+        ESP_LOGI(TAG, "网络客户端已断开，USB 恢复");
       }
       xSemaphoreGive(done_);
     }
@@ -134,34 +132,12 @@ class UsbSwitch
   bool active_ = true;
 };
 
-// TCP 客户端连上时，别的传输发起的采样作废并关闭 USB；客户端走后，TCP 发起的采样停止
-// 并恢复 USB。
-struct TcpHandover
-{
-  UsbSwitch& usb;
-  DapVendor& vendor;
-
-  static void OnConnect(void* ctx)
-  {
-    auto* self = static_cast<TcpHandover*>(ctx);
-    self->vendor.OnTransportClosed();
-    self->vendor.SetTransport(DapVendor::Transport::TCP);
-    self->usb.Down();
-  }
-
-  static void OnDisconnect(void* ctx)
-  {
-    auto* self = static_cast<TcpHandover*>(ctx);
-    self->vendor.OnTransportClosed();
-    self->usb.Up();
-  }
-};
 }  // namespace
 
 extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
-  LibXR::PlatformInit(3, 8192);
+  LibXR::PlatformInit(Config::kLibxrTimerPriority, 8192);
 
   // 在 SWD 核上创建 SWD 对象，等它建好。
   static volatile bool swd_ready = false;
@@ -181,15 +157,10 @@ extern "C" void app_main(void)
   static Dap dap(LibXR::USB::Endpoint::EPNumber::EP1, LibXR::USB::Endpoint::EPNumber::EP1,
                  GetSwdSet().swd, nullptr);
 
-  // DAP_Info 里报探针的序列号（和 USB 序列号相同），上位机靠它认出同一块探针。
-  SetProbeInfo(dap, "XR-DAP-S3");
-
-  // XR 厂商扩展（0x80 到 0x85，加上 0x86 Wi-Fi 配置）挂在 DAP 类的命令钩子上，
-  // USB、TCP、串口行为一致。
+  // XR 厂商扩展挂在 DAP 类的命令钩子上，USB、网络、串口行为一致。
   static DapVendor vendor(GetSwdSet().swd, Config::kDapPacketSize);
-  WifiCommand::Install(vendor);
-  vendor.Begin(Config::kSwdCore, Config::kSamplingPriority);
-  dap.SetCommandHook(&DapVendor::Hook, &vendor);
+  InstallVendor(dap, vendor, Config::kProductName, Config::kSwdCore,
+                Config::kSamplingPriority);
 
   // libxr 在应用线程里执行 DAP 命令，循环调用 Step()。线程放在 SWD 核上，与核 0 的 USB
   // 中断分开，避免互相抢占。
@@ -208,11 +179,10 @@ extern "C" void app_main(void)
                                  LibXR::USB::Endpoint::EPNumber::EP2,
                                  LibXR::USB::Endpoint::EPNumber::EP3, 1024, 1024, 8);
   // USB 序列号 = 前缀 + 出厂 MAC（6 字节），协议栈把它转成十六进制接在前缀后面，和
-  // DAP_Info 的序列号相同。产品名带 "CMSIS-DAP"：probe-rs、pyOCD 等按产品名认 CMSIS-DAP
-  // 设备。
+  // DAP_Info 的序列号相同。
   static constexpr auto lang = LibXR::USB::DescriptorStrings::MakeLanguagePack(
-      LibXR::USB::DescriptorStrings::Language::EN_US, "XRobot", "XR-DAP-S3 CMSIS-DAP",
-      kSerialPrefix);
+      LibXR::USB::DescriptorStrings::Language::EN_US, kVendorName,
+      Config::kUsbProductName, kSerialPrefix);
   static LibXR::ESP32USBDevice usb(
       {
           {LibXR::RawData{ep0_buffer, sizeof(ep0_buffer)}},
@@ -221,7 +191,7 @@ extern "C" void app_main(void)
           {LibXR::RawData{ep3_comm, sizeof(ep3_comm)}, true},
       },
       LibXR::USB::DeviceDescriptor::PacketSize0::SIZE_64, Config::kUsbVid,
-      Config::kUsbPid, 0x0100, {&lang}, {{&dap, &cdc}},
+      Config::kUsbPid, Config::kUsbBcdDevice, {&lang}, {{&dap, &cdc}},
       LibXR::ConstRawData{ProbeMac(), 6});
   usb.Init(false);
   usb.Start(false);
@@ -257,28 +227,15 @@ extern "C" void app_main(void)
     }
   }
 
-  // Wi-Fi 和 TCP。Wi-Fi 最多等 20 秒；没连上时 Wi-Fi 仍会在后台重连，TCP 服务照常启动。
-  // 没有热点参数时 Wi-Fi 不启动，只提供 USB。
-  const esp_err_t wifi = WifiStaStart(20000);
-  // 通过 USB 虚拟串口配置 Wi-Fi。没有热点参数时也能用它来设置。
-  static WifiConsole<LibXR::USB::CDCUart> console(cdc);
+  // Wi-Fi 命令行在 USB 虚拟串口上，没有热点参数时也能用它来设置。
+  static UartConsole<LibXR::USB::CDCUart> console(cdc);
   console.Start(0);
-  if (wifi == ESP_OK || wifi == ESP_ERR_TIMEOUT)
+
+  static UsbSwitch usb_switch(usb);
+  if (StartNetwork(dap, vendor,
+                   {Config::kChipName, Config::kUsbProductName, Config::kSwdCore,
+                    &UsbSwitch::OnNetworkClient, &usb_switch}))
   {
-    static UsbSwitch usb_switch(usb);
     usb_switch.Start();
-    static TcpHandover handover{usb_switch, vendor};
-    static DapTcpServer<Dap> server(dap, Config::kTcpPort);
-    server.SetHooks(&TcpHandover::OnConnect, &TcpHandover::OnDisconnect, &handover);
-    server.EnableUsbip(Config::kUsbipPort, "XR-DAP-S3 CMSIS-DAP");
-    server.Start(Config::kSwdCore);
-    MdnsStart("esp32s3", Config::kTcpPort);
-    ESP_LOGI(TAG, "TCP 服务已启动，DAP 端口 %u，USB/IP 端口 %u，剩余堆 %u 字节",
-             (unsigned)Config::kTcpPort, (unsigned)Config::kUsbipPort,
-             (unsigned)esp_get_free_heap_size());
-  }
-  else
-  {
-    ESP_LOGW(TAG, "Wi-Fi 未启动（%s），只提供 USB", esp_err_to_name(wifi));
   }
 }

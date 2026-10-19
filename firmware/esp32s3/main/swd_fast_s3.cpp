@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SwdEngine 的高速路径（仅 ESP32-S3）：汇编写死每个半周期的指令，高低半周期指令数相同。
-// 每一档展开后代码量较大，放在 flash 里（linker.lf 只把 main.cpp 放进 IRAM）。指令缓存
+// 每一档展开后代码量较大，放在 flash 里（linker.lf 不把本文件放进 IRAM）。指令缓存
 // 未命中只会拉长某一个半周期，SWD 是同步协议，不影响正确性。
 //
 // SwdEngine fast path (ESP32-S3 only): the instructions of every half period are fixed
 // in assembly, with the same count in the high and low halves. Each unrolled level is
-// large, so it lives in flash (linker.lf puts only main.cpp in IRAM). An instruction
+// large, so it lives in flash (linker.lf leaves this file out of IRAM). An instruction
 // cache miss only stretches one half period, which SWD, being synchronous, tolerates.
 
+#include "swd_bits.hpp"
 #include "swd_engine.hpp"
 
 #if XRDAP_SWD_FAST_PATH
@@ -20,8 +21,9 @@ using Request = LibXR::Debug::SwdProtocol::Request;
 using Response = LibXR::Debug::SwdProtocol::Response;
 using Ack = LibXR::Debug::SwdProtocol::Ack;
 
-// 输出使能是 APB 寄存器写，十几个 CPU 周期后才生效；切到输出后等这么久再发第一位数据。
-constexpr uint32_t kOutputEnableSettle = 16U;
+using SwdBits::DecodeAck;
+using SwdBits::kOutputEnableSettle;
+using SwdBits::MakeRequest;
 
 inline uint32_t Now() { return esp_cpu_get_cycle_count(); }
 
@@ -117,33 +119,6 @@ inline __attribute__((always_inline)) uint32_t ReadBits(uint32_t* raw, uint32_t 
         [n] "i"(N)
       : "memory");
   return acc;
-}
-
-inline uint32_t MakeRequest(const Request& req)
-{
-  const uint32_t apndp = (req.port == LibXR::Debug::SwdProtocol::Port::AP) ? 1U : 0U;
-  const uint32_t rnw = req.rnw ? 1U : 0U;
-  const uint32_t a2 = req.addr2b & 1U;
-  const uint32_t a3 = (req.addr2b >> 1) & 1U;
-  const uint32_t par = (apndp ^ rnw ^ a2 ^ a3) & 1U;
-  return 1U | (apndp << 1) | (rnw << 2) | (a2 << 3) | (a3 << 4) | (par << 5) | (1U << 7);
-}
-
-inline Ack DecodeAck(uint32_t bits)
-{
-  switch (bits)
-  {
-    case 1:
-      return Ack::OK;
-    case 2:
-      return Ack::WAIT;
-    case 4:
-      return Ack::FAULT;
-    case 0:
-      return Ack::NO_ACK;
-    default:
-      return Ack::PROTOCOL;
-  }
 }
 
 template <int N>

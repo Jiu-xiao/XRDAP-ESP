@@ -1,0 +1,16 @@
+# 热路径放进 IRAM 运行，避免从 Flash 取指令时的缓存未命中：main.cpp 里实例化的 SWD 位带、
+# DAP 命令处理和网络收发，以及厂商扩展的 MEM-AP 访问、采样和帧缓冲。S3 的 swd_fast_s3.cpp
+# 展开后太大，留在 Flash。
+#
+# Hot paths run from IRAM to avoid cache misses on flash fetches: the SWD bit-banging,
+# DAP command handling and network I/O instantiated in main.cpp, plus the vendor
+# extension's MEM-AP access, sampling and frame buffer. The S3's swd_fast_s3.cpp is too
+# large when unrolled and stays in flash.
+[mapping:xrdap_hot]
+archive: libmain.a
+entries:
+    main (noflash)
+    dap_vendor (noflash)
+    mem_ap (noflash)
+    sampler (noflash)
+    frame_ring (noflash)

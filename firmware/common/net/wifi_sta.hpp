@@ -32,8 +32,8 @@ esp_err_t WifiStaStart(uint32_t timeout_ms);
 ///        means an open network.
 /// @return ESP_ERR_INVALID_ARG 长度不合法 / invalid length；其他非 ESP_OK 为 NVS 错误 /
 ///         other non-OK values are NVS errors.
-/// @note 格式与 RMLink 固件一致，用 RMLink 配过网的板子无需重配 / Same format as the
-///       RMLink firmware, so boards provisioned by RMLink need no reconfiguration.
+/// @note 存储格式固定，升级固件不丢热点参数 / The storage format is fixed, so firmware
+///       upgrades keep the credentials.
 esp_err_t WifiStaSave(const char* ssid, const char* password);
 
 /// @brief 清除已保存的热点参数；本来就没有也返回 ESP_OK / Erase the saved credentials;

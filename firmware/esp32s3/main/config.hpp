@@ -1,52 +1,44 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+// ESP32-S3 版 XR-DAP 的固定参数；两种芯片共用的在 probe_config.hpp。
+//
+// Fixed parameters of the ESP32-S3 XR-DAP firmware; shared ones are in probe_config.hpp.
+
 #include <cstdint>
 
-// ESP32-S3 版 XR-DAP 的固定参数。
-//
-// Fixed parameters of the ESP32-S3 XR-DAP firmware.
+#include "probe_config.hpp"
 
 namespace XrDap::Config
 {
+/// DAP_Info 产品名 / DAP_Info product name.
+inline constexpr char kProductName[] = "XR-DAP-S3";
+/// USB 产品名；probe-rs、pyOCD 按其中的 "CMSIS-DAP" 认设备 / USB product name; probe-rs
+/// and pyOCD recognise the device by "CMSIS-DAP" in it.
+inline constexpr char kUsbProductName[] = "XR-DAP-S3 CMSIS-DAP";
+/// mDNS TXT 里的芯片名 / Chip name in the mDNS TXT.
+inline constexpr char kChipName[] = "esp32s3";
+
+/// USB 设备版本号；USB/IP 虚拟设备用 0x0200，Windows 按 VID、PID、版本号缓存描述符，两者
+/// 不能相同 / USB device release; the USB/IP virtual device uses 0x0200. Windows caches
+/// descriptors by VID, PID and release, so the two must differ.
+constexpr uint16_t kUsbBcdDevice = 0x0100;
+
 /// SWCLK 引脚 / SWCLK pin.
 constexpr int kSwclkGpio = 5;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 4;
 
-/// SWD 位带、DAP 的 Step() 线程和 TCP 服务所在的核。专用 GPIO 只能在创建它的核上访问；
-/// USB 中断、Wi-Fi、lwIP 都在核 0，所以用核 1 / Core for the SWD bit-banging, the DAP
-/// Step() thread and the TCP server. Dedicated GPIO is only accessible from its creating
-/// core; USB interrupts, Wi-Fi and lwIP live on core 0, hence core 1.
+/// SWD 位带、DAP 的 Step() 线程、采样和网络服务所在的核。专用 GPIO 只能在创建它的核上
+/// 访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the DAP
+/// Step() thread, sampling and the network server. Dedicated GPIO is only accessible
+/// from its creating core; USB interrupts, Wi-Fi and lwIP live on core 0, hence core 1.
 constexpr int kSwdCore = 1;
+/// libxr 定时器任务优先级 / libxr timer task priority.
+constexpr unsigned kLibxrTimerPriority = 3;
 /// DAP Step() 线程优先级 / DAP Step() thread priority.
 constexpr unsigned kStepPriority = 10;
-
-/// 通告给上位机的 DAP 包长 / DAP packet size advertised to the host.
-constexpr uint16_t kDapPacketSize = 1024;
-/// TCP DAP 监听端口 / TCP DAP listening port.
-constexpr uint16_t kTcpPort = 3241;
-/// USB/IP 虚拟 USB 探针的监听端口 / USB/IP virtual USB probe listening port.
-constexpr uint16_t kUsbipPort = 3240;
-
-/// USB 厂商号，XRUSB 登记的 VID:PID 之 VID。同一 VID:PID 靠序列号区分设备，序列号规则见
-/// probe_info.hpp 与 xrobot.work「VID/PID 与 Serial 使用约定」 / USB vendor ID from the
-/// XRUSB-registered VID:PID. Devices sharing a VID:PID are told apart by serial number;
-/// see probe_info.hpp and the xrobot.work VID/PID and serial convention.
-constexpr uint16_t kUsbVid = 0x1D50;
-/// USB 产品号 / USB product ID.
-constexpr uint16_t kUsbPid = 0x6199;
-
-/// 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档以减小边沿过冲和振铃；0 档在 10 MHz
-/// 以上错得更多 / Pad drive strength, 0 weakest to 3 strongest (IDF default 2). One step
-/// lower reduces edge overshoot and ringing; level 0 fails more above 10 MHz.
-constexpr int kPadDriveStrength = 1;
-
-/// 厂商扩展采样任务优先级。该任务在 SWD 核上优先级最高，由节拍定时器唤醒、节拍之间阻塞，
-/// DAP 命令、TCP、串口在节拍之间运行，USB/TCP 取数据不会挤掉节拍 / Priority of the vendor
-/// sampling task. It is the highest-priority task on the SWD core, woken by the tick
-/// timer and blocked between ticks; DAP commands, TCP and serial run in the gaps, so
-/// USB/TCP readout does not displace ticks.
+/// 采样任务优先级，为 SWD 核上最高 / Sampling task priority, the highest on the SWD core.
 constexpr unsigned kSamplingPriority = 14;
 
 /// 是否启用串口 DAP 链路（libxr Topic 帧）。它占用板上 USB 转串口芯片接的 UART0，因此

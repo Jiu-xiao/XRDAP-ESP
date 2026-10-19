@@ -43,6 +43,7 @@
 #include "esp_cpu.h"
 #include "hal/dedic_gpio_cpu_ll.h"
 #include "sdkconfig.h"
+#include "swd_bits.hpp"
 
 #if CONFIG_IDF_TARGET_ESP32S3
 #define XRDAP_SWD_FAST_PATH 1
@@ -284,8 +285,6 @@ class SwdEngine final : public LibXR::Debug::Swd
   static constexpr uint32_t kDefaultHz = 1000000U;
   static constexpr uint32_t kLineResetCycles = 64U;
   static constexpr uint32_t kJtagToSwd = 0xE79EU;  // 低位先发：0x9E、0xE7
-  // 输出使能是 APB 寄存器写，十几个 CPU 周期后才生效；切到输出后等这么久再发第一位数据。
-  static constexpr uint32_t kOutputEnableSettle = 16U;
   static constexpr int32_t kLateSlack = 4;
   // MEM-AP 写完 TAR 后要忙一小段时间，紧接着读 DRW 会收到 WAIT，白白多一次完整传输。
   // 因此 AP 写之后多发 2 个时钟加约 0.35 µs 的低电平空闲时钟。
@@ -381,7 +380,7 @@ class SwdEngine final : public LibXR::Debug::Swd
 
     Drive();
     Pacer p = Begin();
-    ClockOutBits(p, MakeRequest(req), 8U);
+    ClockOutBits(p, SwdBits::MakeRequest(req), 8U);
 
     // 释放 SWDIO，换向时钟，然后读 3 位 ACK
     Release();
@@ -391,7 +390,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     {
       ack |= (ClockIn(p) ? 1U : 0U) << i;
     }
-    resp.ack = DecodeAck(ack);
+    resp.ack = SwdBits::DecodeAck(ack);
 
     if (resp.ack != Ack::OK)
     {
@@ -428,7 +427,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     {
       ClockIn(p);  // 换向时钟，之后主机驱动 SWDIO
       Drive();
-      p.t += kOutputEnableSettle;
+      p.t += SwdBits::kOutputEnableSettle;
       ClockOutBits(p, req.wdata, 32U);
       ClockOut(p, static_cast<uint32_t>(__builtin_parity(req.wdata)));
       if (req.port == LibXR::Debug::SwdProtocol::Port::AP)
@@ -443,8 +442,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     return LibXR::ErrorCode::OK;
   }
 
-  // ------------------------------------------------------------ 汇编路径（仅 S3，见
-  // swd_fast_s3.cpp）
+  // ------------------------------------------- 汇编路径（仅 S3，见 swd_fast_s3.cpp）
 #if XRDAP_SWD_FAST_PATH
   using FastXfer = LibXR::ErrorCode (*)(const SwdFastPins&, const Request&, Response&);
   static constexpr size_t kFastCount = kSwdFastLevels;
@@ -511,36 +509,6 @@ class SwdEngine final : public LibXR::Debug::Swd
 #endif
     Out(dm_);
     Drive();
-  }
-
-  // ------------------------------------------------------------ 协议
-
-  static inline uint32_t MakeRequest(const Request& req)
-  {
-    const uint32_t apndp = (req.port == LibXR::Debug::SwdProtocol::Port::AP) ? 1U : 0U;
-    const uint32_t rnw = req.rnw ? 1U : 0U;
-    const uint32_t a2 = req.addr2b & 1U;
-    const uint32_t a3 = (req.addr2b >> 1) & 1U;
-    const uint32_t par = (apndp ^ rnw ^ a2 ^ a3) & 1U;
-    return 1U | (apndp << 1) | (rnw << 2) | (a2 << 3) | (a3 << 4) | (par << 5) |
-           (1U << 7);
-  }
-
-  static inline Ack DecodeAck(uint32_t bits)
-  {
-    switch (bits)
-    {
-      case 1:
-        return Ack::OK;
-      case 2:
-        return Ack::WAIT;
-      case 4:
-        return Ack::FAULT;
-      case 0:
-        return Ack::NO_ACK;
-      default:
-        return Ack::PROTOCOL;
-    }
   }
 
   DedicGpioPin& swdio_;

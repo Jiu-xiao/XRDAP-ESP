@@ -19,10 +19,11 @@
 
 #include <cstdint>
 
+#include "console_core.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "libxr.hpp"
-#include "wifi_console.hpp"
+#include "uart_console.hpp"
 
 namespace XrDap
 {
@@ -115,10 +116,7 @@ class SerialMux
 
   static void Write(void* ctx, const char* text, size_t len)
   {
-    auto* self = static_cast<SerialMux*>(ctx);
-    LibXR::Semaphore sem;
-    LibXR::WriteOperation op(sem, 200);
-    (void)self->uart_.Write(LibXR::ConstRawData{text, len}, op);
+    UartWrite(static_cast<SerialMux*>(ctx)->uart_, text, len);
   }
 
   LinkT& link_;

@@ -3,7 +3,7 @@
 //   串口：芯片自带的 USB Serial/JTAG（电脑上是 CDC 串口），用 libxr Topic 帧提供
 //         CMSIS-DAP，配合电脑端 xrdap-forward 给 OpenOCD 用；同一个口也是 Wi-Fi
 //         命令行（serial_mux.hpp）。
-//   Wi-Fi：连上热点后在 TCP 端口提供 CMSIS-DAP，帧格式与 S3 版相同。
+//   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针，与 S3 版相同。
 // 两种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。C3 没有
 // 能做自定义 USB 设备的 USB 控制器，所以没有 S3 版的 USB CMSIS-DAP 接口。与 S3 版共用的
 // 源文件在 firmware/common 下。
@@ -12,7 +12,8 @@
 //   Serial: the built-in USB Serial/JTAG (a CDC port on the PC) carries CMSIS-DAP in
 //           libxr Topic frames for OpenOCD via the PC-side xrdap-forward; the same port
 //           is also the Wi-Fi console (serial_mux.hpp).
-//   Wi-Fi:  once joined, CMSIS-DAP is served on a TCP port with the same framing as S3.
+//   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe,
+//           as on the S3.
 // Both transports share one DAP instance and the XR vendor extension (multi-address
 // access, pointer chains, probe-side sampling). The C3 has no USB controller usable for
 // custom USB devices, so it lacks the S3's USB CMSIS-DAP interface. Sources shared with
@@ -20,7 +21,6 @@
 #include <cstdint>
 
 #include "config.hpp"
-#include "dap_tcp.hpp"
 #include "dap_vendor.hpp"
 #include "daplink_v2_profile_swd.hpp"
 #include "debug/dap_serial_transport.hpp"
@@ -33,14 +33,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "libxr.hpp"
-#include "mdns_service.hpp"
-#include "probe_info.hpp"
+#include "probe_app.hpp"
 #include "serial_link.hpp"
 #include "serial_mux.hpp"
 #include "swd_link.hpp"
-#include "wifi_command.hpp"
-#include "wifi_console.hpp"
-#include "wifi_sta.hpp"
+#include "uart_console.hpp"
 
 namespace
 {
@@ -51,8 +48,8 @@ constexpr const char* TAG = "xrdap";
 using SwdLink = LibXR::Debug::SwdGeneralGPIO<DedicGpioPin, DedicGpioPin>;
 // DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal() 执行命令，所以不需要
 // S3 版循环调用 Step() 的线程；端点号用不到，随便填。
-using Dap = LibXR::USB::DapLinkV2Class<SwdWithClock, Config::kDapPacketSize, 4u,
-                                       Config::kDapPacketSize>;
+using Dap = LibXR::USB::DapLinkV2Class<SwdWithClock, Config::kDapPacketSize,
+                                       Config::kDapPacketCount, Config::kDapPacketSize>;
 
 struct SwdSet
 {
@@ -66,21 +63,6 @@ struct SwdSet
                    Config::kEdgeWriteCycles};
 };
 
-// TCP 客户端连上时，串口发起的采样作废；客户端走后，TCP 发起的采样停止。
-struct TcpHandover
-{
-  static void OnConnect(void* ctx)
-  {
-    auto* vendor = static_cast<DapVendor*>(ctx);
-    vendor->OnTransportClosed();
-    vendor->SetTransport(DapVendor::Transport::TCP);
-  }
-
-  static void OnDisconnect(void* ctx)
-  {
-    static_cast<DapVendor*>(ctx)->OnTransportClosed();
-  }
-};
 }  // namespace
 
 extern "C" void app_main(void)
@@ -93,15 +75,10 @@ extern "C" void app_main(void)
   static Dap dap(LibXR::USB::Endpoint::EPNumber::EP1, LibXR::USB::Endpoint::EPNumber::EP1,
                  swd_set.swd, nullptr);
 
-  // DAP_Info 里报探针的序列号（前缀 + 出厂 MAC），上位机靠它认出同一块探针。
-  SetProbeInfo(dap, "XR-DAP-C3");
-
-  // XR 厂商扩展（0x80 到 0x85，加 0x86 Wi-Fi 配置）挂在 DAP 类的命令钩子上，串口、TCP
-  // 行为一致。
+  // XR 厂商扩展挂在 DAP 类的命令钩子上，串口、网络行为一致。
   static DapVendor vendor(swd_set.swd, Config::kDapPacketSize);
-  WifiCommand::Install(vendor);
-  vendor.Begin(Config::kCore, Config::kSamplingPriority);
-  dap.SetCommandHook(&DapVendor::Hook, &vendor);
+  InstallVendor(dap, vendor, Config::kProductName, Config::kCore,
+                Config::kSamplingPriority);
 
   // USB Serial/JTAG 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令。
   // 控制台不能用这个口（sdkconfig 里控制台已关掉）。
@@ -118,9 +95,6 @@ extern "C" void app_main(void)
   ESP_LOGI(TAG, "USB Serial/JTAG 上的串口 DAP 链路已启动，SWCLK GPIO%d，SWDIO GPIO%d",
            Config::kSwclkGpio, Config::kSwdioGpio);
 
-  // Wi-Fi 和 TCP。Wi-Fi 最多等 20 秒；没连上时 Wi-Fi 仍会在后台重连，TCP 服务照常启动。
-  // 没有热点参数时 Wi-Fi 不启动，只提供串口。
-  const esp_err_t wifi = WifiStaStart(20000);
   // UART0 上也有一个命令行，给引出了 UART0 的开发板用。
   static LibXR::ESP32UART console_uart(
       static_cast<uart_port_t>(Config::kConsoleUart), Config::kConsoleTxGpio,
@@ -130,21 +104,10 @@ extern "C" void app_main(void)
       LibXR::UART::Configuration{Config::kConsoleBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1},
       /*enable_dma=*/false);
-  static WifiConsole<LibXR::ESP32UART> console(console_uart);
+  static UartConsole<LibXR::ESP32UART> console(console_uart);
   console.Start(Config::kCore);
-  if (wifi == ESP_OK || wifi == ESP_ERR_TIMEOUT)
-  {
-    static DapTcpServer<Dap> server(dap, Config::kTcpPort);
-    server.SetHooks(&TcpHandover::OnConnect, &TcpHandover::OnDisconnect, &vendor);
-    server.EnableUsbip(Config::kUsbipPort, "XR-DAP-C3 CMSIS-DAP");
-    server.Start(Config::kCore);
-    MdnsStart("esp32c3", Config::kTcpPort);
-    ESP_LOGI(TAG, "TCP 服务已启动，DAP 端口 %u，USB/IP 端口 %u，剩余堆 %u 字节",
-             (unsigned)Config::kTcpPort, (unsigned)Config::kUsbipPort,
-             (unsigned)esp_get_free_heap_size());
-  }
-  else
-  {
-    ESP_LOGW(TAG, "Wi-Fi 未启动（%s），只提供串口", esp_err_to_name(wifi));
-  }
+
+  StartNetwork(
+      dap, vendor,
+      {Config::kChipName, Config::kUsbProductName, Config::kCore, nullptr, nullptr});
 }

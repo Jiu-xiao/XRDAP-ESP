@@ -20,6 +20,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lwip/sockets.h"
+#include "probe_config.hpp"
+#include "socket_io.hpp"
 #include "usbip_device.hpp"
 
 namespace XrDap
@@ -71,7 +73,7 @@ class DapTcpServer
   void Start(int core)
   {
     if (xTaskCreatePinnedToCore(&DapTcpServer::TaskEntry, "xrdap_tcp", kStackSize, this,
-                                10, nullptr, core) != pdPASS)
+                                Config::kNetPriority, nullptr, core) != pdPASS)
     {
       ESP_LOGE(TAG, "创建服务任务失败，剩余堆 %u 字节",
                (unsigned)esp_get_free_heap_size());
@@ -80,50 +82,17 @@ class DapTcpServer
 
  private:
   static constexpr const char* TAG = "xrdap_tcp";
-  static constexpr size_t kMaxPayload = 1024;
+  static constexpr size_t kMaxPayload = Config::kDapPacketSize;
   static constexpr uint32_t kStackSize = 12288;
 
   static void TaskEntry(void* arg) { static_cast<DapTcpServer*>(arg)->Run(); }
 
-  static bool ReadAll(int fd, uint8_t* buf, size_t n)
-  {
-    while (n)
-    {
-      const int r = recv(fd, buf, n, 0);
-      if (r <= 0)
-      {
-        return false;
-      }
-      buf += r;
-      n -= static_cast<size_t>(r);
-    }
-    return true;
-  }
-
-  static bool WriteAll(int fd, const uint8_t* buf, size_t n)
-  {
-    while (n)
-    {
-      const int r = send(fd, buf, n, 0);
-      if (r <= 0)
-      {
-        return false;
-      }
-      buf += r;
-      n -= static_cast<size_t>(r);
-    }
-    return true;
-  }
-
   void Serve(int fd)
   {
-    // 帧头和数据放在同一块缓冲里，一个响应只调用一次 send()。
-    static uint8_t req[kMaxPayload];
-    static uint8_t out[8 + kMaxPayload];
     for (;;)
     {
       uint8_t hdr[8];
-      if (!ReadAll(fd, hdr, sizeof(hdr)))
+      if (!Net::ReadAll(fd, hdr, sizeof(hdr)))
       {
         return;
       }
@@ -133,23 +102,23 @@ class DapTcpServer
         ESP_LOGW(TAG, "帧头无效，关闭连接");
         return;
       }
-      if (!ReadAll(fd, req, len))
+      if (!Net::ReadAll(fd, req_, len))
       {
         return;
       }
 
       uint16_t out_len = 0;
-      (void)dap_.ExecuteExternal(req, len, out + 8, kMaxPayload, out_len);
+      (void)dap_.ExecuteExternal(req_, len, out_ + 8, kMaxPayload, out_len);
       if (out_len == 0)
       {
         continue;  // 有的命令没有应答，例如 DAP_TransferAbort
       }
-      memcpy(out, "DAP\0", 4);
-      out[4] = static_cast<uint8_t>(out_len & 0xFF);
-      out[5] = static_cast<uint8_t>(out_len >> 8);
-      out[6] = 2;
-      out[7] = 0;
-      if (!WriteAll(fd, out, 8u + out_len))
+      memcpy(out_, "DAP\0", 4);
+      out_[4] = static_cast<uint8_t>(out_len & 0xFF);
+      out_[5] = static_cast<uint8_t>(out_len >> 8);
+      out_[6] = 2;
+      out_[7] = 0;
+      if (!Net::WriteAll(fd, out_, 8u + out_len))
       {
         return;
       }
@@ -266,6 +235,9 @@ class DapTcpServer
   DapT& dap_;
   uint16_t port_;
   uint16_t usbip_port_ = 0;
+  uint8_t req_[kMaxPayload] = {};
+  // 帧头和数据放在同一块缓冲里，一个响应只调用一次 send()
+  uint8_t out_[8 + kMaxPayload] = {};
   UsbipDevice<DapT> usbip_;
   void (*on_connect_)(void*) = nullptr;
   void (*on_disconnect_)(void*) = nullptr;

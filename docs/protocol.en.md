@@ -474,7 +474,7 @@ OpenOCD accepts the host name directly in `cmsis-dap tcp host`. Host tools brows
 
 ## 5. The ESP32-C3 USB port
 
-The USB port of the ESP32-C3 is USB Serial/JTAG, which appears on the computer as one CDC serial port. The DAP link (the serial frames of section 1) and the Wi-Fi command line share this port without any mode switch. For each chunk of received data the firmware (`firmware/common/serial_mux.hpp`) does the following:
+The USB port of the ESP32-C3 is USB Serial/JTAG, which appears on the computer as one CDC serial port. The DAP link (the serial frames of section 1) and the Wi-Fi command line share this port without any mode switch. For each chunk of received data the firmware (`firmware/common/serial/serial_mux.hpp`) does the following:
 
 1. The chunk is first given to the DAP link. The link finds the frame header `0x5A` and checks the CRC itself; bytes that are not part of a frame are discarded.
 2. If the chunk executed at least one DAP frame, or a DAP frame was executed within the last 2 seconds, the data is not given to the command line.
@@ -484,7 +484,7 @@ As a result DAP frames and command-line output never mix: the debug tool always 
 
 ## 6. USB/IP virtual device
 
-The probe serves USB/IP on TCP port 3240 (protocol in the Linux kernel document `usb/usbip_protocol.rst`, fields big-endian). The implementation is in `firmware/common/usbip_device.hpp`, and the `usbip` module of the host xrdap library is the same device model.
+The probe serves USB/IP on TCP port 3240 (protocol in the Linux kernel document `usb/usbip_protocol.rst`, fields big-endian). The implementation is in `firmware/common/net/usbip_device.hpp`, and the `usbip` module of the host xrdap library is the same device model.
 
 | Operation | Handling |
 |---|---|

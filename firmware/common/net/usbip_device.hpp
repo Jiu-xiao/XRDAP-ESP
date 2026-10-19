@@ -23,7 +23,9 @@
 #include <cstring>
 
 #include "lwip/sockets.h"
+#include "probe_config.hpp"
 #include "probe_info.hpp"
+#include "socket_io.hpp"
 
 namespace XrDap
 {
@@ -40,9 +42,8 @@ class UsbipDevice
   explicit UsbipDevice(DapT& dap) : dap_(dap) {}
 
   /// @brief 设置 USB 产品名 / Set the USB product name.
-  /// @param product 例如 "XR-DAP-C3 CMSIS-DAP"，需一直有效；工具按其中的 "CMSIS-DAP" 识别
-  /// /
-  ///        Such as "XR-DAP-C3 CMSIS-DAP"; must stay valid. Tools look for "CMSIS-DAP".
+  /// @param product 例如 "XR-DAP-C3 CMSIS-DAP"，需一直有效 / Such as
+  ///        "XR-DAP-C3 CMSIS-DAP"; must stay valid.
   void SetProduct(const char* product) { product_ = product; }
 
   /// @brief 处理连接上的第一个操作 / Handle the first operation on a connection.
@@ -53,7 +54,7 @@ class UsbipDevice
   bool Handshake(int fd)
   {
     uint8_t op[8];
-    if (!ReadAll(fd, op, sizeof(op)))
+    if (!Net::ReadAll(fd, op, sizeof(op)))
     {
       return false;
     }
@@ -67,7 +68,7 @@ class UsbipDevice
       n += PutUsbDevice(reply + n);
       const uint8_t interface[4] = {0xFF, 0, 0, 0};
       memcpy(reply + n, interface, sizeof(interface));
-      (void)WriteAll(fd, reply, n + sizeof(interface));
+      (void)Net::WriteAll(fd, reply, n + sizeof(interface));
       return false;
     }
     if (code != kOpReqImport)
@@ -75,7 +76,7 @@ class UsbipDevice
       return false;
     }
     char busid[32];
-    if (!ReadAll(fd, reinterpret_cast<uint8_t*>(busid), sizeof(busid)))
+    if (!Net::ReadAll(fd, reinterpret_cast<uint8_t*>(busid), sizeof(busid)))
     {
       return false;
     }
@@ -83,12 +84,12 @@ class UsbipDevice
     if (strcmp(busid, kBusId) != 0)
     {
       n = PutOpHeader(reply, kOpRepImport, 1);
-      (void)WriteAll(fd, reply, n);
+      (void)Net::WriteAll(fd, reply, n);
       return false;
     }
     n = PutOpHeader(reply, kOpRepImport, 0);
     n += PutUsbDevice(reply + n);
-    return WriteAll(fd, reply, n);
+    return Net::WriteAll(fd, reply, n);
   }
 
   /// @brief 处理 URB，直到连接断开 / Serve URBs until the connection closes.
@@ -101,7 +102,7 @@ class UsbipDevice
     resp_head_ = 0;
     resp_count_ = 0;
     uint8_t hdr[kHeaderLen];
-    while (ReadAll(fd, hdr, sizeof(hdr)))
+    while (Net::ReadAll(fd, hdr, sizeof(hdr)))
     {
       const uint32_t cmd = GetU32(hdr);
       bool ok = false;
@@ -137,11 +138,11 @@ class UsbipDevice
   static constexpr size_t kHeaderLen = 48;
   static constexpr size_t kUsbDeviceLen = 312;
   static constexpr const char* kBusId = "1-1";
-  static constexpr uint16_t kVid = 0x1D50;
-  static constexpr uint16_t kPid = 0x6199;
+  static constexpr uint16_t kVid = Config::kUsbVid;
+  static constexpr uint16_t kPid = Config::kUsbPid;
   static constexpr uint16_t kBcdDevice = 0x0200;
   static constexpr uint8_t kMsVendorCode = 0x20;
-  static constexpr size_t kMaxPacket = 1024;
+  static constexpr size_t kMaxPacket = Config::kDapPacketSize;
   static constexpr char kMsName[] = "DeviceInterfaceGUIDs";
   static constexpr char kMsGuid[] = "{CDB3B5AD-293B-4663-AA36-1AAE46463776}";
   // UTF-16LE。名称带一个结尾 0，值是 REG_MULTI_SZ，带两个 / UTF-16LE. The name has one
@@ -150,11 +151,9 @@ class UsbipDevice
   static constexpr size_t kMsDataLen = 2 * (sizeof(kMsGuid) + 1);
   static constexpr size_t kMsOs20SetLen = 10 + 20 + 10 + kMsNameLen + kMsDataLen;
   static_assert(kMsOs20SetLen == 162, "MS OS 2.0 descriptor set length");
-  // 两块探针的 DAP_Info 都报 4 个包，客户端最多先发 4 个 OUT 再取响应；队列占 4 KB 静态
-  // 内存，S3 开着串口链路时堆已经不宽裕 / Both probes report 4 packets in DAP_Info, so a
-  // client sends at most 4 OUTs before it collects the responses. The queue takes 4 KB of
-  // static RAM; heap is already tight on the S3 with the serial link enabled.
-  static constexpr size_t kQueueDepth = 4;
+  // 客户端最多先发 DAP_Info 报的包数个 OUT，再取响应 / A client sends at most the
+  // DAP_Info packet count of OUTs before it collects the responses.
+  static constexpr size_t kQueueDepth = Config::kDapPacketCount;
 
   struct PendingIn
   {
@@ -220,36 +219,6 @@ class UsbipDevice
     return kUsbDeviceLen;
   }
 
-  static bool ReadAll(int fd, uint8_t* buf, size_t n)
-  {
-    while (n)
-    {
-      const int r = recv(fd, buf, n, 0);
-      if (r <= 0)
-      {
-        return false;
-      }
-      buf += r;
-      n -= static_cast<size_t>(r);
-    }
-    return true;
-  }
-
-  static bool WriteAll(int fd, const uint8_t* buf, size_t n)
-  {
-    while (n)
-    {
-      const int r = send(fd, buf, n, 0);
-      if (r <= 0)
-      {
-        return false;
-      }
-      buf += r;
-      n -= static_cast<size_t>(r);
-    }
-    return true;
-  }
-
   /// 追加一个 RET_SUBMIT 或 RET_UNLINK，数据已放在 Payload() / Append a RET_SUBMIT or
   /// RET_UNLINK whose data is already in Payload().
   void AddRet(uint32_t cmd, uint32_t seqnum, int32_t status, uint32_t actual,
@@ -275,7 +244,7 @@ class UsbipDevice
   {
     const size_t n = tx_len_;
     tx_len_ = 0;
-    return n == 0 || WriteAll(fd, tx_, n);
+    return n == 0 || Net::WriteAll(fd, tx_, n);
   }
 
   // ---------------------------------------------------------------- 描述符
@@ -511,7 +480,7 @@ class UsbipDevice
     {
       return false;
     }
-    if (!ReadAll(fd, rx_, out_len))
+    if (!Net::ReadAll(fd, rx_, out_len))
     {
       return false;
     }
