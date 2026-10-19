@@ -95,6 +95,11 @@ class DedicGpioPin final : public LibXR::GPIO
  private:
   void OutputEnable(bool on)
   {
+    if (on == output_enabled_)
+    {
+      return;  // 已经是这个状态，省掉一次外设总线写加读回
+    }
+    output_enabled_ = on;
     REG_WRITE(on ? GPIO_ENABLE_W1TS_REG : GPIO_ENABLE_W1TC_REG, 1U << gpio_);
     // GPIO_ENABLE 在外设总线上，写操作先进写缓冲，总线忙时要几十个 CPU 周期才真正生效（实测过一次两位数据
     // 之后才生效，前两位被上拉成 1，且两位翻转校验位查不出来）。读回同一个外设的寄存器会等写完成，
@@ -103,6 +108,7 @@ class DedicGpioPin final : public LibXR::GPIO
   }
 
   int gpio_;
+  bool output_enabled_ = false;
   dedic_gpio_bundle_handle_t bundle_ = nullptr;
   uint32_t out_mask_ = 0U;
   uint32_t in_mask_ = 0U;

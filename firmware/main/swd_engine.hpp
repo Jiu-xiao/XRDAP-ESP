@@ -43,6 +43,7 @@ struct SwdFastPins
   uint32_t dm;
   uint32_t im;
   DedicGpioPin* swdio;
+  uint32_t idle_after_ap_write;  // AP 写之后多发的低电平时钟数
 };
 
 /// 汇编路径的档位数，以及每一档的传输函数和实测半周期（1/16 CPU 周期）。代码量大，放在 flash 里，见 swd_fast_s3.cpp。
@@ -100,6 +101,7 @@ class SwdEngine final : public LibXR::Debug::Swd
       // 表按 N 从小到大排列，上面的循环找到的是第一个不短于想要值的一档
       fast_ = SwdFastTransferFn(pick);
       fast_idx_ = pick;
+      idle_ap_write_ = IdleClocksFor((cpu_hz_ * 8U) / fast_half_x16_[pick]);
       half_ = min_half_;  // 线复位、序列等不讲究速度的操作仍走按时刻发沿的路径
       return LibXR::ErrorCode::OK;
     }
@@ -107,6 +109,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     // 四舍五入到整数个 CPU 周期；Advance 不累计迟到量，平均半周期就是 half_
     const uint32_t half = (want_x16 + 8U) / 16U;
     half_ = (half < min_half_) ? min_half_ : half;
+    idle_ap_write_ = IdleClocksFor(cpu_hz_ / (2U * half_));
     return LibXR::ErrorCode::OK;
   }
 
@@ -215,6 +218,10 @@ class SwdEngine final : public LibXR::Debug::Swd
   // 输出使能是 APB 寄存器写，十几个 CPU 周期后才生效，切到输出后等这么久再发第一位数据
   static constexpr uint32_t kOutputEnableSettle = 16U;
   static constexpr int32_t kLateSlack = 4;
+  // MEM-AP 写完 TAR 后要忙一小段时间；紧接着读 DRW 会收到 WAIT，白白多一次完整的传输。
+  // AP 写之后多发 2 个时钟加约 0.35 µs 的低电平时钟（实测只发 1 个时钟或不足 0.4 µs 时还会收到 WAIT）。
+  static constexpr uint32_t kApWriteIdleNs = 350U;
+  static uint32_t IdleClocksFor(uint32_t hz) { return 2U + (hz / 1000U * kApWriteIdleNs + 999999U) / 1000000U; }
 
   // ------------------------------------------------------------ 按时刻发沿
 
@@ -349,6 +356,13 @@ class SwdEngine final : public LibXR::Debug::Swd
       p.t += kOutputEnableSettle;
       ClockOutBits(p, req.wdata, 32U);
       ClockOut(p, static_cast<uint32_t>(__builtin_parity(req.wdata)));
+      if (req.port == LibXR::Debug::SwdProtocol::Port::AP)
+      {
+        for (uint32_t i = 0; i < idle_ap_write_; ++i)
+        {
+          ClockOut(p, 0U);
+        }
+      }
       End(p);
     }
     return LibXR::ErrorCode::OK;
@@ -367,7 +381,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     }
   }
 
-  SwdFastPins Pins() const { return SwdFastPins{cm_, dm_, im_, &swdio_}; }
+  SwdFastPins Pins() const { return SwdFastPins{cm_, dm_, im_, &swdio_, idle_ap_write_}; }
 
   uint32_t fast_half_x16_[kFastCount] = {};
   size_t fast_idx_ = 0;
@@ -458,6 +472,7 @@ class SwdEngine final : public LibXR::Debug::Swd
   uint32_t dm_;
   uint32_t im_;
   uint32_t half_ = 0U;
+  uint32_t idle_ap_write_ = 0U;
   uint32_t min_half_ = 2U;
 
 };

@@ -30,64 +30,87 @@ inline void Spin(uint32_t cycles)
 
 inline void Out(uint32_t value) { dedic_gpio_cpu_ll_write_all(value); }
 
-/// 输出 COUNT 位：lo[i] 是第 i 位在 SWCLK 低时的输出寄存器值，高电平时的值 = lo[i] | cm。
-/// 低半周期：写沿、算高电平值、N 个 nop；高半周期：写沿、取下一位、N 个 nop。两段都是 N + 2 条指令。
-template <int N, int COUNT>
-inline __attribute__((always_inline)) void WriteFast(const uint32_t* lo, uint32_t cm)
+/// 输出 BITS 位数据（val 的低 BITS 位，低位先发），PAR 为 1 时再输出一位校验位 pb。
+/// 低半周期：写沿（SWCLK 低，SWDIO 为这一位）、算高电平值、N 个 nop；
+/// 高半周期：写沿（SWCLK 高）、用空闲的指令位算下一位要输出的值、凑够 N + 2 条指令。
+/// 下一位的值直接从 val 里取（extui 取一位，movnez 选 SWDIO 的位），不用先展开成数组。
+template <int N, int BITS, int PAR>
+inline __attribute__((always_inline)) void WriteBits(uint32_t val, uint32_t dm, uint32_t cm,
+                                                    uint32_t pb)
 {
   uint32_t a;
   uint32_t h;
+  uint32_t t;
   asm volatile(
-      "l32i %[a], %[p], 0\n"
-      ".set xr_i, 1\n"
+      "extui %[t], %[v], 0, 1\n"
+      "movi %[a], 0\n"
+      "movnez %[a], %[dm], %[t]\n"
+      ".set xr_i, 0\n"
       ".rept %c[cnt]\n"
       "wur.gpio_out %[a]\n"
       "or %[h], %[a], %[cm]\n"
       ".rept %c[n]\n nop\n .endr\n"
       "wur.gpio_out %[h]\n"
-      ".if xr_i < %c[cnt]\n"
-      "l32i %[a], %[p], 4*xr_i\n"
+      ".if xr_i + 1 < %c[bits]\n"
+      "extui %[t], %[v], xr_i + 1, 1\n"
+      "movi %[a], 0\n"
+      "movnez %[a], %[dm], %[t]\n"
+      ".rept %c[n] - 2\n nop\n .endr\n"
+      ".elseif (xr_i + 1 == %c[bits]) && %c[par]\n"
+      "movi %[a], 0\n"
+      "movnez %[a], %[dm], %[pb]\n"
+      ".rept %c[n] - 1\n nop\n .endr\n"
       ".else\n"
-      "nop\n"
+      ".rept %c[n] + 1\n nop\n .endr\n"
       ".endif\n"
-      ".rept %c[n]\n nop\n .endr\n"
       ".set xr_i, xr_i + 1\n"
       ".endr\n"
-      : [a] "=&r"(a), [h] "=&r"(h)
-      : [p] "r"(lo), [cm] "r"(cm), [cnt] "i"(COUNT), [n] "i"(N)
+      : [a] "=&r"(a), [h] "=&r"(h), [t] "=&r"(t)
+      : [v] "r"(val), [dm] "r"(dm), [cm] "r"(cm), [pb] "r"(pb), [cnt] "i"(BITS + PAR),
+        [bits] "i"(BITS), [par] "i"(PAR), [n] "i"(N)
       : "memory");
 }
 
-/// 读 COUNT 位，原始输入寄存器值存进 raw[]。
-/// 低半周期：写沿、N 个 nop、采样；高半周期：写沿、存数、N 个 nop。两段都是 N + 2 条指令，采样紧挨着上升沿。
+/// 读 COUNT 位。前 32 位在高半周期里直接拼进 acc（srl 移到最低位、extui 取一位、slli 放回原位、or 合并，
+/// 都放在空闲的指令位里）；第 32 位起的原始输入寄存器值存进 raw[]。
+/// 低半周期：写沿、N 个 nop、采样；高半周期：写沿、处理采到的这一位、凑够 N + 2 条指令。
+/// 采样是低半周期的最后一条指令，紧挨着上升沿。
 template <int N, int COUNT>
-inline __attribute__((always_inline)) void ReadFast(uint32_t* raw, uint32_t vlo, uint32_t vhi)
+inline __attribute__((always_inline)) uint32_t ReadBits(uint32_t* raw, uint32_t vlo, uint32_t vhi,
+                                                       uint32_t shift)
 {
+  uint32_t acc;
   uint32_t x;
+  uint32_t t;
   asm volatile(
+      "ssr %[sh]\n"
+      "movi %[acc], 0\n"
       ".set xr_i, 0\n"
       ".rept %c[cnt]\n"
       "wur.gpio_out %[lo]\n"
       ".rept %c[n]\n nop\n .endr\n"
       "ee.get_gpio_in %[x]\n"
       "wur.gpio_out %[hi]\n"
-      "s32i %[x], %[p], 4*xr_i\n"
+      ".if xr_i < 32\n"
+      "srl %[t], %[x]\n"
+      "extui %[t], %[t], 0, 1\n"
+      ".if xr_i > 0\n"
+      "slli %[t], %[t], xr_i\n"
+      ".rept %c[n] - 3\n nop\n .endr\n"
+      ".else\n"
+      ".rept %c[n] - 2\n nop\n .endr\n"
+      ".endif\n"
+      "or %[acc], %[acc], %[t]\n"
+      ".else\n"
+      "s32i %[x], %[p], 4*(xr_i-32)\n"
       ".rept %c[n]\n nop\n .endr\n"
+      ".endif\n"
       ".set xr_i, xr_i + 1\n"
       ".endr\n"
-      : [x] "=&r"(x)
-      : [p] "r"(raw), [lo] "r"(vlo), [hi] "r"(vhi), [cnt] "i"(COUNT), [n] "i"(N)
+      : [acc] "=&r"(acc), [x] "=&r"(x), [t] "=&r"(t)
+      : [p] "r"(raw), [lo] "r"(vlo), [hi] "r"(vhi), [sh] "r"(shift), [cnt] "i"(COUNT), [n] "i"(N)
       : "memory");
-}
-
-inline uint32_t Pack(const uint32_t* raw, uint32_t count, uint32_t im)
-{
-  uint32_t v = 0U;
-  for (uint32_t i = 0; i < count; ++i)
-  {
-    v |= ((raw[i] & im) != 0U ? 1U : 0U) << i;
-  }
-  return v;
+  return acc;
 }
 
 inline uint32_t MakeRequest(const Request& req)
@@ -122,35 +145,30 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
 {
   const uint32_t cm = pins.cm;
   const uint32_t dm = pins.dm;
-  uint32_t bits[33];
-  uint32_t raw[34];
+  const uint32_t sh = static_cast<uint32_t>(__builtin_ctz(pins.im));
+  uint32_t raw[2];
   resp.ack = Ack::PROTOCOL;
   resp.rdata = 0U;
   resp.parity_ok = true;
 
-  const uint32_t rq = MakeRequest(req);
-  for (uint32_t i = 0; i < 8U; ++i)
-  {
-    bits[i] = ((rq >> i) & 1U) ? dm : 0U;
-  }
   pins.swdio->SetOutputEnable(true);
-  WriteFast<N, 8>(bits, cm);
+  WriteBits<N, 8, 0>(MakeRequest(req), dm, cm, 0U);
 
-  // 释放 SWDIO：换向时钟 + 3 位 ACK
+  // 释放 SWDIO：换向时钟 + 3 位 ACK（acc 的位 0 是换向时钟，位 1 到 3 是 ACK）
   pins.swdio->SetOutputEnable(false);
-  ReadFast<N, 4>(raw, dm, dm | cm);
-  resp.ack = DecodeAck(Pack(raw + 1, 3U, pins.im));
+  const uint32_t ack_bits = ReadBits<N, 4>(raw, dm, dm | cm, sh);
+  resp.ack = DecodeAck((ack_bits >> 1) & 7U);
 
   if (resp.ack != Ack::OK)
   {
     if (resp.ack == Ack::NO_ACK || resp.ack == Ack::PROTOCOL)
     {
       // 和 CMSIS-DAP 一致：ACK 不是 OK、WAIT、FAULT 时，目标可能仍在数据阶段，换向时钟加 33 个时钟都在释放 SWDIO 下发
-      ReadFast<N, 34>(raw, dm, dm | cm);
+      (void)ReadBits<N, 34>(raw, dm, dm | cm, sh);
     }
     else
     {
-      ReadFast<N, 1>(raw, dm, dm | cm);  // 换向时钟，不进数据阶段
+      (void)ReadBits<N, 1>(raw, dm, dm | cm, sh);  // 换向时钟，不进数据阶段
     }
     Out(dm);
     pins.swdio->SetOutputEnable(true);
@@ -159,27 +177,29 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
 
   if (req.rnw)
   {
-    // 32 位数据 + 校验位 + 换向时钟
-    ReadFast<N, 34>(raw, dm, dm | cm);
+    // 32 位数据 + 校验位 + 换向时钟；raw[0] 是校验位的采样
+    const uint32_t data = ReadBits<N, 34>(raw, dm, dm | cm, sh);
     Out(dm);
     pins.swdio->SetOutputEnable(true);
-    const uint32_t data = Pack(raw, 32U, pins.im);
-    const uint32_t parity = (raw[32] & pins.im) != 0U ? 1U : 0U;
+    const uint32_t parity = (raw[0] >> sh) & 1U;
     resp.rdata = data;
     resp.parity_ok = (parity == static_cast<uint32_t>(__builtin_parity(data)));
   }
   else
   {
     const uint32_t data = req.wdata;
-    for (uint32_t i = 0; i < 32U; ++i)
-    {
-      bits[i] = ((data >> i) & 1U) ? dm : 0U;
-    }
-    bits[32] = __builtin_parity(data) ? dm : 0U;
-    ReadFast<N, 1>(raw, dm, dm | cm);  // 换向时钟，之后主机驱动 SWDIO
+    (void)ReadBits<N, 1>(raw, dm, dm | cm, sh);  // 换向时钟，之后主机驱动 SWDIO
     pins.swdio->SetOutputEnable(true);
-    Spin(kOutputEnableSettle);
-    WriteFast<N, 33>(bits, cm);
+    // GPIO_ENABLE 读回之后输出已经生效，不再额外等待
+    WriteBits<N, 32, 1>(data, dm, cm, static_cast<uint32_t>(__builtin_parity(data)));
+    if (req.port == LibXR::Debug::SwdProtocol::Port::AP)
+    {
+      // AP 写之后多发几个低电平时钟，让 MEM-AP 忙完，否则紧接着的读会收到 WAIT
+      for (uint32_t i = 0; i < pins.idle_after_ap_write; ++i)
+      {
+        WriteBits<N, 1, 0>(0U, dm, cm, 0U);
+      }
+    }
     Out(dm);
   }
   return LibXR::ErrorCode::OK;
@@ -189,12 +209,13 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
 template <int N>
 uint32_t MeasureHalfX16(const SwdFastPins& pins)
 {
-  uint32_t raw[32];
+  uint32_t raw[2];
   uint32_t best = UINT32_MAX;
+  const uint32_t sh = static_cast<uint32_t>(__builtin_ctz(pins.im));
   for (int rep = 0; rep < 4; ++rep)
   {
     const uint32_t t0 = Now();
-    ReadFast<N, 32>(raw, pins.dm, pins.dm | pins.cm);
+    (void)ReadBits<N, 32>(raw, pins.dm, pins.dm | pins.cm, sh);
     const uint32_t used = Now() - t0;
     best = (used < best) ? used : best;
   }
