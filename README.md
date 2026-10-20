@@ -57,6 +57,8 @@ python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 
 升级用同样的命令，Wi-Fi 设置会保留。v0.5.1 及更早的 S3 镜像头写的是 8MB，烧到 4MB Flash 的板子（N4、部分 Lite 板）上会反复重启；用这些旧镜像时在 `write_flash` 后加 `--flash_size 4MB`。esptool 报 `Wrong boot mode` 进不了下载模式时（有的板子自动下载电路只能复位、拉不低 GPIO0），按住 BOOT，按一下 RESET（EN），再松开 BOOT，然后在命令里加 `--before no_reset`。
 
+Lite 板没有复位键和 USB 转串口，烧录前要手动进下载模式：拔下 USB，按住 SW1（接 GPIO0 的按键）再插上，然后松开。芯片进入下载模式后，电脑上出现原生 USB 的串口（`303A:1001`），再运行上面的命令；烧完后 esptool 复位芯片，新固件随即启动。
+
 ### 装电脑端工具
 
 从 [XRDAP-Host 的 Releases](https://github.com/Jiu-xiao/XRDAP-Host/releases) 下载对应平台的 `xrdap`。插上探针后运行：

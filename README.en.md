@@ -57,6 +57,8 @@ python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 
 Upgrades use the same command. The Wi-Fi settings are kept. S3 images of v0.5.1 and earlier have an 8MB flash header and reboot in a loop on boards with 4MB flash (N4, some Lite boards); with those older images add `--flash_size 4MB` after `write_flash`. If esptool reports `Wrong boot mode` and cannot enter download mode (on some boards the auto-download circuit can only reset and cannot pull GPIO0 low), hold BOOT, press RESET (EN) once, release BOOT, and then add `--before no_reset` to the command.
 
+The Lite board has neither a reset button nor a USB-to-serial chip, so it enters download mode by hand before flashing: unplug USB, hold SW1 (the button on GPIO0) while plugging it back in, then release it. In download mode the PC sees the native USB serial port (`303A:1001`); run the command above. After flashing, esptool resets the chip and the new firmware starts.
+
 ### Installing the host tool
 
 Download `xrdap` for your platform from [XRDAP-Host Releases](https://github.com/Jiu-xiao/XRDAP-Host/releases). With the probe plugged in, run:
