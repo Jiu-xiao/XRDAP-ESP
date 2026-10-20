@@ -19,11 +19,14 @@
 // libxr's DAP/USB headers must come before FreeRTOS: on the classic ESP32,
 // xtensa/config/specreg.h (pulled in through FreeRTOS) defines INTERRUPT as a macro,
 // which collides with an enumerator of the libxr endpoint type.
+// clang-format off
+#include "daplink_v2_profile_swd.hpp"
+// clang-format on
+
 #include <cstdint>
 
 #include "config.hpp"
 #include "dap_vendor.hpp"
-#include "daplink_v2_profile_swd.hpp"
 #include "debug/dap_serial_transport.hpp"
 #include "debug/swd_general_gpio.hpp"
 #include "esp_log.h"
