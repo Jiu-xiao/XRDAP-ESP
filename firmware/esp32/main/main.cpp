@@ -14,19 +14,11 @@
 //           as on the S3 and C3.
 // The classic ESP32 has no USB controller and no CPU dedicated GPIO: SWD is driven
 // through the GPIO registers (RegGpioPin).
-// libxr 的 DAP/USB 头文件要在 FreeRTOS 之前包含：传统 ESP32 的 xtensa/config/specreg.h
-// （经 FreeRTOS 间接包含）把 INTERRUPT 定义成宏，与 libxr 端点类型的枚举值同名。
-// libxr's DAP/USB headers must come before FreeRTOS: on the classic ESP32,
-// xtensa/config/specreg.h (pulled in through FreeRTOS) defines INTERRUPT as a macro,
-// which collides with an enumerator of the libxr endpoint type.
-// clang-format off
-#include "daplink_v2_profile_swd.hpp"
-// clang-format on
-
 #include <cstdint>
 
 #include "config.hpp"
 #include "dap_vendor.hpp"
+#include "daplink_v2_profile_swd.hpp"
 #include "debug/dap_serial_transport.hpp"
 #include "debug/swd_general_gpio.hpp"
 #include "esp_log.h"
