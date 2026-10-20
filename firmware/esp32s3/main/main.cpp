@@ -3,14 +3,16 @@
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
 //   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针；有网络客户端时
 //          USB 关闭，客户端走后 USB 恢复。
-//   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap 使用。
+//   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap 使用（板上有 USB
+//         转串口芯片时，见 config.hpp 的板型）。
 // 三种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。
 //
 // XR-DAP-S3: a CMSIS-DAP debug probe for the ESP32-S3 built on libxr.
 //   USB:    a Bulk v2 DAP interface plus a CDC virtual serial port.
 //   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe;
 //           USB is shut down while a network client is connected and restored after.
-//   Serial: CMSIS-DAP in libxr Topic frames on UART0, for the PC-side xrdap.
+//   Serial: CMSIS-DAP in libxr Topic frames on UART0, for the PC-side xrdap (on boards
+//           with a USB-UART chip, see the board choice in config.hpp).
 // All three transports share one DAP instance and the XR vendor extension (multi-address
 // access, pointer chains, probe-side sampling).
 #include <cstdint>
@@ -21,6 +23,7 @@
 #include "daplink_v2_profile_swd.hpp"
 #include "debug/dap_serial_transport.hpp"
 #include "dedic_gpio_pin.hpp"
+#include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
@@ -137,6 +140,15 @@ extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
   LibXR::PlatformInit(Config::kLibxrTimerPriority, 8192);
+
+  // 有 SWDIO 模拟开关的板子（Lite）先把开关接到 SWDIO 引脚那一侧，再建 SWD 对象。
+  if constexpr (Config::kSwdioSelectGpio >= 0)
+  {
+    const auto sel = static_cast<gpio_num_t>(Config::kSwdioSelectGpio);
+    gpio_reset_pin(sel);
+    gpio_set_level(sel, 0);
+    gpio_set_direction(sel, GPIO_MODE_OUTPUT);
+  }
 
   // 在 SWD 核上创建 SWD 对象，等它建好。
   static volatile bool swd_ready = false;

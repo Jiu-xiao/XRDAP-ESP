@@ -12,6 +12,7 @@
 #include "hal/dedic_gpio_cpu_ll.h"
 #include "hal/gpio_ll.h"
 #include "soc/gpio_reg.h"
+#include "soc/soc_caps.h"
 
 namespace XrDap
 {
@@ -24,12 +25,10 @@ namespace XrDap
 /// CPU 专用 GPIO，以 LibXR::GPIO 接口提供 / CPU dedicated GPIO exposed through the
 /// LibXR::GPIO interface.
 /// 读写都是单条 CPU 指令（S3 为 Xtensa GPIO 指令，C3 为 RISC-V CSR 读写），比走 GPIO 矩阵
-/// 快得多。专用 GPIO 只能在创建它的核上访问，对象需在目标核的任务里构造；只支持
-/// GPIO0 到 GPIO31（输出使能用 GPIO_ENABLE_REG）。
+/// 快得多。专用 GPIO 只能在创建它的核上访问，对象需在目标核的任务里构造。
 /// Reads and writes are single CPU instructions (Xtensa GPIO ops on S3, RISC-V CSR
 /// accesses on C3), much faster than the GPIO matrix. A dedicated GPIO is only accessible
-/// from the core that created it, so construct the object in a task on the target core;
-/// only GPIO0 to GPIO31 are supported (output enable uses GPIO_ENABLE_REG).
+/// from the core that created it, so construct the object in a task on the target core.
 class DedicGpioPin final : public LibXR::GPIO
 {
  public:
@@ -42,8 +41,17 @@ class DedicGpioPin final : public LibXR::GPIO
   /// @param drive_strength 驱动强度，0 最弱，3 最强 / Drive strength, 0 weakest to 3
   ///        strongest.
   DedicGpioPin(int gpio_num, bool bidirectional, bool pull_up, int drive_strength)
-      : gpio_(gpio_num)
+      : gpio_(gpio_num), enable_bit_(1U << (gpio_num % 32))
   {
+#if SOC_GPIO_PIN_COUNT > 32
+    if (gpio_num >= 32)
+    {
+      // GPIO32 以后的输出使能在第二组寄存器里
+      enable_set_ = GPIO_ENABLE1_W1TS_REG;
+      enable_clr_ = GPIO_ENABLE1_W1TC_REG;
+      enable_ = GPIO_ENABLE1_REG;
+    }
+#endif
     gpio_reset_pin(static_cast<gpio_num_t>(gpio_));
     gpio_set_direction(static_cast<gpio_num_t>(gpio_), GPIO_MODE_INPUT_OUTPUT);
     gpio_set_pull_mode(static_cast<gpio_num_t>(gpio_),
@@ -131,13 +139,17 @@ class DedicGpioPin final : public LibXR::GPIO
       return;  // 已经是这个状态，省掉一次外设总线写加读回
     }
     output_enabled_ = on;
-    REG_WRITE(on ? GPIO_ENABLE_W1TS_REG : GPIO_ENABLE_W1TC_REG, 1U << gpio_);
+    REG_WRITE(on ? enable_set_ : enable_clr_, enable_bit_);
     // GPIO_ENABLE 在外设总线上，写先进写缓冲，总线忙时要几十个 CPU 周期才生效，此前引脚
     // 仍被上拉。读回同一外设的寄存器会等写完成，调用方再等一小段，引脚就切换好了。
-    (void)REG_READ(GPIO_ENABLE_REG);
+    (void)REG_READ(enable_);
   }
 
   int gpio_;
+  uint32_t enable_bit_;
+  uint32_t enable_set_ = GPIO_ENABLE_W1TS_REG;
+  uint32_t enable_clr_ = GPIO_ENABLE_W1TC_REG;
+  uint32_t enable_ = GPIO_ENABLE_REG;
   bool output_enabled_ = false;
   dedic_gpio_bundle_handle_t bundle_ = nullptr;
   uint32_t out_mask_ = 0U;

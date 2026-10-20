@@ -1,13 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// ESP32-S3 版 XR-DAP 的固定参数；两种芯片共用的在 probe_config.hpp。
+// ESP32-S3 版 XR-DAP 的固定参数；各芯片共用的在 probe_config.hpp。引脚按板型（Kconfig 的
+// XRDAP_BOARD）选：
+//   默认：ESP32-S3 开发板，SWCLK GPIO5、SWDIO GPIO4，串口链路走板上 USB 转串口芯片。
+//   Lite：“高速无线 DAP 调试器 Lite”，SWCLK GPIO37；SWDIO 经 SGM3157 模拟开关接到目标，
+//         开关的 IN（GPIO36）固定为低，NC 端的 GPIO47 当双向 SWDIO 用；板上没有 USB 转
+//         串口芯片，不开串口链路。
 //
 // Fixed parameters of the ESP32-S3 XR-DAP firmware; shared ones are in probe_config.hpp.
+// Pins depend on the board (Kconfig XRDAP_BOARD):
+//   Default: ESP32-S3 dev board, SWCLK GPIO5, SWDIO GPIO4, serial link through the
+//   on-board
+//            USB-UART chip.
+//   Lite:    "Wireless DAP Lite", SWCLK GPIO37; SWDIO reaches the target through an
+//            SGM3157 analog switch whose IN (GPIO36) is held low, so GPIO47 on its NC
+//            side serves as the bidirectional SWDIO; no USB-UART chip, so no serial link.
 
 #include <cstdint>
 
 #include "probe_config.hpp"
+#include "sdkconfig.h"
 
 namespace XrDap::Config
 {
@@ -24,10 +37,28 @@ inline constexpr char kChipName[] = "esp32s3";
 /// descriptors by VID, PID and release, so the two must differ.
 constexpr uint16_t kUsbBcdDevice = 0x0100;
 
+#if CONFIG_XRDAP_BOARD_LITE
+/// SWCLK 引脚 / SWCLK pin.
+constexpr int kSwclkGpio = 37;
+/// SWDIO 引脚 / SWDIO pin.
+constexpr int kSwdioGpio = 47;
+/// SWDIO 模拟开关的选择脚，启动时拉低让 kSwdioGpio 接通目标；-1 表示没有 / Select pin of
+/// the SWDIO analog switch, driven low at start-up to connect kSwdioGpio to the target;
+/// -1 when there is none.
+constexpr int kSwdioSelectGpio = 36;
+/// 板上有没有接 UART0 的 USB 转串口芯片 / Whether a USB-UART chip is wired to UART0.
+constexpr bool kUsbUartOnBoard = false;
+#else
 /// SWCLK 引脚 / SWCLK pin.
 constexpr int kSwclkGpio = 5;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 4;
+/// SWDIO 模拟开关的选择脚，-1 表示没有 / Select pin of the SWDIO analog switch; -1 when
+/// there is none.
+constexpr int kSwdioSelectGpio = -1;
+/// 板上有没有接 UART0 的 USB 转串口芯片 / Whether a USB-UART chip is wired to UART0.
+constexpr bool kUsbUartOnBoard = true;
+#endif
 
 /// SWD 位带、DAP 的 Step() 线程、采样和网络服务所在的核。专用 GPIO 只能在创建它的核上
 /// 访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the DAP
@@ -44,7 +75,7 @@ constexpr unsigned kSamplingPriority = 14;
 /// 是否启用串口 DAP 链路（libxr Topic 帧）。它占用板上 USB 转串口芯片接的 UART0，因此
 /// 系统日志控制台已关闭 / Enable the serial DAP link (libxr Topic frames). It uses UART0
 /// wired to the on-board USB-UART chip, so the system log console is disabled.
-constexpr bool kSerialLink = true;
+constexpr bool kSerialLink = kUsbUartOnBoard;
 /// 串口 UART 号 / Serial UART number.
 constexpr int kSerialUart = 0;
 /// 串口 TX 引脚 / Serial TX pin.

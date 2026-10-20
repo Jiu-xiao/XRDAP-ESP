@@ -1,0 +1,4 @@
+# “高速无线 DAP 调试器 Lite”板，叠加在 sdkconfig.defaults 之后使用，见 README 的“从源码编译”。
+# The "Wireless DAP Lite" board; applied on top of sdkconfig.defaults, see "Building from
+# source" in the README.
+CONFIG_XRDAP_BOARD_LITE=y

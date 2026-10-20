@@ -26,6 +26,10 @@ jobs:
         include:
           - target: esp32s3
             asset: xrdap-esp32-s3.bin
+          # “高速无线 DAP 调试器 Lite”板：S3 工程加上 sdkconfig.defaults.lite
+          - target: esp32s3
+            asset: xrdap-esp32-s3-lite.bin
+            board: lite
           - target: esp32c3
             asset: xrdap-esp32-c3.bin
           - target: esp32
@@ -43,7 +47,13 @@ jobs:
           . $IDF_PATH/export.sh
           git config --global --add safe.directory '*'
           cd firmware/${{ matrix.target }}
-          idf.py build merge-bin
+          if [ -n "${{ matrix.board }}" ]; then
+            idf.py -B build -D SDKCONFIG=build/sdkconfig \
+              -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.${{ matrix.board }}" \
+              build merge-bin
+          else
+            idf.py build merge-bin
+          fi
 
       - name: 整理固件文件
         run: |
@@ -69,7 +79,7 @@ jobs:
       - name: 整理发布文件
         run: |
           mkdir release
-          cp artifacts/xrdap-esp32-s3.bin artifacts/xrdap-esp32-c3.bin artifacts/xrdap-esp32.bin release/
+          cp artifacts/*.bin release/
           cd release && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
       - name: 发布 release

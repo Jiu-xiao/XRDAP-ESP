@@ -31,9 +31,11 @@
 
 一个目标只接一个探针。传统 ESP32 的 GPIO5 是启动配置引脚，所以换成 GPIO18、GPIO19；它的串口链路在 UART0（GPIO1、GPIO3），也就是板上 USB 转串口芯片那个口，插 USB 线即可。C3 要用芯片自带的 USB 口（D- GPIO18、D+ GPIO19）：USB 座直接连到这两个脚的开发板插上就行；USB 座接的是 USB 转串口芯片的板子（例如 ESP32-C3-DevKitM-1），另接一根 USB 线到排针的 GPIO18、GPIO19、5V、GND。
 
+“高速无线 DAP 调试器 Lite”板（ESP32-S3 模组，2×5 排针）用单独的固件 `xrdap-esp32-s3-lite.bin`：SWCLK 是 GPIO37；SWDIO 经板上的 SGM3157 模拟开关接到排针，固件把开关的选择脚 GPIO36 固定为低，用 GPIO47 收发 SWDIO。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi。模组要用不带 Octal PSRAM 的（WROOM-1-N8、MINI-1-N8），带 Octal PSRAM 的型号占用 GPIO35 到 37。这个固件还没有在实物上测过。
+
 ### 烧固件
 
-在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
+在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-s3-lite.bin`（Lite 板）、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
@@ -224,19 +226,25 @@ idf.py build
 idf.py -p COM3 flash
 ```
 
-`idf.py build merge-bin` 生成和 release 相同的合并镜像 `build/merged-binary.bin`。
+`idf.py build merge-bin` 生成和 release 相同的合并镜像 `build/merged-binary.bin`。Lite 板的固件在 `firmware/esp32s3` 里多叠加一份配置：
+
+```
+idf.py -B build-lite -D SDKCONFIG=build-lite/sdkconfig -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.lite" build merge-bin
+```
+
+也可以在 `idf.py menuconfig` 的 XR-DAP → Board 里选板型。
 
 | 目录 | 内容 |
 |---|---|
-| `firmware/esp32s3`、`firmware/esp32c3`、`firmware/esp32` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级），S3 的 SWD 引擎 |
+| `firmware/esp32s3`、`firmware/esp32c3`、`firmware/esp32` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级；S3 按板型选引脚），S3 的 SWD 引擎 |
 | `firmware/common/vendor` | XR 厂商扩展：协议、MEM-AP 访问、采样调度、帧缓冲、0x86 Wi-Fi 命令 |
 | `firmware/common/net` | Wi-Fi、OpenOCD TCP 服务、USB/IP 虚拟设备、mDNS |
 | `firmware/common/serial`、`console` | 串口 DAP 链路、C3 的串口分流、Wi-Fi 命令行 |
 | `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤 |
-| `firmware/common/swd` | C3 的专用 GPIO 引脚、传统 ESP32 的 GPIO 寄存器引脚、SWCLK 频率控制 |
+| `firmware/common/swd` | S3、C3 的专用 GPIO 引脚，传统 ESP32 的 GPIO 寄存器引脚，C3 和传统 ESP32 的 SWCLK 频率控制 |
 | `docs/protocol.md` | 串口帧、TCP 帧、厂商命令、探针身份、mDNS、USB/IP 设备 |
 
-每次推送都由 GitHub Actions 编译两个固件并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布。
+每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布。
 
 ### 厂商扩展
 

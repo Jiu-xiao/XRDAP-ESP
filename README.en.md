@@ -31,9 +31,11 @@ The S3 is the fastest and simplest choice. A C3 or a classic ESP32 also works, w
 
 Connect one probe to one target. GPIO5 of the classic ESP32 is a strapping pin, so GPIO18 and GPIO19 are used instead; its serial link is on UART0 (GPIO1, GPIO3), which is the port of the on-board USB-to-serial chip, so a USB cable is enough. On the C3, use the chip's own USB port (D- on GPIO18, D+ on GPIO19). If the board's USB connector is wired directly to these two pins, plug into it. If the connector goes to a USB-to-serial chip (for example ESP32-C3-DevKitM-1), run a separate USB cable to the GPIO18, GPIO19, 5V and GND header pins.
 
+The "Wireless DAP Lite" board (ESP32-S3 module, 2×5 header) uses its own image, `xrdap-esp32-s3-lite.bin`. SWCLK is GPIO37. SWDIO reaches the header through the on-board SGM3157 analog switch; the firmware holds the switch select pin GPIO36 low and drives and reads SWDIO on GPIO47. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available. Use a module without Octal PSRAM (WROOM-1-N8, MINI-1-N8); modules with Octal PSRAM use GPIO35 to 37. This image has not been tested on the real board yet.
+
 ### Flashing the firmware
 
-Download `xrdap-esp32-s3.bin`, `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
+Download `xrdap-esp32-s3.bin`, `xrdap-esp32-s3-lite.bin` (Lite board), `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
@@ -226,19 +228,25 @@ idf.py build
 idf.py -p COM3 flash
 ```
 
-`idf.py build merge-bin` produces the same merged image as the release, `build/merged-binary.bin`.
+`idf.py build merge-bin` produces the same merged image as the release, `build/merged-binary.bin`. The Lite board image adds one more configuration layer in `firmware/esp32s3`:
+
+```
+idf.py -B build-lite -D SDKCONFIG=build-lite/sdkconfig -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.lite" build merge-bin
+```
+
+The board can also be chosen in `idf.py menuconfig` under XR-DAP → Board.
 
 | Directory | Content |
 |---|---|
-| `firmware/esp32s3`, `firmware/esp32c3`, `firmware/esp32` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities), and the S3 SWD engine |
+| `firmware/esp32s3`, `firmware/esp32c3`, `firmware/esp32` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities; the S3 picks pins by board), and the S3 SWD engine |
 | `firmware/common/vendor` | XR vendor extension: protocol, MEM-AP access, sampling scheduler, frame buffer, 0x86 Wi-Fi command |
 | `firmware/common/net` | Wi-Fi, OpenOCD TCP server, USB/IP virtual device, mDNS |
 | `firmware/common/serial`, `console` | Serial DAP link, C3 serial splitting, Wi-Fi command line |
 | `firmware/common/probe` | Parameters, probe identity and start-up steps shared by all three chips |
-| `firmware/common/swd` | C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins, SWCLK frequency control |
+| `firmware/common/swd` | S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins, SWCLK frequency control for the C3 and classic ESP32 |
 | `docs/protocol.en.md` | Serial frame, TCP frame, vendor commands, probe identity, mDNS, USB/IP device |
 
-Every push builds both firmware images and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release automatically.
+Every push builds the four firmware images (S3, S3 Lite, C3, classic ESP32) and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release automatically.
 
 ### Vendor extension
 
