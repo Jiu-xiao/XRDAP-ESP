@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XR-DAP 网页烧录</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --text: #1d2125;
+    --muted: #5d6670;
+    --line: #dde1e6;
+    --accent: #1f6feb;
+    --accent-text: #ffffff;
+    --note: #fff7e0;
+    --note-line: #e9cf7a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418;
+      --card: #1a1f25;
+      --text: #e6e9ed;
+      --muted: #9aa4ae;
+      --line: #2c333b;
+      --accent: #4c8dff;
+      --accent-text: #0b0e11;
+      --note: #2a2414;
+      --note-line: #6b5a24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  h1 { font-size: 24px; margin: 0; }
+  .lang { display: flex; gap: 4px; }
+  .lang button {
+    border: 1px solid var(--line); background: var(--card); color: var(--muted);
+    border-radius: 6px; padding: 2px 10px; font: inherit; font-size: 14px; cursor: pointer;
+  }
+  .lang button[aria-pressed="true"] { color: var(--text); border-color: var(--accent); }
+  p.lead { color: var(--muted); margin: 8px 0 24px; }
+  fieldset { border: 0; margin: 0 0 20px; padding: 0; display: grid; gap: 8px; }
+  legend { font-weight: 600; margin-bottom: 8px; }
+  label.board {
+    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+  }
+  label.board:has(input:checked) { border-color: var(--accent); }
+  label.board input { margin-top: 5px; accent-color: var(--accent); }
+  .board small { display: block; color: var(--muted); font-size: 14px; }
+  .note {
+    background: var(--note); border: 1px solid var(--note-line); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 20px; font-size: 15px;
+  }
+  .note:empty { display: none; }
+  esp-web-install-button button[slot="activate"] {
+    background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px;
+    padding: 10px 28px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .version { color: var(--muted); font-size: 14px; margin-left: 12px; }
+  .warn { color: var(--muted); font-size: 15px; }
+  section.help { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 15px; }
+  section.help h2 { font-size: 16px; margin: 0 0 8px; }
+  section.help ul { margin: 0; padding-left: 20px; }
+  a { color: var(--accent); }
+  code { font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 data-i18n="title"></h1>
+    <div class="lang">
+      <button type="button" data-lang="zh">中文</button>
+      <button type="button" data-lang="en">English</button>
+    </div>
+  </header>
+  <p class="lead" data-i18n="lead"></p>
+
+  <fieldset id="boards"><legend data-i18n="choose"></legend></fieldset>
+  <div class="note" id="note"></div>
+
+  <div>
+    <esp-web-install-button id="install">
+      <button slot="activate" data-i18n="flash"></button>
+      <span slot="unsupported" class="warn" data-i18n="unsupported"></span>
+      <span slot="not-allowed" class="warn" data-i18n="notAllowed"></span>
+    </esp-web-install-button>
+    <span class="version" id="version"></span>
+  </div>
+
+  <section class="help">
+    <h2 data-i18n="helpTitle"></h2>
+    <ul>
+      <li data-i18n="helpKeep"></li>
+      <li data-i18n="helpBoot"></li>
+      <li data-i18n-html="helpCli"></li>
+    </ul>
+  </section>
+</main>
+<script>
+  const TEXT = {
+    zh: {
+      title: "XR-DAP 网页烧录",
+      lead: "在浏览器里给 ESP 探针烧固件，不用安装 Python 和 esptool。需要 Chrome 或 Edge 桌面版。",
+      choose: "选择板子",
+      flash: "烧录",
+      version: "固件版本",
+      unsupported: "这个浏览器不支持 Web Serial，请用 Chrome 或 Edge 桌面版。",
+      notAllowed: "页面需要通过 HTTPS 打开才能访问串口。",
+      helpTitle: "说明",
+      helpKeep: "升级会保留探针里的 Wi-Fi 设置。",
+      helpBoot: "连不上或提示进不了下载模式时：按住 BOOT，按一下 RESET（EN），松开 BOOT，再点“烧录”。",
+      helpCli: "也可以用命令行烧录，见 <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a> 的 README。",
+    },
+    en: {
+      title: "XR-DAP web flasher",
+      lead: "Flash the ESP probe firmware from the browser, without installing Python or esptool. Needs desktop Chrome or Edge.",
+      choose: "Choose the board",
+      flash: "Flash",
+      version: "Firmware version",
+      unsupported: "This browser has no Web Serial. Use desktop Chrome or Edge.",
+      notAllowed: "The page must be opened over HTTPS to access serial ports.",
+      helpTitle: "Notes",
+      helpKeep: "An upgrade keeps the Wi-Fi settings stored in the probe.",
+      helpBoot: "If the port does not connect or download mode cannot be entered: hold BOOT, press RESET (EN) once, release BOOT, then press Flash.",
+      helpCli: "Flashing from the command line is described in the <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a> README.",
+    },
+  };
+
+  let boards = [];
+  let lang = "zh";
+  try {
+    const saved = localStorage.getItem("xrdap-flash-lang");
+    lang = saved || (navigator.language.startsWith("zh") ? "zh" : "en");
+  } catch (e) {
+    lang = navigator.language.startsWith("zh") ? "zh" : "en";
+  }
+
+  function selected() {
+    const input = document.querySelector("input[name=board]:checked");
+    return boards.find((b) => b.id === (input && input.value));
+  }
+
+  async function showVersion(board) {
+    const out = document.getElementById("version");
+    out.textContent = "";
+    try {
+      const manifest = await (await fetch(`manifest-${board.id}.json`)).json();
+      if (selected() === board) out.textContent = `${TEXT[lang].version} ${manifest.version}`;
+    } catch (e) {
+      // The page still flashes; only the version label is missing.
+    }
+  }
+
+  function selectBoard(board) {
+    document.getElementById("install").manifest = `manifest-${board.id}.json`;
+    document.getElementById("note").textContent = board.note[lang];
+    showVersion(board);
+  }
+
+  function render() {
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.title = TEXT[lang].title;
+    document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = TEXT[lang][el.dataset.i18n]));
+    document.querySelectorAll("[data-i18n-html]").forEach((el) => (el.innerHTML = TEXT[lang][el.dataset.i18nHtml]));
+    document.querySelectorAll(".lang button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+
+    const current = selected();
+    const set = document.getElementById("boards");
+    set.querySelectorAll("label").forEach((l) => l.remove());
+    boards.forEach((board, i) => {
+      const label = document.createElement("label");
+      label.className = "board";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "board";
+      input.value = board.id;
+      input.checked = current ? current.id === board.id : i === 0;
+      input.addEventListener("change", () => selectBoard(board));
+      const text = document.createElement("span");
+      text.textContent = board.name[lang];
+      const chip = document.createElement("small");
+      chip.textContent = `${board.chip} · ${board.asset}`;
+      text.append(chip);
+      label.append(input, text);
+      set.append(label);
+    });
+    if (boards.length) selectBoard(selected());
+  }
+
+  document.querySelectorAll(".lang button").forEach((button) =>
+    button.addEventListener("click", () => {
+      lang = button.dataset.lang;
+      try {
+        localStorage.setItem("xrdap-flash-lang", lang);
+      } catch (e) {
+        // Language choice is not remembered; nothing else depends on it.
+      }
+      render();
+    })
+  );
+
+  fetch("boards.json")
+    .then((r) => r.json())
+    .then((list) => {
+      boards = list;
+      render();
+    });
+  render();
+</script>
+</body>
+</html>
