@@ -112,7 +112,7 @@ See [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host). Open `xrdap`, select a
 
 ### 2.6 Configuring Wi-Fi and changing the hotspot
 
-With the probe connected to the computer (by USB or serial):
+With the probe connected to the computer (by USB or serial), connect to it in the `xrdap` GUI, expand "Wi-Fi", fill in the SSID and password and click "保存并重启" (save and restart); or use the command line:
 
 ```
 xrdap wifi set 热点名 密码
@@ -209,7 +209,7 @@ OpenOCD reading 128 KiB from an STM32F401 (Linux, 4 MHz requested):
 
 The C3 has a single core, so Wi-Fi traffic and sampling run on the same core. Sampling 4 variables over Wi-Fi at 1 ms skips no ticks. At 500 µs about 0.2% of ticks are skipped.
 
-Classic ESP32 (CP2102, 921600 baud, target STM32G431, jumper wires): reads and writes are correct for SWD clock requests from 1 to 40 MHz, and the actual clock is about 3 MHz (the GPIO registers are on the peripheral bus, about 31 µs per access). Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s.
+Classic ESP32 (CP2102, 921600 baud, target STM32G431, jumper wires): reads and writes are correct for SWD clock requests from 1 to 40 MHz, and the actual clock is about 3 MHz (the GPIO registers are on the peripheral bus, about 31 µs per access). Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs one tick was skipped in 5 seconds); on Linux, OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
 
 ### SWD clock and wiring
 
