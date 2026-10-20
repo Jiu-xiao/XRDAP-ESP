@@ -3,15 +3,14 @@
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
 //   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针；有网络客户端时
 //          USB 关闭，客户端走后 USB 恢复。
-//   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap-forward 给 OpenOCD。
+//   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap 使用。
 // 三种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。
 //
 // XR-DAP-S3: a CMSIS-DAP debug probe for the ESP32-S3 built on libxr.
 //   USB:    a Bulk v2 DAP interface plus a CDC virtual serial port.
 //   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe;
 //           USB is shut down while a network client is connected and restored after.
-//   Serial: CMSIS-DAP in libxr Topic frames on UART0, used by OpenOCD through the
-//           PC-side xrdap-forward.
+//   Serial: CMSIS-DAP in libxr Topic frames on UART0, for the PC-side xrdap.
 // All three transports share one DAP instance and the XR vendor extension (multi-address
 // access, pointer chains, probe-side sampling).
 #include <cstdint>

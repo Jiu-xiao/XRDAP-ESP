@@ -5,8 +5,8 @@
 // （DapSerialTransport::Feed），它自己找帧头、校验 CRC，非帧字节直接丢弃。这一块没有执行
 // 任何 DAP 帧、且最近 kQuietMs 内也没有 DAP 帧时，才把字节交给命令行（ConsoleCore）。
 // 命令行只在收到一行人打的命令并回车后才输出，行内出现控制字符就整行丢弃，所以调试工具
-// 不会收到命令行插进来的字。串口终端打开该口即可输入 help、wifi set 等命令；xrdap、
-// xrdap-forward 照常连接。
+// 不会收到命令行插进来的字。串口终端打开该口即可输入 help、wifi set 等命令；
+// 电脑端 xrdap 照常连接。
 //
 // Runs the DAP link and a text console on one serial port without mode switching. Each
 // chunk read is first fed to the DAP link (DapSerialTransport::Feed), which finds frame
@@ -15,7 +15,7 @@
 // to the console (ConsoleCore). The console prints only after a human-typed line ends
 // with Enter and drops any line containing control characters, so debug tools never
 // receive console output. A serial terminal can type help, wifi set, etc. on this port
-// while xrdap and xrdap-forward keep working.
+// while the PC-side xrdap keeps working.
 
 #include <cstdint>
 

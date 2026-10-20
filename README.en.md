@@ -13,7 +13,7 @@ The host tool is in [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host): a sing
 | USB cable, for Keil, pyOCD, probe-rs, OpenOCD | Works directly (native USB probe) | Run `xrdap share usbip` on the computer first | Same as C3 (through the board's USB-to-serial chip) |
 | Wi-Fi, for Keil, pyOCD, probe-rs, OpenOCD | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP |
 | Wi-Fi, for OpenOCD | OpenOCD TCP backend, direct | Same as S3 | Same as S3 |
-| SWD clock | up to about 23.7 MHz | up to about 20 MHz | about 3 MHz in practice (GPIO register bit-banding) |
+| SWD clock | up to about 23.7 MHz | up to about 20 MHz | up to about 5 MHz (GPIO register bit-banding, limited by the peripheral bus) |
 | Shortest probe-side sampling period (USB cable) | 4 variables 118 µs | 4 variables 300 µs | 8 variables 1 ms, 1 variable 200 µs |
 | OpenOCD reading 128 KiB (USB cable) | 0.62 s | 1.8 s | 3.4 s |
 
@@ -209,11 +209,11 @@ OpenOCD reading 128 KiB from an STM32F401 (Linux, 4 MHz requested):
 
 The C3 has a single core, so Wi-Fi traffic and sampling run on the same core. Sampling 4 variables over Wi-Fi at 1 ms skips no ticks. At 500 µs about 0.2% of ticks are skipped.
 
-Classic ESP32 (CP2102, 921600 baud, target STM32G431, jumper wires): reads and writes are correct for SWD clock requests from 1 to 40 MHz, and the actual clock is about 3 MHz (the GPIO registers are on the peripheral bus, about 31 µs per access). Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs one tick was skipped in 5 seconds); on Linux, OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
+Classic ESP32 (CP2102, 921600 baud, target STM32G431, jumper wires): reads and writes are correct for SWD clock requests from 1 to 40 MHz. The GPIO registers are on the peripheral bus (about 12 CPU cycles per write, 17 per read), so any request above 5 MHz runs at full speed, and `xrdap info` reports about 30 µs per access (about 150 SWCLK cycles, i.e. just under 5 MHz). Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs one tick was skipped in 5 seconds); on Linux, OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
 
 ### SWD clock and wiring
 
-SWCLK high and low times are equal, and the frequency is computed in CPU cycles (4 MHz measured 4.03 MHz on the S3; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz, not measured with an oscilloscope). The C3 frequency correction value has not been calibrated with a logic analyzer. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
+On the S3, SWCLK high and low times are equal and the frequency is computed in CPU cycles (4 MHz measured 4.03 MHz; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz, not measured with an oscilloscope). The C3 and the classic ESP32 use libxr's generic GPIO bit-banging, where the frequency comes from a busy-wait after each SWCLK edge; the correction value (`kEdgeWriteCycles` in `config.hpp`) was derived from per-access times at several clocks, not calibrated with a logic analyzer. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
 
 ### Building from source
 

@@ -13,7 +13,7 @@
 | 插 USB 线给 Keil、pyOCD、probe-rs、OpenOCD 用 | 直接用（原生 USB 探针） | 电脑上运行 `xrdap share usbip` 后用 | 同 C3（经板上 USB 转串口芯片） |
 | 走 Wi-Fi 给 Keil、pyOCD、probe-rs、OpenOCD 用 | 用 USB/IP 挂载 | 用 USB/IP 挂载 | 用 USB/IP 挂载 |
 | 走 Wi-Fi 给 OpenOCD 用 | OpenOCD 的 TCP 后端直连 | 同左 | 同左 |
-| SWD 时钟 | 最高约 23.7 MHz | 最高约 20 MHz | 实际约 3 MHz（GPIO 寄存器位带） |
+| SWD 时钟 | 最高约 23.7 MHz | 最高约 20 MHz | 最高约 5 MHz（GPIO 寄存器位带，受外设总线限制） |
 | 探针端采样的最短周期（插线） | 4 个变量 118 µs | 4 个变量 300 µs | 8 个变量 1 ms，1 个变量 200 µs |
 | OpenOCD 读 128 KiB（插线） | 0.62 s | 1.8 s | 3.4 s |
 
@@ -207,11 +207,11 @@ OpenOCD 读 STM32F401 的 128 KiB（Linux，4 MHz 请求）：
 
 C3 是单核，Wi-Fi 收发和采样在同一个核上：经 Wi-Fi 采样 4 个变量 1 ms 不跳拍，500 µs 约跳 0.2% 的拍。
 
-传统 ESP32（CP2102，921600 baud，目标 STM32G431，杜邦线）：SWD 1 到 40 MHz 请求下读写全部正确，实际约 3 MHz（GPIO 寄存器在外设总线上，每次访问约 31 µs）；探针端采样 8 个变量 1 ms、1 个变量 200 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share usbip`，OpenOCD 读 128 KiB 3.4 s。经 Wi-Fi：4 个变量 500 µs、8 个变量 600 µs、1 个变量 150 µs 不丢帧（150 µs 时 5 秒内跳 1 拍）；Linux 上 USB/IP 挂载后 OpenOCD 读 128 KiB 3.2 s，TCP 后端 2.3 s。
+传统 ESP32（CP2102，921600 baud，目标 STM32G431，杜邦线）：SWD 1 到 40 MHz 请求下读写全部正确；GPIO 寄存器在外设总线上（写一次约 12 个 CPU 周期，读一次约 17 个），请求 5 MHz 以上都按全速跑，`xrdap info` 报告的单次访问约 30 µs（约 150 个 SWCLK 周期，折合不到 5 MHz）；探针端采样 8 个变量 1 ms、1 个变量 200 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share usbip`，OpenOCD 读 128 KiB 3.4 s。经 Wi-Fi：4 个变量 500 µs、8 个变量 600 µs、1 个变量 150 µs 不丢帧（150 µs 时 5 秒内跳 1 拍）；Linux 上 USB/IP 挂载后 OpenOCD 读 128 KiB 3.2 s，TCP 后端 2.3 s。
 
 ### SWD 时钟和接线
 
-SWCLK 高低电平等长，频率按 CPU 周期计算（S3 上 4 MHz 实测 4.03 MHz；请求 25 MHz 及以上时用最快的一档，约 23.7 MHz，未用示波器量过）。C3 的频率校正值还没有用逻辑分析仪校准。能跑多快取决于线长、目标板上拉和走线，先用 4 MHz；高时钟出错时先看 SWCLK、SWDIO 波形，缩短线或加串联电阻。引脚驱动强度设为 1（IDF 默认 2），减小过冲和振铃。
+S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算（4 MHz 实测 4.03 MHz；请求 25 MHz 及以上时用最快的一档，约 23.7 MHz，未用示波器量过）。C3 和传统 ESP32 用 libxr 的通用 GPIO 位带，频率由每个 SWCLK 沿之后的忙等决定，校正值（`config.hpp` 的 `kEdgeWriteCycles`）是按不同时钟下单次访问的耗时推算的，没有用逻辑分析仪校准。能跑多快取决于线长、目标板上拉和走线，先用 4 MHz；高时钟出错时先看 SWCLK、SWDIO 波形，缩短线或加串联电阻。引脚驱动强度设为 1（IDF 默认 2），减小过冲和振铃。
 
 ### 自己编译
 

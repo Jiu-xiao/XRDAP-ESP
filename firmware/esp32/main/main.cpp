@@ -24,8 +24,6 @@
 #include "esp_log.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "reg_gpio_pin.hpp"

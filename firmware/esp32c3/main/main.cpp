@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // XR-DAP 的 ESP32-C3 版：基于 libxr 的 CMSIS-DAP 调试探针。
 //   串口：芯片自带的 USB Serial/JTAG（电脑上是 CDC 串口），用 libxr Topic 帧提供
-//         CMSIS-DAP，配合电脑端 xrdap-forward 给 OpenOCD 用；同一个口也是 Wi-Fi
-//         命令行（serial_mux.hpp）。
+//         CMSIS-DAP，配合电脑端 xrdap 使用（xrdap share 再转给其他调试工具）；同一个口
+//         也是 Wi-Fi 命令行（serial_mux.hpp）。
 //   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针，与 S3 版相同。
 // 两种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。C3 没有
 // 能做自定义 USB 设备的 USB 控制器，所以没有 S3 版的 USB CMSIS-DAP 接口。与 S3 版共用的
@@ -10,8 +10,8 @@
 //
 // XR-DAP for the ESP32-C3: a CMSIS-DAP debug probe built on libxr.
 //   Serial: the built-in USB Serial/JTAG (a CDC port on the PC) carries CMSIS-DAP in
-//           libxr Topic frames for OpenOCD via the PC-side xrdap-forward; the same port
-//           is also the Wi-Fi console (serial_mux.hpp).
+//           libxr Topic frames for the PC-side xrdap (xrdap share passes it on to other
+//           debug tools); the same port is also the Wi-Fi console (serial_mux.hpp).
 //   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe,
 //           as on the S3.
 // Both transports share one DAP instance and the XR vendor extension (multi-address
@@ -30,8 +30,6 @@
 #include "esp_log.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "serial_link.hpp"
