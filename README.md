@@ -47,7 +47,7 @@ Lite 板的状态灯（WS2812）和按键：
 
 ### 烧固件
 
-在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-s3-lite.bin`（Lite 板）、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
+用 Chrome 或 Edge 桌面版打开[网页烧录](https://jiu-xiao.github.io/XRDAP-ESP/)，选板子后点“烧录”，不用安装 Python 和 esptool。也可以用命令行：在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-s3-lite.bin`（Lite 板）、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
@@ -258,7 +258,7 @@ idf.py -B build-lite -D SDKCONFIG=build-lite/sdkconfig -D "SDKCONFIG_DEFAULTS=sd
 | `firmware/common/swd` | S3、C3 的专用 GPIO 引脚，传统 ESP32 的 GPIO 寄存器引脚，C3 和传统 ESP32 的 SWCLK 频率控制 |
 | `docs/protocol.md` | 串口帧、TCP 帧、厂商命令、探针身份、mDNS、USB/IP 设备 |
 
-每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布。
+每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布 release，并把固件和 `web/` 下的网页烧录页面发布到 GitHub Pages（`web/make_site.py` 按 `web/boards.json` 为每块板生成 ESP Web Tools 的 manifest）。
 
 ### 厂商扩展
 
