@@ -36,7 +36,7 @@
 #include "probe_app.hpp"
 #include "serial_link.hpp"
 #include "serial_mux.hpp"
-#include "swd_link.hpp"
+#include "swd_clock.hpp"
 #include "uart_console.hpp"
 
 namespace
@@ -48,7 +48,8 @@ constexpr const char* TAG = "xrdap";
 using SwdLink = LibXR::Debug::SwdGeneralGPIO<DedicGpioPin, DedicGpioPin>;
 // DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal() 执行命令，所以不需要
 // S3 版循环调用 Step() 的线程；端点号用不到，随便填。
-using Dap = LibXR::USB::DapLinkV2Class<SwdWithClock, Config::kDapPacketSize,
+using Swd = SwdWithClock<DedicGpioPin>;
+using Dap = LibXR::USB::DapLinkV2Class<Swd, Config::kDapPacketSize,
                                        Config::kDapPacketCount, Config::kDapPacketSize>;
 
 struct SwdSet
@@ -57,10 +58,10 @@ struct SwdSet
                      Config::kPadDriveStrength};
   DedicGpioPin swdio{Config::kSwdioGpio, /*bidirectional=*/true, /*pull_up=*/true,
                      Config::kPadDriveStrength};
-  // 延时参数填 0：SwdGeneralGPIO 走全速路径，SWCLK 频率由 swd_link.hpp 里设定。
+  // 延时参数填 0：SwdGeneralGPIO 走全速路径，SWCLK 频率由 swd_clock.hpp 里设定。
   SwdLink link{swclk, swdio, 0u};
-  SwdWithClock swd{link, swclk, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000U,
-                   Config::kEdgeWriteCycles};
+  Swd swd{link, swclk, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000U,
+          Config::kEdgeWriteCycles};
 };
 
 }  // namespace

@@ -4,22 +4,25 @@
 #include <cstdint>
 
 #include "debug/swd.hpp"
-#include "dedic_gpio_pin.hpp"
 
-// 给 libxr 的 SWD 实现加上 SWCLK 频率控制。
+// 给 libxr 的 SWD 实现加上 SWCLK 频率控制，C3 和传统 ESP32 用。
 //
-// Adds SWCLK frequency control on top of the libxr SWD implementation.
+// Adds SWCLK frequency control on top of the libxr SWD implementation; used by the C3 and
+// the classic ESP32.
 
 namespace XrDap
 {
 
 /// 包装 libxr 的 SWD 实现以设置 SWCLK 频率 / Wraps the libxr SWD implementation to set
 /// the SWCLK frequency.
-/// SwdGeneralGPIO 本身不延时（全速），频率由 DedicGpioPin 在每个时钟沿后的周期计数等待
-/// 决定：半周期的 CPU 周期数减去一次写沿本身的开销。
-/// SwdGeneralGPIO does not delay (full speed); the frequency comes from DedicGpioPin's
+/// SwdGeneralGPIO 本身不延时（全速），频率由 SWCLK 引脚在每个时钟沿后的周期计数等待决定：
+/// 半周期的 CPU 周期数减去一次写沿本身的开销。
+/// SwdGeneralGPIO does not delay (full speed); the frequency comes from the SWCLK pin's
 /// cycle-count wait after each edge: half-period CPU cycles minus the cost of one edge
 /// write.
+/// @tparam PinT 提供 SetEdgeSpinCycles() 的引脚（DedicGpioPin 或 RegGpioPin）/ Pin type
+///         providing SetEdgeSpinCycles() (DedicGpioPin or RegGpioPin).
+template <typename PinT>
 class SwdWithClock final : public LibXR::Debug::Swd
 {
  public:
@@ -28,12 +31,10 @@ class SwdWithClock final : public LibXR::Debug::Swd
   ///        object.
   /// @param swclk SWCLK 引脚，用于设置边沿间隔 / SWCLK pin used to set the edge spacing.
   /// @param cpu_hz CPU 频率 / CPU frequency in Hz.
-  /// @param edge_write_cycles 写一次沿本身在每个 SWCLK 周期多出的 CPU 周期数；默认 13 是
-  ///        S3 在 240 MHz 下用逻辑分析仪实测的（约 110 ns） / Extra CPU cycles one edge
-  ///        write adds per SWCLK period; the default 13 was measured on an S3 at 240 MHz
-  ///        with a logic analyzer (about 110 ns).
-  SwdWithClock(LibXR::Debug::Swd& inner, DedicGpioPin& swclk, uint32_t cpu_hz,
-               uint32_t edge_write_cycles = 13U)
+  /// @param edge_write_cycles 写一次沿本身在每个 SWCLK 周期多出的 CPU 周期数 / Extra CPU
+  ///        cycles one edge write adds per SWCLK period.
+  SwdWithClock(LibXR::Debug::Swd& inner, PinT& swclk, uint32_t cpu_hz,
+               uint32_t edge_write_cycles)
       : inner_(inner),
         swclk_(swclk),
         cpu_hz_(cpu_hz),
@@ -73,7 +74,7 @@ class SwdWithClock final : public LibXR::Debug::Swd
 
  private:
   LibXR::Debug::Swd& inner_;
-  DedicGpioPin& swclk_;
+  PinT& swclk_;
   uint32_t cpu_hz_;
   uint32_t edge_write_cycles_;
 };
