@@ -33,6 +33,18 @@
 
 “高速无线 DAP 调试器 Lite”板（ESP32-S3 模组，2×5 排针）用单独的固件 `xrdap-esp32-s3-lite.bin`：SWCLK 是 GPIO37；SWDIO 经板上的 SGM3157 模拟开关接到排针，固件把开关的选择脚 GPIO36 固定为低，用 GPIO47 收发 SWDIO。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi。模组要用不带 Octal PSRAM 的（WROOM-1-N8、MINI-1-N8），带 Octal PSRAM 的型号占用 GPIO35 到 37。这个固件还没有在实物上测过。
 
+Lite 板的状态灯（WS2812）和按键：
+
+| 灯 | 含义 |
+|---|---|
+| 蓝色常亮 | 没有热点参数，只走 USB |
+| 黄色慢闪 | 正在连 Wi-Fi |
+| 绿色常亮 | Wi-Fi 已连上 |
+| 青色常亮 | 有网络调试客户端（OpenOCD TCP 或 USB/IP）连着 |
+| 红色快闪 | 按键按住中；按满 5 秒变红色常亮，清除热点参数并重启 |
+
+板上的 WS2812 用 5V 供电、3.3V 数据驱动，在电平门限边上，个别灯珠可能不亮或颜色不对，不影响调试功能。
+
 ### 烧固件
 
 在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-s3-lite.bin`（Lite 板）、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：

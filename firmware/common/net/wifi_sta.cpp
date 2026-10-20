@@ -200,4 +200,14 @@ WifiStatus WifiStaGetStatus()
   }
   return st;
 }
+
+WifiLink WifiStaGetLink()
+{
+  if (!s_started)
+  {
+    return WifiLink::OFF;
+  }
+  return (xEventGroupGetBits(s_events) & kGotIp) != 0 ? WifiLink::UP : WifiLink::JOINING;
+}
+
 }  // namespace XrDap

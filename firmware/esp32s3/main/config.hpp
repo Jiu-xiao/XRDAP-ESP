@@ -5,17 +5,19 @@
 // XRDAP_BOARD）选：
 //   默认：ESP32-S3 开发板，SWCLK GPIO5、SWDIO GPIO4，串口链路走板上 USB 转串口芯片。
 //   Lite：“高速无线 DAP 调试器 Lite”，SWCLK GPIO37；SWDIO 经 SGM3157 模拟开关接到目标，
-//         开关的 IN（GPIO36）固定为低，NC 端的 GPIO47 当双向 SWDIO 用；板上没有 USB 转
-//         串口芯片，不开串口链路。
+//         开关的 IN（GPIO36）固定为低，NC 端的 GPIO47 当双向 SWDIO 用；没有 USB 转串口
+//         芯片，不开串口链路；GPIO48 的 WS2812 显示状态，GPIO21 的按键长按清除 Wi-Fi
+//         （status_panel.hpp）。
 //
 // Fixed parameters of the ESP32-S3 XR-DAP firmware; shared ones are in probe_config.hpp.
 // Pins depend on the board (Kconfig XRDAP_BOARD):
 //   Default: ESP32-S3 dev board, SWCLK GPIO5, SWDIO GPIO4, serial link through the
-//   on-board
-//            USB-UART chip.
+//            on-board USB-UART chip.
 //   Lite:    "Wireless DAP Lite", SWCLK GPIO37; SWDIO reaches the target through an
 //            SGM3157 analog switch whose IN (GPIO36) is held low, so GPIO47 on its NC
-//            side serves as the bidirectional SWDIO; no USB-UART chip, so no serial link.
+//            side serves as the bidirectional SWDIO; no USB-UART chip, so no serial
+//            link; the WS2812 on GPIO48 shows the state and a long press of the GPIO21
+//            button clears Wi-Fi (status_panel.hpp).
 
 #include <cstdint>
 
@@ -48,6 +50,12 @@ constexpr int kSwdioGpio = 47;
 constexpr int kSwdioSelectGpio = 36;
 /// 板上有没有接 UART0 的 USB 转串口芯片 / Whether a USB-UART chip is wired to UART0.
 constexpr bool kUsbUartOnBoard = false;
+/// 状态灯（WS2812）数据脚，-1 表示没有 / Status light (WS2812) data pin; -1 when there
+/// is none.
+constexpr int kStatusLedGpio = 48;
+/// Wi-Fi 清除按键（按下接地），-1 表示没有 / Wi-Fi clear button (shorts to ground);
+/// -1 when there is none.
+constexpr int kWifiButtonGpio = 21;
 #else
 /// SWCLK 引脚 / SWCLK pin.
 constexpr int kSwclkGpio = 5;
@@ -58,7 +66,15 @@ constexpr int kSwdioGpio = 4;
 constexpr int kSwdioSelectGpio = -1;
 /// 板上有没有接 UART0 的 USB 转串口芯片 / Whether a USB-UART chip is wired to UART0.
 constexpr bool kUsbUartOnBoard = true;
+/// 状态灯（WS2812）数据脚，-1 表示没有 / Status light (WS2812) data pin; -1 when there
+/// is none.
+constexpr int kStatusLedGpio = -1;
+/// Wi-Fi 清除按键（按下接地），-1 表示没有 / Wi-Fi clear button (shorts to ground);
+/// -1 when there is none.
+constexpr int kWifiButtonGpio = -1;
 #endif
+static_assert((kStatusLedGpio < 0) == (kWifiButtonGpio < 0),
+              "状态灯和按键由同一个 StatusPanel 处理，要么都有，要么都没有");
 
 /// SWD 位带、DAP 的 Step() 线程、采样和网络服务所在的核。专用 GPIO 只能在创建它的核上
 /// 访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the DAP

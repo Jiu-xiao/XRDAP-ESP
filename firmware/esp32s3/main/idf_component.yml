@@ -1,3 +1,5 @@
-## ESP-IDF 组件管理器的依赖：mDNS 广播（firmware/common/net/mdns_service.hpp）
+## ESP-IDF 组件管理器的依赖：mDNS 广播（firmware/common/net/mdns_service.hpp）、
+## Lite 板的 WS2812 状态灯（status_panel.cpp）
 dependencies:
   espressif/mdns: "^1.8.2"
+  espressif/led_strip: "^3.0.3"

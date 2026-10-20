@@ -59,4 +59,16 @@ struct WifiStatus
 /// 读取当前 Wi-Fi 状态，可在任意任务调用 / Read the current Wi-Fi status; callable from
 /// any task.
 WifiStatus WifiStaGetStatus();
+
+/// Wi-Fi 连接阶段 / Wi-Fi link stage.
+enum class WifiLink
+{
+  OFF,      ///< 没有热点参数，Wi-Fi 未启动 / No credentials, Wi-Fi not started.
+  JOINING,  ///< 已启动，还没拿到 IP / Started, no IP yet.
+  UP,       ///< 已拿到 IP / IP obtained.
+};
+
+/// 读取连接阶段；不读 NVS，适合周期性查询，可在任意任务调用 / Read the link stage; does
+/// not touch NVS, so it is cheap to poll; callable from any task.
+WifiLink WifiStaGetLink();
 }  // namespace XrDap

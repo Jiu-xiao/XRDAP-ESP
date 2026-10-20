@@ -35,6 +35,7 @@
 #include "probe_app.hpp"
 #include "probe_info.hpp"
 #include "serial_link.hpp"
+#include "status_panel.hpp"
 #include "swd_engine.hpp"
 #include "uart_console.hpp"
 
@@ -242,10 +243,36 @@ extern "C" void app_main(void)
   static UartConsole<LibXR::USB::CDCUart> console(cdc);
   console.Start(0);
 
+  // 有状态灯的板子（Lite）：在 Wi-Fi 连接之前就开始显示。
+  StatusPanel* panel = nullptr;
+  if constexpr (Config::kStatusLedGpio >= 0)
+  {
+    static StatusPanel status(Config::kStatusLedGpio, Config::kWifiButtonGpio);
+    status.Start(0);
+    panel = &status;
+  }
+
+  // 网络客户端连上、断开时：关闭或恢复 USB，更新状态灯。
+  struct ClientHooks
+  {
+    UsbSwitch& usb;
+    StatusPanel* panel;
+
+    static void OnClient(bool connected, void* ctx)
+    {
+      auto* self = static_cast<ClientHooks*>(ctx);
+      UsbSwitch::OnNetworkClient(connected, &self->usb);
+      if (self->panel != nullptr)
+      {
+        self->panel->SetNetworkClient(connected);
+      }
+    }
+  };
   static UsbSwitch usb_switch(usb);
+  static ClientHooks hooks{usb_switch, panel};
   if (StartNetwork(dap, vendor,
                    {Config::kChipName, Config::kUsbProductName, Config::kSwdCore,
-                    &UsbSwitch::OnNetworkClient, &usb_switch}))
+                    &ClientHooks::OnClient, &hooks}))
   {
     usb_switch.Start();
   }
