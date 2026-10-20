@@ -31,7 +31,7 @@ The S3 is the fastest and simplest choice. A C3 or a classic ESP32 also works, w
 
 Connect one probe to one target. GPIO5 of the classic ESP32 is a strapping pin, so GPIO18 and GPIO19 are used instead; its serial link is on UART0 (GPIO1, GPIO3), which is the port of the on-board USB-to-serial chip, so a USB cable is enough. On the C3, use the chip's own USB port (D- on GPIO18, D+ on GPIO19). If the board's USB connector is wired directly to these two pins, plug into it. If the connector goes to a USB-to-serial chip (for example ESP32-C3-DevKitM-1), run a separate USB cable to the GPIO18, GPIO19, 5V and GND header pins.
 
-The "Wireless DAP Lite" board (ESP32-S3 module, 2×5 header) uses its own image, `xrdap-esp32-s3-lite.bin`. SWCLK is GPIO37. SWDIO reaches the header through the on-board SGM3157 analog switch; the firmware holds the switch select pin GPIO36 low and drives and reads SWDIO on GPIO47. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available. Use a module without Octal PSRAM (WROOM-1-N8, MINI-1-N8); modules with Octal PSRAM use GPIO35 to 37. This image has not been tested on the real board yet.
+The "Wireless DAP Lite" board (ESP32-S3 module, 2×5 header) uses its own image, `xrdap-esp32-s3-lite.bin`. SWCLK is GPIO37. SWDIO reaches the header through the on-board SGM3157 analog switch; the firmware holds the switch select pin GPIO36 low and drives and reads SWDIO on GPIO47. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available. Use a module without Octal PSRAM (WROOM-1-N4 or N8, MINI-1-N4 or N8); modules with Octal PSRAM use GPIO35 to 37. This image has not been tested on the real board yet.
 
 Status light (WS2812) and button on the Lite board:
 
@@ -55,7 +55,7 @@ python -m esptool --chip esp32c3 write_flash 0x0 xrdap-esp32-c3.bin
 python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 ```
 
-Upgrades use the same command. The Wi-Fi settings are kept. If esptool reports `Wrong boot mode` and cannot enter download mode (on some boards the auto-download circuit can only reset and cannot pull GPIO0 low), hold BOOT, press RESET (EN) once, release BOOT, and then add `--before no_reset` to the command.
+Upgrades use the same command. The Wi-Fi settings are kept. S3 images of v0.5.1 and earlier have an 8MB flash header and reboot in a loop on boards with 4MB flash (N4, some Lite boards); with those older images add `--flash_size 4MB` after `write_flash`. If esptool reports `Wrong boot mode` and cannot enter download mode (on some boards the auto-download circuit can only reset and cannot pull GPIO0 low), hold BOOT, press RESET (EN) once, release BOOT, and then add `--before no_reset` to the command.
 
 ### Installing the host tool
 
