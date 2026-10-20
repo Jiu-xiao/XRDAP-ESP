@@ -2,44 +2,46 @@
 
 [中文](README.md)
 
-A CMSIS-DAP debug probe built on ESP32-S3 or ESP32-C3, based on [libxr](https://github.com/xrobot-org/libxr). It works over a USB cable or over Wi-Fi. Keil, pyOCD, probe-rs and OpenOCD treat it as an ordinary CMSIS-DAP probe. The probe can also sample target variables at a fixed period, and a host tool plots the curves. Tested on STM32G431KB and STM32F401RC.
+A CMSIS-DAP debug probe built on ESP32-S3, ESP32-C3 or the classic ESP32, based on [libxr](https://github.com/xrobot-org/libxr). It works over a USB cable or over Wi-Fi. Keil, pyOCD, probe-rs and OpenOCD treat it as an ordinary CMSIS-DAP probe. The probe can also sample target variables at a fixed period, and a host tool plots the curves. Tested on STM32G431KB and STM32F401RC.
 
 The host tool is in [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host): a single `xrdap` executable. Without arguments it starts the GUI; with a command it runs as a command-line tool.
 
 ## Choosing a board
 
-| | ESP32-S3 | ESP32-C3 |
-|---|---|---|
-| USB cable, for Keil, pyOCD, probe-rs, OpenOCD | Works directly (native USB probe) | Run `xrdap share usbip` on the computer first |
-| Wi-Fi, for Keil, pyOCD, probe-rs, OpenOCD | Attach with USB/IP | Attach with USB/IP |
-| Wi-Fi, for OpenOCD | OpenOCD TCP backend, direct | Same as S3 |
-| Maximum SWD clock | about 23.7 MHz | about 20 MHz |
-| Shortest probe-side sampling period for 4 variables (USB) | 118 µs | 300 µs |
+| | ESP32-S3 | ESP32-C3 | Classic ESP32 |
+|---|---|---|---|
+| USB cable, for Keil, pyOCD, probe-rs, OpenOCD | Works directly (native USB probe) | Run `xrdap share usbip` on the computer first | Same as C3 (through the board's USB-to-serial chip) |
+| Wi-Fi, for Keil, pyOCD, probe-rs, OpenOCD | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP |
+| Wi-Fi, for OpenOCD | OpenOCD TCP backend, direct | Same as S3 | Same as S3 |
+| SWD clock | up to about 23.7 MHz | up to about 20 MHz | about 3 MHz in practice (GPIO register bit-banding) |
+| Shortest probe-side sampling period (USB cable) | 4 variables 118 µs | 4 variables 300 µs | 8 variables 1 ms, 1 variable 200 µs |
+| OpenOCD reading 128 KiB (USB cable) | 0.62 s | 1.8 s | 3.4 s |
 
-The S3 is the fastest and simplest choice. A C3 also works fully, with one extra step: `xrdap share`.
+The S3 is the fastest and simplest choice. A C3 or a classic ESP32 also works, with one extra step: `xrdap share`. The classic ESP32 has no native USB and no CPU-dedicated GPIO, so SWD and the serial link are one step slower; debugging and flashing work fine.
 
 ## 1. Setup
 
 ### Wiring
 
-| Probe | Target |
-|---|---|
-| GPIO5 | SWCLK |
-| GPIO4 | SWDIO |
-| GND | GND |
+| Target | ESP32-S3, ESP32-C3 | Classic ESP32 |
+|---|---|---|
+| SWCLK | GPIO5 | GPIO18 |
+| SWDIO | GPIO4 | GPIO19 |
+| GND | GND | GND |
 
-The pins are the same on both chips. Connect one probe to one target. On the C3, use the chip's own USB port (D- on GPIO18, D+ on GPIO19). If the board's USB connector is wired directly to these two pins, plug into it. If the connector goes to a USB-to-serial chip (for example ESP32-C3-DevKitM-1), run a separate USB cable to the GPIO18, GPIO19, 5V and GND header pins.
+Connect one probe to one target. GPIO5 of the classic ESP32 is a strapping pin, so GPIO18 and GPIO19 are used instead; its serial link is on UART0 (GPIO1, GPIO3), which is the port of the on-board USB-to-serial chip, so a USB cable is enough. On the C3, use the chip's own USB port (D- on GPIO18, D+ on GPIO19). If the board's USB connector is wired directly to these two pins, plug into it. If the connector goes to a USB-to-serial chip (for example ESP32-C3-DevKitM-1), run a separate USB cable to the GPIO18, GPIO19, 5V and GND header pins.
 
 ### Flashing the firmware
 
-Download `xrdap-esp32-s3.bin` or `xrdap-esp32-c3.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
+Download `xrdap-esp32-s3.bin`, `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
 python -m esptool --chip esp32c3 write_flash 0x0 xrdap-esp32-c3.bin
+python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 ```
 
-Upgrades use the same command. The Wi-Fi settings are kept. If esptool cannot enter download mode, hold BOOT and press RESET once.
+Upgrades use the same command. The Wi-Fi settings are kept. If esptool reports `Wrong boot mode` and cannot enter download mode (on some boards the auto-download circuit can only reset and cannot pull GPIO0 low), hold BOOT, press RESET (EN) once, release BOOT, and then add `--before no_reset` to the command.
 
 ### Installing the host tool
 
@@ -67,9 +69,9 @@ probe-rs list
 
 Keil: select CMSIS-DAP Debugger under Debug, choose SW as the port in Settings, and an IDCODE in the SW Device field means the connection works. Start with Max Clock at 4 MHz. OpenOCD and probe-rs were tested; pyOCD was not.
 
-### 2.2 C3 over USB, with Keil, pyOCD, probe-rs, OpenOCD
+### 2.2 C3 or classic ESP32 over USB, with Keil, pyOCD, probe-rs, OpenOCD
 
-The C3's USB port is a fixed-function USB Serial/JTAG, which appears as a serial port on the computer. `xrdap share usbip` turns it into a USB probe (replace `COM7` with the actual port; on Linux it is `/dev/ttyACM0`):
+The C3's USB port is a fixed-function USB Serial/JTAG, and the classic ESP32's USB port goes to a USB-to-serial chip; either appears as a serial port on the computer. `xrdap share usbip` turns it into a USB probe (replace `COM7` with the actual port; on Linux it is `/dev/ttyACM0` or `/dev/ttyUSB0`):
 
 ```
 xrdap -p COM7 share usbip
@@ -81,7 +83,7 @@ Then attach it in another terminal:
 usbip attach -r 127.0.0.1 -b 1-1
 ```
 
-`XR-DAP-C3 CMSIS-DAP` then appears in the system and is used as in 2.1. Attaching needs a USB/IP client. Linux has one in the kernel (`sudo modprobe vhci-hcd`, and prefix the commands with `sudo`). On Windows, install [usbip-win2](https://github.com/vadimgrn/usbip-win2). To avoid a terminal, connect to the probe in the `xrdap` GUI and tick 共享为 USB DAP (share as USB DAP). The effect is the same.
+`XR-DAP-C3 CMSIS-DAP` (`XR-DAP-ESP32 CMSIS-DAP` for the classic ESP32) then appears in the system and is used as in 2.1. Attaching needs a USB/IP client. Linux has one in the kernel (`sudo modprobe vhci-hcd`, and prefix the commands with `sudo`). On Windows, install [usbip-win2](https://github.com/vadimgrn/usbip-win2). To avoid a terminal, connect to the probe in the `xrdap` GUI and tick 共享为 USB DAP (share as USB DAP). The effect is the same.
 
 ### 2.3 Over Wi-Fi, with Keil, pyOCD, probe-rs, OpenOCD
 
@@ -129,13 +131,15 @@ python -m serial.tools.miniterm COM7 115200 --dtr 0 --rts 0
 
 ### Connection overview
 
-| Connection | S3 | C3 | Used by |
-|---|---|---|---|
-| Native USB (CMSIS-DAP v2) | yes | no | All tools |
-| Serial link on the chip's USB port | no | yes | `xrdap`; `xrdap share` passes it on to other tools |
-| On-board USB-to-serial (UART0, 4 Mbaud) | yes | no | Same as above |
-| Wi-Fi, USB/IP, port 3240 | yes | yes | All tools after attaching |
-| Wi-Fi, OpenOCD TCP backend, port 3241 | yes | yes | OpenOCD, `xrdap` |
+| Connection | S3 | C3 | Classic ESP32 | Used by |
+|---|---|---|---|---|
+| Native USB (CMSIS-DAP v2) | yes | no | no | All tools |
+| Serial link on the chip's USB port | no | yes | no | `xrdap`; `xrdap share` passes it on to other tools |
+| On-board USB-to-serial (UART0) | yes, 4 Mbaud | no | yes, 921600 | Same as above |
+| Wi-Fi, USB/IP, port 3240 | yes | yes | yes | All tools after attaching |
+| Wi-Fi, OpenOCD TCP backend, port 3241 | yes | yes | yes | OpenOCD, `xrdap` |
+
+`xrdap` picks the baud rate from the serial chip: CH343 and similar try 4 Mbaud first, while CP2102 and CH340 use 921600, so `--baud` need not be given.
 
 All connections share one DAP and serve one client at a time. Ports 3240 and 3241 also exclude each other: while one is connected, the other waits. While a network client is connected, the S3's native USB is temporarily off and comes back after disconnect. If a client does not disconnect cleanly, the probe releases it after about 11 seconds.
 
@@ -205,6 +209,8 @@ OpenOCD reading 128 KiB from an STM32F401 (Linux, 4 MHz requested):
 
 The C3 has a single core, so Wi-Fi traffic and sampling run on the same core. Sampling 4 variables over Wi-Fi at 1 ms skips no ticks. At 500 µs about 0.2% of ticks are skipped.
 
+Classic ESP32 (CP2102, 921600 baud, target STM32G431, jumper wires): reads and writes are correct for SWD clock requests from 1 to 40 MHz, and the actual clock is about 3 MHz (the GPIO registers are on the peripheral bus, about 31 µs per access). Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s.
+
 ### SWD clock and wiring
 
 SWCLK high and low times are equal, and the frequency is computed in CPU cycles (4 MHz measured 4.03 MHz on the S3; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz, not measured with an oscilloscope). The C3 frequency correction value has not been calibrated with a logic analyzer. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
@@ -215,7 +221,7 @@ ESP-IDF v5.5 is required. libxr is the `third_party/libxr` submodule.
 
 ```
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP.git
-cd XRDAP-ESP/firmware/esp32s3      # for the C3 use firmware/esp32c3
+cd XRDAP-ESP/firmware/esp32s3      # for the C3 use firmware/esp32c3, for the classic ESP32 firmware/esp32
 idf.py build
 idf.py -p COM3 flash
 ```
@@ -224,11 +230,12 @@ idf.py -p COM3 flash
 
 | Directory | Content |
 |---|---|
-| `firmware/esp32s3`, `firmware/esp32c3` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities), and the S3 SWD engine |
+| `firmware/esp32s3`, `firmware/esp32c3`, `firmware/esp32` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities), and the S3 SWD engine |
 | `firmware/common/vendor` | XR vendor extension: protocol, MEM-AP access, sampling scheduler, frame buffer, 0x86 Wi-Fi command |
 | `firmware/common/net` | Wi-Fi, OpenOCD TCP server, USB/IP virtual device, mDNS |
 | `firmware/common/serial`, `console` | Serial DAP link, C3 serial splitting, Wi-Fi command line |
-| `firmware/common/probe` | Parameters, probe identity and start-up steps shared by both chips |
+| `firmware/common/probe` | Parameters, probe identity and start-up steps shared by all three chips |
+| `firmware/common/swd` | C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins, SWCLK frequency control |
 | `docs/protocol.en.md` | Serial frame, TCP frame, vendor commands, probe identity, mDNS, USB/IP device |
 
 Every push builds both firmware images and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release automatically.

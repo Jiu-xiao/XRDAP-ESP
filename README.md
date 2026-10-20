@@ -2,44 +2,46 @@
 
 [English](README.en.md)
 
-用 ESP32-S3 或 ESP32-C3 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。插 USB 线或走 Wi-Fi 都能用，Keil、pyOCD、probe-rs、OpenOCD 把它当普通的 CMSIS-DAP 探针；另外能在探针上按固定周期采样目标的变量，配合电脑端工具画曲线。已在 STM32G431KB、STM32F401RC 上测试。
+用 ESP32-S3、ESP32-C3 或传统 ESP32 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。插 USB 线或走 Wi-Fi 都能用，Keil、pyOCD、probe-rs、OpenOCD 把它当普通的 CMSIS-DAP 探针；另外能在探针上按固定周期采样目标的变量，配合电脑端工具画曲线。已在 STM32G431KB、STM32F401RC 上测试。
 
 电脑端工具在 [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host)：一个 `xrdap` 可执行文件，不带参数是图形界面，带命令是命令行。
 
 ## 选哪块板
 
-| | ESP32-S3 | ESP32-C3 |
-|---|---|---|
-| 插 USB 线给 Keil、pyOCD、probe-rs、OpenOCD 用 | 直接用（原生 USB 探针） | 电脑上运行 `xrdap share usbip` 后用 |
-| 走 Wi-Fi 给 Keil、pyOCD、probe-rs、OpenOCD 用 | 用 USB/IP 挂载 | 用 USB/IP 挂载 |
-| 走 Wi-Fi 给 OpenOCD 用 | OpenOCD 的 TCP 后端直连 | 同左 |
-| SWD 最高时钟 | 约 23.7 MHz | 约 20 MHz |
-| 探针端采样 4 个变量的最短周期（USB） | 118 µs | 300 µs |
+| | ESP32-S3 | ESP32-C3 | 传统 ESP32 |
+|---|---|---|---|
+| 插 USB 线给 Keil、pyOCD、probe-rs、OpenOCD 用 | 直接用（原生 USB 探针） | 电脑上运行 `xrdap share usbip` 后用 | 同 C3（经板上 USB 转串口芯片） |
+| 走 Wi-Fi 给 Keil、pyOCD、probe-rs、OpenOCD 用 | 用 USB/IP 挂载 | 用 USB/IP 挂载 | 用 USB/IP 挂载 |
+| 走 Wi-Fi 给 OpenOCD 用 | OpenOCD 的 TCP 后端直连 | 同左 | 同左 |
+| SWD 时钟 | 最高约 23.7 MHz | 最高约 20 MHz | 实际约 3 MHz（GPIO 寄存器位带） |
+| 探针端采样的最短周期（插线） | 4 个变量 118 µs | 4 个变量 300 µs | 8 个变量 1 ms，1 个变量 200 µs |
+| OpenOCD 读 128 KiB（插线） | 0.62 s | 1.8 s | 3.4 s |
 
-要最快、最省事选 S3；手边只有 C3 也完全能用，多一步 `xrdap share`。
+要最快、最省事选 S3；手边只有 C3 或传统 ESP32 也能用，多一步 `xrdap share`。传统 ESP32 没有原生 USB 和 CPU 专用 GPIO，SWD 和串口都慢一档，调试、烧录没问题。
 
 ## 1. 准备
 
 ### 接线
 
-| 探针 | 目标 |
-|---|---|
-| GPIO5 | SWCLK |
-| GPIO4 | SWDIO |
-| GND | GND |
+| 目标 | ESP32-S3、ESP32-C3 | 传统 ESP32 |
+|---|---|---|
+| SWCLK | GPIO5 | GPIO18 |
+| SWDIO | GPIO4 | GPIO19 |
+| GND | GND | GND |
 
-两种芯片引脚相同。一个目标只接一个探针。C3 要用芯片自带的 USB 口（D- GPIO18、D+ GPIO19）：USB 座直接连到这两个脚的开发板插上就行；USB 座接的是 USB 转串口芯片的板子（例如 ESP32-C3-DevKitM-1），另接一根 USB 线到排针的 GPIO18、GPIO19、5V、GND。
+一个目标只接一个探针。传统 ESP32 的 GPIO5 是启动配置引脚，所以换成 GPIO18、GPIO19；它的串口链路在 UART0（GPIO1、GPIO3），也就是板上 USB 转串口芯片那个口，插 USB 线即可。C3 要用芯片自带的 USB 口（D- GPIO18、D+ GPIO19）：USB 座直接连到这两个脚的开发板插上就行；USB 座接的是 USB 转串口芯片的板子（例如 ESP32-C3-DevKitM-1），另接一根 USB 线到排针的 GPIO18、GPIO19、5V、GND。
 
 ### 烧固件
 
-在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin` 或 `xrdap-esp32-c3.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
+在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
 python -m esptool --chip esp32c3 write_flash 0x0 xrdap-esp32-c3.bin
+python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 ```
 
-升级用同样的命令，Wi-Fi 设置会保留。esptool 进不了下载模式时，按住 BOOT 再按一下 RESET。
+升级用同样的命令，Wi-Fi 设置会保留。esptool 报 `Wrong boot mode` 进不了下载模式时（有的板子自动下载电路只能复位、拉不低 GPIO0），按住 BOOT，按一下 RESET（EN），再松开 BOOT，然后在命令里加 `--before no_reset`。
 
 ### 装电脑端工具
 
@@ -67,9 +69,9 @@ probe-rs list
 
 Keil：Debug 选 CMSIS-DAP Debugger，Settings 里端口选 SW，SW Device 栏出现 IDCODE 即连上，Max Clock 先设 4 MHz。OpenOCD 和 probe-rs 实测可用，pyOCD 没有实测。
 
-### 2.2 C3 插 USB，用 Keil、pyOCD、probe-rs、OpenOCD
+### 2.2 C3 或传统 ESP32 插 USB，用 Keil、pyOCD、probe-rs、OpenOCD
 
-C3 的 USB 口是固定功能的 USB Serial/JTAG，电脑上是一个串口。用 `xrdap share usbip` 把它变成 USB 探针（`COM7` 换成实际的口，Linux 上是 `/dev/ttyACM0`）：
+C3 的 USB 口是固定功能的 USB Serial/JTAG，传统 ESP32 的 USB 口接的是 USB 转串口芯片，电脑上都是一个串口。用 `xrdap share usbip` 把它变成 USB 探针（`COM7` 换成实际的口，Linux 上是 `/dev/ttyACM0` 或 `/dev/ttyUSB0`）：
 
 ```
 xrdap -p COM7 share usbip
@@ -81,7 +83,7 @@ xrdap -p COM7 share usbip
 usbip attach -r 127.0.0.1 -b 1-1
 ```
 
-之后系统里出现 `XR-DAP-C3 CMSIS-DAP`，用法同 2.1。挂载要 USB/IP 客户端：Linux 内核自带（`sudo modprobe vhci-hcd`，命令前加 `sudo`），Windows 装 [usbip-win2](https://github.com/vadimgrn/usbip-win2)。不想开终端时，在 `xrdap` 图形界面里连上探针后勾选“共享为 USB DAP”，效果相同。
+之后系统里出现 `XR-DAP-C3 CMSIS-DAP`（传统 ESP32 是 `XR-DAP-ESP32 CMSIS-DAP`），用法同 2.1。挂载要 USB/IP 客户端：Linux 内核自带（`sudo modprobe vhci-hcd`，命令前加 `sudo`），Windows 装 [usbip-win2](https://github.com/vadimgrn/usbip-win2)。不想开终端时，在 `xrdap` 图形界面里连上探针后勾选“共享为 USB DAP”，效果相同。
 
 ### 2.3 走 Wi-Fi，用 Keil、pyOCD、probe-rs、OpenOCD
 
@@ -129,13 +131,15 @@ python -m serial.tools.miniterm COM7 115200 --dtr 0 --rts 0
 
 ### 连接方式一览
 
-| 连接 | S3 | C3 | 给谁用 |
-|---|---|---|---|
-| 原生 USB（CMSIS-DAP v2） | 有 | 无 | 所有工具 |
-| 芯片 USB 口上的串口链路 | 无 | 有 | `xrdap`；`xrdap share` 转给其他工具 |
-| 板上 USB 转串口（UART0，4 Mbaud） | 有 | 无 | 同上 |
-| Wi-Fi，USB/IP，端口 3240 | 有 | 有 | 挂载后所有工具 |
-| Wi-Fi，OpenOCD TCP 后端，端口 3241 | 有 | 有 | OpenOCD、`xrdap` |
+| 连接 | S3 | C3 | 传统 ESP32 | 给谁用 |
+|---|---|---|---|---|
+| 原生 USB（CMSIS-DAP v2） | 有 | 无 | 无 | 所有工具 |
+| 芯片 USB 口上的串口链路 | 无 | 有 | 无 | `xrdap`；`xrdap share` 转给其他工具 |
+| 板上 USB 转串口（UART0） | 有，4 Mbaud | 无 | 有，921600 | 同上 |
+| Wi-Fi，USB/IP，端口 3240 | 有 | 有 | 有 | 挂载后所有工具 |
+| Wi-Fi，OpenOCD TCP 后端，端口 3241 | 有 | 有 | 有 | OpenOCD、`xrdap` |
+
+`xrdap` 按串口芯片自动选波特率：CH343 等先试 4 Mbaud，CP2102、CH340 用 921600，不用手写 `--baud`。
 
 几种连接共用一个 DAP，同一时间只服务一个客户端，3240 和 3241 也互斥（一个连着时另一个排队）。网络客户端连着时 S3 的原生 USB 暂时关闭，断开后恢复。客户端没有正常断开时约 11 秒后释放。
 
@@ -203,6 +207,8 @@ OpenOCD 读 STM32F401 的 128 KiB（Linux，4 MHz 请求）：
 
 C3 是单核，Wi-Fi 收发和采样在同一个核上：经 Wi-Fi 采样 4 个变量 1 ms 不跳拍，500 µs 约跳 0.2% 的拍。
 
+传统 ESP32（CP2102，921600 baud，目标 STM32G431，杜邦线）：SWD 1 到 40 MHz 请求下读写全部正确，实际约 3 MHz（GPIO 寄存器在外设总线上，每次访问约 31 µs）；探针端采样 8 个变量 1 ms、1 个变量 200 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share usbip`，OpenOCD 读 128 KiB 3.4 s。
+
 ### SWD 时钟和接线
 
 SWCLK 高低电平等长，频率按 CPU 周期计算（S3 上 4 MHz 实测 4.03 MHz；请求 25 MHz 及以上时用最快的一档，约 23.7 MHz，未用示波器量过）。C3 的频率校正值还没有用逻辑分析仪校准。能跑多快取决于线长、目标板上拉和走线，先用 4 MHz；高时钟出错时先看 SWCLK、SWDIO 波形，缩短线或加串联电阻。引脚驱动强度设为 1（IDF 默认 2），减小过冲和振铃。
@@ -213,7 +219,7 @@ SWCLK 高低电平等长，频率按 CPU 周期计算（S3 上 4 MHz 实测 4.03
 
 ```
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP.git
-cd XRDAP-ESP/firmware/esp32s3      # C3 是 firmware/esp32c3
+cd XRDAP-ESP/firmware/esp32s3      # C3 是 firmware/esp32c3，传统 ESP32 是 firmware/esp32
 idf.py build
 idf.py -p COM3 flash
 ```
@@ -222,11 +228,12 @@ idf.py -p COM3 flash
 
 | 目录 | 内容 |
 |---|---|
-| `firmware/esp32s3`、`firmware/esp32c3` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级），S3 的 SWD 引擎 |
+| `firmware/esp32s3`、`firmware/esp32c3`、`firmware/esp32` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级），S3 的 SWD 引擎 |
 | `firmware/common/vendor` | XR 厂商扩展：协议、MEM-AP 访问、采样调度、帧缓冲、0x86 Wi-Fi 命令 |
 | `firmware/common/net` | Wi-Fi、OpenOCD TCP 服务、USB/IP 虚拟设备、mDNS |
 | `firmware/common/serial`、`console` | 串口 DAP 链路、C3 的串口分流、Wi-Fi 命令行 |
-| `firmware/common/probe` | 两种芯片共用的参数、探针身份、启动步骤 |
+| `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤 |
+| `firmware/common/swd` | C3 的专用 GPIO 引脚、传统 ESP32 的 GPIO 寄存器引脚、SWCLK 频率控制 |
 | `docs/protocol.md` | 串口帧、TCP 帧、厂商命令、探针身份、mDNS、USB/IP 设备 |
 
 每次推送都由 GitHub Actions 编译两个固件并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布。
