@@ -87,36 +87,3 @@ jobs:
         with:
           files: release/*
           generate_release_notes: true
-
-  # 网页烧录：release 的固件连同页面和每块板的 ESP Web Tools manifest 发布到 GitHub Pages
-  # （浏览器不能跨域读 release 附件，固件要和页面放在同一站点）
-  pages:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: firmware
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: 生成网页烧录站点
-        run: python3 web/make_site.py artifacts "${GITHUB_REF_NAME}" site
-
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - id: deploy
-        uses: actions/deploy-pages@v4

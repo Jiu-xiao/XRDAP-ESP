@@ -47,7 +47,7 @@ The board's WS2812 runs from 5 V with 3.3 V data, which is at the edge of its in
 
 ### Flashing the firmware
 
-Open the [web flasher](https://jiu-xiao.github.io/XRDAP-ESP/) in desktop Chrome or Edge, choose the board and press Flash; no Python or esptool is needed. From the command line instead, download `xrdap-esp32-s3.bin`, `xrdap-esp32-s3-lite.bin` (Lite board), `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
+Open the [web flasher](https://jiu-xiao.github.io/XRDAP-ESP/) in desktop Chrome or Edge, choose the board and press Flash firmware. From the command line instead, download `xrdap-esp32-s3.bin`, `xrdap-esp32-s3-lite.bin` (Lite board), `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
@@ -260,7 +260,7 @@ The board can also be chosen in `idf.py menuconfig` under XR-DAP → Board.
 | `firmware/common/swd` | S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins, SWCLK frequency control for the C3 and classic ESP32 |
 | `docs/protocol.en.md` | Serial frame, TCP frame, vendor commands, probe identity, mDNS, USB/IP device |
 
-Every push builds the four firmware images (S3, S3 Lite, C3, classic ESP32) and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release and deploys the firmware with the web flasher page in `web/` to GitHub Pages (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
+Every push builds the four firmware images (S3, S3 Lite, C3, classic ESP32) and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release. The `pages` workflow publishes the web flasher from the newest release images and the page in `web/` on main, after a tagged build finishes or when `web/` changes (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
 
 ### Vendor extension
 

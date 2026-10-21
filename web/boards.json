@@ -3,40 +3,52 @@
     "id": "esp32-s3",
     "asset": "xrdap-esp32-s3.bin",
     "chip": "ESP32-S3",
-    "name": { "zh": "ESP32-S3 开发板", "en": "ESP32-S3 board" },
+    "name": {
+      "zh": "ESP32-S3 开发板",
+      "en": "ESP32-S3 board"
+    },
     "note": {
-      "zh": "用芯片原生 USB 口（D- GPIO19、D+ GPIO20）连电脑。",
-      "en": "Connect the chip's native USB port (D- GPIO19, D+ GPIO20)."
+      "zh": "插芯片原生 USB 口（D- GPIO19、D+ GPIO20）。",
+      "en": "Use the native USB port (D- GPIO19, D+ GPIO20)."
     }
   },
   {
     "id": "esp32-s3-lite",
     "asset": "xrdap-esp32-s3-lite.bin",
     "chip": "ESP32-S3",
-    "name": { "zh": "“高速无线 DAP 调试器 Lite”板", "en": "\"Wireless DAP Lite\" board" },
+    "name": {
+      "zh": "无线 DAP Lite",
+      "en": "Wireless DAP Lite"
+    },
     "note": {
-      "zh": "板上没有复位键：拔下 USB，按住 SW1（接 GPIO0 的按键）再插上，然后松开，再点“烧录”。",
-      "en": "The board has no reset button: unplug USB, hold SW1 (the button on GPIO0) while plugging it back in, release it, then press Flash."
+      "zh": "按住 SW1 插上 USB，松开后烧录。",
+      "en": "Hold SW1 while plugging in USB, release it, then flash."
     }
   },
   {
     "id": "esp32-c3",
     "asset": "xrdap-esp32-c3.bin",
     "chip": "ESP32-C3",
-    "name": { "zh": "ESP32-C3 开发板", "en": "ESP32-C3 board" },
+    "name": {
+      "zh": "ESP32-C3 开发板",
+      "en": "ESP32-C3 board"
+    },
     "note": {
-      "zh": "用芯片自带的 USB 口（D- GPIO18、D+ GPIO19）连电脑。",
-      "en": "Connect the chip's own USB port (D- GPIO18, D+ GPIO19)."
+      "zh": "插芯片自带的 USB 口（D- GPIO18、D+ GPIO19）。",
+      "en": "Use the built-in USB port (D- GPIO18, D+ GPIO19)."
     }
   },
   {
     "id": "esp32",
     "asset": "xrdap-esp32.bin",
     "chip": "ESP32",
-    "name": { "zh": "传统 ESP32 开发板", "en": "Classic ESP32 board" },
+    "name": {
+      "zh": "传统 ESP32 开发板",
+      "en": "Classic ESP32 board"
+    },
     "note": {
-      "zh": "经板上的 USB 转串口芯片连接。",
-      "en": "Connects through the board's USB-to-serial chip."
+      "zh": "插板上的 USB 口（经 USB 转串口芯片）。",
+      "en": "Use the board USB port (through its USB-to-serial chip)."
     }
   }
 ]

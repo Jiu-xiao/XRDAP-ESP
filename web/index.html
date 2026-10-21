@@ -1,148 +1,267 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XR-DAP 网页烧录</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23111312' fill-rule='evenodd' d='M14 14H50L60 24V50L50 60H14L4 50V24ZM17.51 20H46.49L54 27.51V46.49L46.49 54H17.51L10 46.49V27.51ZM18 4H24V14H18ZM40 4H46V14H40Z'/%3E%3Cpath fill='%23111312' d='M24.12 24.88 44.12 44.88 39.88 49.12 19.88 29.12ZM19.88 44.88 39.88 24.88 44.12 29.12 24.12 49.12Z'/%3E%3C/svg%3E">
 <script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<script>
+  // 主题跟随系统，写在 <html data-theme> 上，样式只读 token
+  (function () {
+    var q = window.matchMedia("(prefers-color-scheme: dark)");
+    var set = function () { document.documentElement.dataset.theme = q.matches ? "dark" : "light"; };
+    set();
+    q.addEventListener("change", set);
+  })();
+</script>
 <style>
+  /* XRobot Style token（tokens.css 中本页用到的部分） */
+  :root, [data-theme="light"] {
+    color-scheme: light;
+    --paper: #f2f3f2; --paper-raised: #ffffff; --paper-sunken: #e6e8e6;
+    --line: #d3d6d3; --line-strong: #7c827e;
+    --ink: #111312; --ink-muted: #4d524f; --on-ink: #f2f3f2;
+    --focus: var(--ink); --link: var(--ink);
+  }
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --paper: #0c0e0d; --paper-raised: #151816; --paper-sunken: #070908;
+    --line: #2a2e2c; --line-strong: #6f7672;
+    --ink: #e6e8e6; --ink-muted: #a3a9a5; --on-ink: #0c0e0d;
+    --focus: var(--ink); --link: var(--ink);
+  }
   :root {
-    --bg: #f6f7f9;
-    --card: #ffffff;
-    --text: #1d2125;
-    --muted: #5d6670;
-    --line: #dde1e6;
-    --accent: #1f6feb;
-    --accent-text: #ffffff;
-    --note: #fff7e0;
-    --note-line: #e9cf7a;
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px;
+    --space-8: 32px; --space-12: 48px; --space-16: 64px;
+    --chamfer: 8px; --stroke: 1px; --stroke-strong: 2px;
+    --measure-prose: 40em; --measure-page: 1200px;
+    --size-control: 36px; --size-target: 32px; --size-nav: 56px;
+    --duration-fast: 80ms; --duration-base: 160ms;
+    --font-sans: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Consolas, "Noto Sans Mono CJK SC", monospace;
+    /* ESP Web Tools 的对话框（Material 组件）跟随墨与纸 */
+    --mdc-theme-primary: var(--ink);
+    --mdc-theme-on-primary: var(--on-ink);
+    --mdc-theme-surface: var(--paper-raised);
+    --mdc-theme-on-surface: var(--ink);
+    --mdc-theme-text-primary-on-background: var(--ink);
+    --mdc-dialog-heading-ink-color: var(--ink);
+    --mdc-dialog-content-ink-color: var(--ink-muted);
+    --mdc-shape-medium: 0px;
+    --mdc-shape-small: 0px;
+    --mdc-typography-font-family: var(--font-sans);
+    --improv-primary-color: var(--ink);
+    --improv-on-primary-color: var(--on-ink);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #111418;
-      --card: #1a1f25;
-      --text: #e6e9ed;
-      --muted: #9aa4ae;
-      --line: #2c333b;
-      --accent: #4c8dff;
-      --accent-text: #0b0e11;
-      --note: #2a2414;
-      --note-line: #6b5a24;
-    }
-  }
+  @media (prefers-reduced-motion: reduce) { :root { --duration-fast: 0ms; --duration-base: 0ms; } }
+
   * { box-sizing: border-box; }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 400 16px/28px var(--font-sans);
   }
-  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
-  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  h1 { font-size: 24px; margin: 0; }
-  .lang { display: flex; gap: 4px; }
-  .lang button {
-    border: 1px solid var(--line); background: var(--card); color: var(--muted);
-    border-radius: 6px; padding: 2px 10px; font: inherit; font-size: 14px; cursor: pointer;
+  a { color: var(--link); text-decoration: underline; text-decoration-thickness: var(--stroke); text-underline-offset: 3px; }
+  a:hover { text-decoration-thickness: var(--stroke-strong); }
+  a:focus-visible, button:focus-visible { outline: var(--stroke-strong) solid var(--focus); outline-offset: 2px; }
+  code { font: 400 14px/22px var(--font-mono); }
+
+  /* 导航栏：paper-raised 加底部一条 line */
+  .nav { background: var(--paper-raised); border-bottom: var(--stroke) solid var(--line); }
+  .nav-in {
+    max-width: var(--measure-page); margin: 0 auto; height: var(--size-nav); padding: 0 var(--space-4);
+    display: flex; align-items: center; gap: var(--space-4);
   }
-  .lang button[aria-pressed="true"] { color: var(--text); border-color: var(--accent); }
-  p.lead { color: var(--muted); margin: 8px 0 24px; }
-  fieldset { border: 0; margin: 0 0 20px; padding: 0; display: grid; gap: 8px; }
-  legend { font-weight: 600; margin-bottom: 8px; }
-  label.board {
-    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px;
-    background: var(--card); border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+  .nav .logo { display: block; height: 28px; width: auto; color: var(--ink); }
+  .nav .product { font: 700 14px/22px var(--font-mono); letter-spacing: 0.08em; }
+  .nav .spacer { flex: 1; }
+
+  /* 互斥按钮对：按下的一侧 ink 底 on-ink 字 */
+  .toggle { display: inline-flex; }
+  .toggle button {
+    height: var(--size-target); padding: 0 var(--space-3); border: var(--stroke) solid var(--line-strong);
+    background: transparent; color: var(--ink); font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em;
+    cursor: pointer; border-radius: 0; transition: background-color var(--duration-fast) linear, color var(--duration-fast) linear;
   }
-  label.board:has(input:checked) { border-color: var(--accent); }
-  label.board input { margin-top: 5px; accent-color: var(--accent); }
-  .board small { display: block; color: var(--muted); font-size: 14px; }
-  .note {
-    background: var(--note); border: 1px solid var(--note-line); border-radius: 10px;
-    padding: 10px 14px; margin-bottom: 20px; font-size: 15px;
+  .toggle button + button { border-left: 0; }
+  .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+
+  main { max-width: var(--measure-page); margin: 0 auto; padding: var(--space-12) var(--space-4) var(--space-16); }
+  .path {
+    display: flex; flex-wrap: wrap; gap: 0 var(--space-2); margin-bottom: var(--space-3);
+    font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-muted);
   }
-  .note:empty { display: none; }
-  esp-web-install-button button[slot="activate"] {
-    background: var(--accent); color: var(--accent-text); border: 0; border-radius: 8px;
-    padding: 10px 28px; font: inherit; font-weight: 600; cursor: pointer;
+  .path .sep { color: var(--line-strong); }
+  h1 { margin: 0; font: 700 28px/36px var(--font-sans); }
+  h2 { margin: 0; font: 700 20px/28px var(--font-sans); }
+  .lead { margin: var(--space-3) 0 0; max-width: var(--measure-prose); color: var(--ink-muted); }
+  section { margin-top: var(--space-12); }
+  section > .path { margin-bottom: var(--space-4); }
+
+  /* 板子：Card 当单选项，右上切角；选中时边框 stroke-strong 墨色，芯片 Tag 反相 */
+  .boards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-6); border: 0; margin: 0; padding: 0; }
+  .boards legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .card {
+    position: relative; display: flex; flex-direction: column; gap: var(--space-2);
+    padding: var(--space-4); background: var(--paper-raised); border: var(--stroke) solid var(--line);
+    cursor: pointer; transition: border-color var(--duration-fast) linear;
   }
-  .version { color: var(--muted); font-size: 14px; margin-left: 12px; }
-  .warn { color: var(--muted); font-size: 15px; }
-  section.help { margin-top: 32px; border-top: 1px solid var(--line); padding-top: 16px; font-size: 15px; }
-  section.help h2 { font-size: 16px; margin: 0 0 8px; }
-  section.help ul { margin: 0; padding-left: 20px; }
-  a { color: var(--accent); }
-  code { font-size: 14px; }
+  .card::after {
+    content: ""; position: absolute; top: calc(-1 * var(--stroke)); right: calc(-1 * var(--stroke));
+    width: var(--chamfer); height: var(--chamfer);
+    background: linear-gradient(45deg, transparent calc(50% - 0.75px), var(--line) calc(50% - 0.75px), var(--line) calc(50% + 0.75px), var(--paper) calc(50% + 0.75px));
+  }
+  .card:hover { border-color: var(--line-strong); }
+  .card:has(input:checked) { border: var(--stroke-strong) solid var(--ink); padding: calc(var(--space-4) - 1px); }
+  .card:has(input:checked)::after { display: none; }
+  .card:has(input:focus-visible) { outline: var(--stroke-strong) solid var(--focus); outline-offset: 2px; }
+  .card input { position: absolute; opacity: 0; pointer-events: none; }
+  .card .name { font: 700 20px/28px var(--font-sans); }
+  .card .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .tag {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 var(--space-2);
+    font: 700 12px/16px var(--font-mono); letter-spacing: 0.02em; white-space: nowrap;
+    border: var(--stroke) solid var(--ink); color: var(--ink);
+  }
+  .card:has(input:checked) .tag, .tag.solid { background: var(--ink); color: var(--on-ink); }
+  .file { font: 400 12px/16px var(--font-mono); color: var(--ink-muted); overflow-wrap: anywhere; }
+
+  /* 连接说明和烧录按钮 */
+  .flash { display: flex; flex-direction: column; gap: var(--space-4); max-width: var(--measure-prose); }
+  .connect {
+    margin: 0; padding: var(--space-3) var(--space-4); background: var(--paper-sunken);
+    border-left: var(--stroke-strong) solid var(--ink); font-size: 14px; line-height: 22px;
+  }
+  .connect .label { display: block; margin-bottom: var(--space-1); font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; color: var(--ink-muted); }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+  .btn {
+    display: inline-flex; align-items: center; height: var(--size-control); padding: 0 var(--space-6);
+    font: 700 14px/22px var(--font-sans); white-space: nowrap; cursor: pointer;
+    border: var(--stroke) solid var(--ink); border-radius: 0; background: var(--ink); color: var(--on-ink);
+    clip-path: polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+    transition: background-color var(--duration-fast) linear;
+  }
+  .btn:hover { background: var(--ink-muted); border-color: var(--ink-muted); }
+  .btn:active { transform: translateY(1px); }
+  .status { font-size: 14px; line-height: 22px; color: var(--ink-muted); }
+
+  /* 说明 */
+  .notes { margin: 0; padding: 0; list-style: none; max-width: var(--measure-prose); border-top: var(--stroke) solid var(--line); }
+  .notes li { padding: var(--space-3) 0; border-bottom: var(--stroke) solid var(--line); font-size: 14px; line-height: 22px; }
+
+  footer { background: var(--paper-sunken); border-top: var(--stroke) solid var(--line); }
+  .foot-in {
+    max-width: var(--measure-page); margin: 0 auto; padding: var(--space-6) var(--space-4);
+    display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); font-size: 14px; line-height: 22px; color: var(--ink-muted);
+  }
+  .foot-in .spacer { flex: 1; }
+
+  @media (max-width: 560px) {
+    main { padding-top: var(--space-8); }
+    .nav .product { display: none; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1 data-i18n="title"></h1>
-    <div class="lang">
+<header class="nav">
+  <div class="nav-in">
+    <svg class="logo" viewBox="125 157 350 127" role="img" aria-label="XRobot"><path fill="currentColor" d="m243.119 157-.001 12.887 12.799 12.859h21.387v-1.396l5.5-5.526h34.391l5.5 5.526v1.396h21.387l12.798-12.859v-12.888h4.5v10.16h20.705l10.81 10.856 60.64.001 14.826 14.895v23.81h1.388l5.501 5.52v24.186l-5.5 5.527h-1.391v17.406l-14.815 14.89H378.13l-11.283-11.341H315.15v2.17l-3.58 5.818h-22.61l-3.58-5.818-.001-2.17h-52.522l-11.282 11.341h-75.413l-14.816-14.89-.001-17.407h-1.095l-5.5-5.526v-24.185l5.501-5.521h1.387v-23.81l14.826-14.895 60.64-.001 10.81-10.855h20.704V157h4.5Zm137.096 14.659H361.38v.087l-15.428 15.5h-23.257v1.396l-5.5 5.526h-34.39l-5.5-5.526-.001-1.396h-23.257l-15.428-15.5-.001-.087h-18.834l-10.81 10.857-60.64-.001-12.196 12.253v21.952h1.391l5.502 5.522v24.185l-5.5 5.527h-1.686V267.5l12.186 12.248h71.674l11.282-11.339h54.392l.001-.04 3.58-5.818h22.61l3.58 5.819v.038l53.568.001L380 279.75h71.672l12.187-12.249v-15.548h-1.39l-5.5-5.526v-24.185l5.502-5.521h1.39v-21.953l-12.197-12.253-60.638.001-10.811-10.857Zm-71.16 95.393h-17.581l-1.595 2.593v4.159l1.595 2.593h17.581l1.595-2.591v-4.163l-1.595-2.591Zm-158.223-1.996 5.517 5.542h60.176v2.25h-61.111l-6.176-6.204 1.594-1.588Zm301.962 0 1.595 1.588-6.176 6.204H387.1v-2.25h60.175l5.518-5.542ZM135.66 221.22h-3.541l-2.869 2.88v20.47l2.87 2.883h3.54l2.87-2.884V224.1l-2.87-2.88Zm332.22 0h-3.541l-2.87 2.88v20.469l2.87 2.884h3.54l2.871-2.884v-20.468l-2.87-2.881Zm-332.865 7.873v10.345h-2.25v-10.345h2.25Zm332.22 0v10.345h-2.25v-10.345h2.25ZM232.71 184.92v2.25h-11.248l-7.213 7.248h-57.39v-2.25h56.453l7.216-7.248h12.182Zm146.76 0 7.214 7.248h56.455v2.25h-57.39l-7.215-7.248h-11.247v-2.25h12.183Zm-64.146-4.598h-30.651l-2.87 2.883v3.579l2.87 2.883h30.651l2.87-2.883v-3.579l-2.87-2.883Zm-5.095 3.548v2.25H289.63v-2.25h20.6Z"/><path fill="currentColor" d="M231.6 245 L223.3 252.5 L211 238.3 L198.7 252.4 L190.3 244.9 L203.5 229.7 L190.3 214.5 L198.7 207 L211 221.2 L223.3 207.1 L231.6 214.6 L218.4 229.8 L231.6 245 M273.1 247.4 L263.4 253 L252.8 234.8 L246.8 234.8 L246.8 252.1 L235.5 252.1 L235.5 215.2 L243 207.7 L272.3 207.7 L272.3 227.4 L265.4 234.2 L273.1 247.4 M246.8 216.2 L246.8 226.3 L261 226.3 L261 216.2 L246.8 216.2 M299.3 252.1 L277.7 252.1 L277.7 233.4 L285.2 225.9 L306.7 225.9 L306.7 244.7 L299.3 252.1 M289 234.4 L289 243.6 L295.5 243.6 L295.5 234.4 L289 234.4 M333.4 252.1 L311.9 252.1 L311.9 207.7 L323.2 207.7 L323.2 225.9 L340.9 225.9 L340.9 244.7 L333.4 252.1 M323.2 234.4 L323.2 243.6 L329.7 243.6 L329.7 234.4 L323.2 234.4 M367.3 252.1 L345.8 252.1 L345.8 233.4 L353.2 225.9 L374.7 225.9 L374.7 244.7 L367.3 252.1 M357 234.4 L357 243.6 L363.5 243.6 L363.5 234.4 L357 234.4 M385.1 234.4 L379.6 234.4 L379.6 225.9 L385.1 225.9 L385.1 215.3 L396.4 215.3 L396.4 225.9 L406.8 225.9 L406.8 234.4 L396.4 234.4 L396.4 243.6 L405.9 243.6 L405.9 249 L406.9 249.8 L406.9 252.1 L385.1 252.1 L385.1 234.4 Z"/></svg>
+    <span class="product">XR-DAP</span>
+    <span class="spacer"></span>
+    <div class="toggle" role="group" aria-label="Language">
       <button type="button" data-lang="zh">中文</button>
-      <button type="button" data-lang="en">English</button>
+      <button type="button" data-lang="en">EN</button>
     </div>
-  </header>
+  </div>
+</header>
+
+<main>
+  <div class="path"><span>XR-DAP</span><span class="sep">/</span><span data-i18n="pathPage"></span></div>
+  <h1 data-i18n="title"></h1>
   <p class="lead" data-i18n="lead"></p>
 
-  <fieldset id="boards"><legend data-i18n="choose"></legend></fieldset>
-  <div class="note" id="note"></div>
+  <section>
+    <div class="path"><span>01</span><span class="sep">/</span><span data-i18n="stepBoard"></span></div>
+    <fieldset class="boards" id="boards"><legend data-i18n="stepBoard"></legend></fieldset>
+  </section>
 
-  <div>
-    <esp-web-install-button id="install">
-      <button slot="activate" data-i18n="flash"></button>
-      <span slot="unsupported" class="warn" data-i18n="unsupported"></span>
-      <span slot="not-allowed" class="warn" data-i18n="notAllowed"></span>
-    </esp-web-install-button>
-    <span class="version" id="version"></span>
-  </div>
+  <section>
+    <div class="path"><span>02</span><span class="sep">/</span><span data-i18n="stepFlash"></span></div>
+    <div class="flash">
+      <p class="connect"><span class="label" data-i18n="connectLabel"></span><span id="note"></span></p>
+      <div class="actions">
+        <esp-web-install-button id="install">
+          <button slot="activate" class="btn" data-i18n="flash"></button>
+          <span slot="unsupported" class="status" data-i18n="unsupported"></span>
+          <span slot="not-allowed" class="status" data-i18n="notAllowed"></span>
+        </esp-web-install-button>
+        <span class="tag" id="version" hidden></span>
+      </div>
+    </div>
+  </section>
 
-  <section class="help">
-    <h2 data-i18n="helpTitle"></h2>
-    <ul>
-      <li data-i18n="helpKeep"></li>
-      <li data-i18n="helpBoot"></li>
-      <li data-i18n-html="helpCli"></li>
+  <section>
+    <div class="path"><span>03</span><span class="sep">/</span><span data-i18n="notesTitle"></span></div>
+    <ul class="notes">
+      <li data-i18n="noteKeep"></li>
+      <li data-i18n="noteBoot"></li>
+      <li data-i18n-html="noteCli"></li>
     </ul>
   </section>
 </main>
+
+<footer>
+  <div class="foot-in">
+    <span>XR-DAP · Apache-2.0</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/Jiu-xiao/XRDAP-ESP">XRDAP-ESP</a>
+    <a href="https://github.com/Jiu-xiao/XRDAP-Host">XRDAP-Host</a>
+    <a href="https://github.com/Jiu-xiao/XRDAP-ESP/releases">Releases</a>
+  </div>
+</footer>
+
 <script>
   const TEXT = {
     zh: {
-      title: "XR-DAP 网页烧录",
-      lead: "在浏览器里给 ESP 探针烧固件，不用安装 Python 和 esptool。需要 Chrome 或 Edge 桌面版。",
-      choose: "选择板子",
-      flash: "烧录",
-      version: "固件版本",
-      unsupported: "这个浏览器不支持 Web Serial，请用 Chrome 或 Edge 桌面版。",
-      notAllowed: "页面需要通过 HTTPS 打开才能访问串口。",
-      helpTitle: "说明",
-      helpKeep: "升级会保留探针里的 Wi-Fi 设置。",
-      helpBoot: "连不上或提示进不了下载模式时：按住 BOOT，按一下 RESET（EN），松开 BOOT，再点“烧录”。",
-      helpCli: "也可以用命令行烧录，见 <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a> 的 README。",
+      pathPage: "ESP32 系列",
+      title: "网页烧录",
+      lead: "用 Chrome 或 Edge 桌面版，经 Web Serial 写入固件。",
+      stepBoard: "选择板子",
+      stepFlash: "连接并烧录",
+      connectLabel: "连接",
+      flash: "烧录固件",
+      version: "固件",
+      unsupported: "需要 Chrome 或 Edge 桌面版。",
+      notAllowed: "需要通过 HTTPS 打开本页。",
+      notesTitle: "说明",
+      noteKeep: "升级不清除 Wi-Fi 设置。",
+      noteBoot: "连不上时：按住 BOOT，按一下 EN，松开 BOOT，再烧录。",
+      noteCli: "命令行烧录和接线见 <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a>，电脑端工具见 <a href=\"https://github.com/Jiu-xiao/XRDAP-Host\">XRDAP-Host</a>。",
     },
     en: {
-      title: "XR-DAP web flasher",
-      lead: "Flash the ESP probe firmware from the browser, without installing Python or esptool. Needs desktop Chrome or Edge.",
-      choose: "Choose the board",
-      flash: "Flash",
-      version: "Firmware version",
-      unsupported: "This browser has no Web Serial. Use desktop Chrome or Edge.",
-      notAllowed: "The page must be opened over HTTPS to access serial ports.",
-      helpTitle: "Notes",
-      helpKeep: "An upgrade keeps the Wi-Fi settings stored in the probe.",
-      helpBoot: "If the port does not connect or download mode cannot be entered: hold BOOT, press RESET (EN) once, release BOOT, then press Flash.",
-      helpCli: "Flashing from the command line is described in the <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a> README.",
+      pathPage: "ESP32 family",
+      title: "Web flasher",
+      lead: "Writes the firmware over Web Serial from desktop Chrome or Edge.",
+      stepBoard: "Choose the board",
+      stepFlash: "Connect and flash",
+      connectLabel: "CONNECT",
+      flash: "Flash firmware",
+      version: "Firmware",
+      unsupported: "Needs desktop Chrome or Edge.",
+      notAllowed: "Open this page over HTTPS.",
+      notesTitle: "Notes",
+      noteKeep: "An upgrade keeps the Wi-Fi settings.",
+      noteBoot: "If the port does not connect: hold BOOT, press EN once, release BOOT, then flash again.",
+      noteCli: "Command-line flashing and wiring: <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a>. PC tool: <a href=\"https://github.com/Jiu-xiao/XRDAP-Host\">XRDAP-Host</a>.",
     },
   };
 
   let boards = [];
-  let lang = "zh";
+  let lang = navigator.language.startsWith("zh") ? "zh" : "en";
   try {
-    const saved = localStorage.getItem("xrdap-flash-lang");
-    lang = saved || (navigator.language.startsWith("zh") ? "zh" : "en");
+    lang = localStorage.getItem("xrdap-flash-lang") || lang;
   } catch (e) {
-    lang = navigator.language.startsWith("zh") ? "zh" : "en";
+    // 存储不可用时按浏览器语言显示
   }
 
   function selected() {
@@ -151,13 +270,16 @@
   }
 
   async function showVersion(board) {
-    const out = document.getElementById("version");
-    out.textContent = "";
+    const tag = document.getElementById("version");
+    tag.hidden = true;
     try {
       const manifest = await (await fetch(`manifest-${board.id}.json`)).json();
-      if (selected() === board) out.textContent = `${TEXT[lang].version} ${manifest.version}`;
+      if (selected() === board) {
+        tag.textContent = `${TEXT[lang].version} ${manifest.version}`;
+        tag.hidden = false;
+      }
     } catch (e) {
-      // The page still flashes; only the version label is missing.
+      // 只少一个版本标签，烧录不受影响
     }
   }
 
@@ -169,41 +291,48 @@
 
   function render() {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-    document.title = TEXT[lang].title;
+    document.title = `XR-DAP ${TEXT[lang].title}`;
     document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = TEXT[lang][el.dataset.i18n]));
     document.querySelectorAll("[data-i18n-html]").forEach((el) => (el.innerHTML = TEXT[lang][el.dataset.i18nHtml]));
-    document.querySelectorAll(".lang button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+    document.querySelectorAll(".toggle button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === lang));
 
     const current = selected();
     const set = document.getElementById("boards");
     set.querySelectorAll("label").forEach((l) => l.remove());
     boards.forEach((board, i) => {
-      const label = document.createElement("label");
-      label.className = "board";
+      const card = document.createElement("label");
+      card.className = "card";
       const input = document.createElement("input");
       input.type = "radio";
       input.name = "board";
       input.value = board.id;
       input.checked = current ? current.id === board.id : i === 0;
       input.addEventListener("change", () => selectBoard(board));
-      const text = document.createElement("span");
-      text.textContent = board.name[lang];
-      const chip = document.createElement("small");
-      chip.textContent = `${board.chip} · ${board.asset}`;
-      text.append(chip);
-      label.append(input, text);
-      set.append(label);
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = board.name[lang];
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const chip = document.createElement("span");
+      chip.className = "tag";
+      chip.textContent = board.chip;
+      const file = document.createElement("span");
+      file.className = "file";
+      file.textContent = board.asset;
+      meta.append(chip, file);
+      card.append(input, name, meta);
+      set.append(card);
     });
     if (boards.length) selectBoard(selected());
   }
 
-  document.querySelectorAll(".lang button").forEach((button) =>
+  document.querySelectorAll(".toggle button").forEach((button) =>
     button.addEventListener("click", () => {
       lang = button.dataset.lang;
       try {
         localStorage.setItem("xrdap-flash-lang", lang);
       } catch (e) {
-        // Language choice is not remembered; nothing else depends on it.
+        // 语言选择不保存，其余不受影响
       }
       render();
     })
