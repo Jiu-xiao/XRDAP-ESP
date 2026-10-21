@@ -27,6 +27,7 @@
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "reg_gpio_pin.hpp"
+#include "restart.hpp"
 #include "serial_link.hpp"
 #include "serial_mux.hpp"
 #include "swd_clock.hpp"
@@ -60,6 +61,8 @@ extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
   LibXR::PlatformInit(Config::kLibxrTimerPriority, 4096);
+  (void)RestartInit();  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on
+                        // failure
 
   // GPIO 寄存器在哪个核上都能访问，SWD 对象直接在这里创建。
   static SwdSet swd_set;

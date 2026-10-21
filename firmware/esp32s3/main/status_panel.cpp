@@ -18,9 +18,6 @@ constexpr const char* TAG = "xrdap_panel";
 constexpr uint32_t kTickMs = 20;
 /// 按住按键多久清除热点参数 / How long the button must be held to clear the credentials.
 constexpr uint32_t kWifiClearHoldMs = 5000;
-/// 清除后多久重启，让紫色常亮能被看到 / Delay before the restart, so solid purple is
-/// seen.
-constexpr uint32_t kRestartDelayMs = 500;
 /// 峰值亮度，0 到 255；灯离眼睛近，低一点就够 / Peak level, 0 to 255; the LED sits
 /// close to the eye, so a low level is enough.
 constexpr uint32_t kPeak = 96;
@@ -93,7 +90,7 @@ void StatusPanel::Run()
     {
       ESP_LOGW(TAG, "按键按住 %u ms，清除热点参数并重启", (unsigned)kWifiClearHoldMs);
       (void)WifiStaClear();
-      RestartLater(kRestartDelayMs);
+      RestartLater();
     }
 
     // 网络客户端在用就是无线；否则 USB 已配置或最近有串口命令是有线；只连着 Wi-Fi 是
