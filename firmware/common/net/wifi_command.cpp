@@ -22,13 +22,6 @@ constexpr uint8_t kFlagStorageRepaired = 0x04U;
 // reset reason.
 constexpr size_t kStatusHead = 9U;
 constexpr size_t kStatusTail = 2U;
-
-// 清除请求在 op 之后要带的确认字节，由 XRDAP-Core protocol.md 3.7 定义，不兼容不带确认的
-// 旧请求（A4 用户决定 ③）。字节定下之前没有参数，请求仍是 86 02 / Confirm bytes the
-// clear request carries after the op, defined by XRDAP-Core protocol.md 3.7; old
-// requests without them are not accepted (A4 user decision 3). Until the bytes are
-// defined the request has no arguments and stays 86 02.
-bool ClearConfirmed(const uint8_t* /*args*/, uint16_t count) { return count == 0U; }
 }  // namespace
 
 bool WifiCommand::Handle(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
@@ -122,7 +115,10 @@ bool WifiCommand::Set(WifiSettings& settings, const uint8_t* req, uint16_t len,
 bool WifiCommand::Clear(WifiSettings& settings, const uint8_t* req, uint16_t len,
                         uint8_t* resp, uint16_t& out)
 {
-  if (!ClearConfirmed(&req[2], static_cast<uint16_t>(len - 2U)))
+  // 86 02 A5：确认字节不对就不清除，不兼容不带确认的旧请求（A4 用户决定 ③）/ 86 02 A5:
+  // nothing is cleared without the right confirm byte; the old request without it is not
+  // accepted (A4 user decision 3).
+  if (len != 3U || req[2] != kWifiClearConfirm)
   {
     return Reply(resp, kStatusArg, out);
   }
