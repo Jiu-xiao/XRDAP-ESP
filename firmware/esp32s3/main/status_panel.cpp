@@ -89,7 +89,7 @@ void StatusPanel::Run()
     if (held_ms >= kWifiClearHoldMs && !RestartPending())
     {
       ESP_LOGW(TAG, "按键按住 %u ms，清除热点参数并重启", (unsigned)kWifiClearHoldMs);
-      (void)WifiStaClear();
+      (void)WifiStaSettings().Clear();
       RestartLater();
     }
 

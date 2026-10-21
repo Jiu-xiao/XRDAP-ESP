@@ -35,8 +35,13 @@ template <typename UartT>
 class UartConsole
 {
  public:
-  /// @param uart 串口，生命周期需长于本对象 / Serial port; must outlive this object.
-  explicit UartConsole(UartT& uart) : uart_(uart), core_(&UartConsole::Write, this) {}
+  /// @param uart 串口 / Serial port.
+  /// @param settings 命令行读写的 Wi-Fi 设置 / Wi-Fi settings the console works on.
+  /// @note 两者生命周期都需长于本对象 / Both must outlive this object.
+  UartConsole(UartT& uart, WifiSettings& settings)
+      : uart_(uart), core_(settings, &UartConsole::Write, this)
+  {
+  }
 
   /// @brief 在指定的核上启动命令行任务 / Start the console task on a core.
   void Start(int core)
