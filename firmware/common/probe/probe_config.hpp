@@ -35,6 +35,11 @@ constexpr unsigned kConsolePriority = 4;
 constexpr uint16_t kUsbVid = 0x1D50;
 /// USB 产品号 / USB product ID.
 constexpr uint16_t kUsbPid = 0x6199;
+/// USB/IP 虚拟设备的版本号。Windows 按 VID、PID、版本号缓存描述符，所以它必须与 S3 原生
+/// USB 设备的 kUsbBcdDevice 不同（esp32s3/main/config.hpp 里检查）/ Release of the USB/IP
+/// virtual device. Windows caches descriptors by VID, PID and release, so it must differ
+/// from the S3 native device's kUsbBcdDevice (checked in esp32s3/main/config.hpp).
+constexpr uint16_t kUsbipBcdDevice = 0x0200;
 
 /// SWD 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档以减小边沿过冲和振铃；0 档的
 /// 边沿太慢，高时钟下出错 / SWD pad drive strength, 0 weakest to 3 strongest (IDF

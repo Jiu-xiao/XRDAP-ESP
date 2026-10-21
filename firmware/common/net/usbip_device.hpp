@@ -148,7 +148,7 @@ class UsbipDevice
   static constexpr char kBusId[] = "1-1";
   static constexpr uint16_t kVid = Config::kUsbVid;
   static constexpr uint16_t kPid = Config::kUsbPid;
-  static constexpr uint16_t kBcdDevice = 0x0200;
+  static constexpr uint16_t kBcdDevice = Config::kUsbipBcdDevice;
   static constexpr uint8_t kMsVendorCode = 0x20;
   static constexpr size_t kMaxPacket = Config::kDapPacketSize;
   static constexpr char kMsName[] = "DeviceInterfaceGUIDs";
