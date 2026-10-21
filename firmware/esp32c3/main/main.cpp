@@ -27,7 +27,6 @@
 #include "debug/swd_general_gpio.hpp"
 #include "dedic_gpio_pin.hpp"
 #include "esp_cdc_jtag.hpp"
-#include "esp_log.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
 #include "libxr.hpp"
@@ -41,8 +40,6 @@
 namespace
 {
 using namespace XrDap;
-
-constexpr const char* TAG = "xrdap";
 
 using SwdLink = LibXR::Debug::SwdGeneralGPIO<DedicGpioPin, DedicGpioPin>;
 // DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal() 执行命令，所以不需要
@@ -69,8 +66,12 @@ extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
   LibXR::PlatformInit(Config::kLibxrTimerPriority, 4096);
-  (void)RestartInit();  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on
-                        // failure
+  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on failure.
+  (void)RestartInit();
+  // NVS 在命令行、0x86、状态灯之前初始化一次；失败时它们报存储错误 / NVS is set up once
+  // before the console, 0x86 and the status light; on failure they report storage
+  // errors.
+  (void)WifiStaInitStorage();
 
   // 单核芯片，专用 GPIO 在哪个任务里创建都可以用。
   static SwdSet swd_set;
@@ -94,8 +95,6 @@ extern "C" void app_main(void)
   static SerialLink link(adapter, usj);
   static SerialMux<SerialLink, LibXR::ESP32CDCJtag> mux(link, usj, WifiStaSettings());
   mux.Start(Config::kCore, Config::kSerialPriority);
-  ESP_LOGI(TAG, "USB Serial/JTAG 上的串口 DAP 链路已启动，SWCLK GPIO%d，SWDIO GPIO%d",
-           Config::kSwclkGpio, Config::kSwdioGpio);
 
   // UART0 上也有一个命令行，给引出了 UART0 的开发板用。
   static LibXR::ESP32UART console_uart(

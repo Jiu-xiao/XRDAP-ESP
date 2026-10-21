@@ -76,7 +76,29 @@ TEST(console_clear_clears_and_restarts)
   Console c;
   c.Type("wifi clear\r");
   CHECK(c.wifi.clears == 1);
+  CHECK(c.wifi.cleared_by == XrDap::EraseSource::CONSOLE);
   CHECK(c.wifi.restarts == 1);
+}
+
+// wifi status 给出清除来源和复位原因，没有热点参数时也给（A4 用户决定 ⑤）/ wifi status
+// shows the erase source and the reset reason, also without credentials (A4 user
+// decision 5).
+TEST(console_status_shows_erase_source_and_reset_reason)
+{
+  Console c;
+  c.wifi.status.last_erase = XrDap::EraseSource::BUTTON;
+  c.wifi.status.reset_reason = XrDap::ResetReason::SOFTWARE;
+  c.Type("wifi status\r");
+  CHECK(c.Printed("上次清除：按键"));
+  CHECK(c.Printed("上次复位：软件重启"));
+}
+
+TEST(console_status_reports_storage_repair)
+{
+  Console c;
+  c.wifi.status.storage_repaired = true;
+  c.Type("wifi status\r");
+  CHECK(c.Printed("NVS 损坏"));
 }
 
 TEST(console_status_without_credentials)

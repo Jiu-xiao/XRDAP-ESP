@@ -8,6 +8,7 @@
 // once at start-up; after that any task may schedule the restart.
 
 #include "esp_err.h"
+#include "wifi_settings.hpp"
 
 namespace XrDap
 {
@@ -29,5 +30,10 @@ void RestartLater();
 /// @brief 是否已经安排了重启 / Whether a restart is scheduled.
 /// @note 可在任意任务调用 / Callable from any task.
 bool RestartPending();
+
+/// @brief 上次复位的原因（esp_reset_reason，读 RTC 寄存器）/ Cause of the last reset
+///        (esp_reset_reason, read from the RTC registers).
+/// @note 可在任意任务调用 / Callable from any task.
+ResetReason LastResetReason();
 
 }  // namespace XrDap

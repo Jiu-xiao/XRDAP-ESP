@@ -24,6 +24,7 @@ class FakeWifiSettings final : public XrDap::WifiSettings
   std::string saved_password;
   int saves = 0;
   int clears = 0;
+  XrDap::EraseSource cleared_by = XrDap::EraseSource::NONE;
   int restarts = 0;
 
   XrDap::WifiStatus Status() override { return status; }
@@ -44,13 +45,14 @@ class FakeWifiSettings final : public XrDap::WifiSettings
     return SaveResult::OK;
   }
 
-  bool Clear() override
+  bool Clear(XrDap::EraseSource source) override
   {
     if (!storage_ok)
     {
       return false;
     }
     ++clears;
+    cleared_by = source;
     return true;
   }
 

@@ -42,6 +42,32 @@ enum class WifiLink : uint8_t
   UP,       ///< 已拿到 IP / IP obtained.
 };
 
+/// 是什么清除了已保存的热点参数，存在 NVS 里，跨重启保留；数值即 0x86 状态里的字节 /
+/// What erased the saved credentials; kept in NVS across restarts. The values are the
+/// byte in the 0x86 status.
+enum class EraseSource : uint8_t
+{
+  NONE = 0,            ///< 没有清除过，或记录丢失 / Never erased, or no record.
+  BUTTON = 1,          ///< 板上按键长按 / Board button long press.
+  CONSOLE = 2,         ///< 命令行 wifi clear / Console wifi clear.
+  VENDOR_COMMAND = 3,  ///< 0x86 清除 / 0x86 clear.
+  STORAGE_REPAIR = 4,  ///< NVS 损坏，擦除重建 / NVS damaged, erased and rebuilt.
+};
+
+/// 上次复位的原因；数值即 0x86 状态里的字节 / Cause of the last reset; the values are
+/// the byte in the 0x86 status.
+enum class ResetReason : uint8_t
+{
+  UNKNOWN = 0,   ///< 未知 / Unknown.
+  POWER_ON = 1,  ///< 上电 / Power-on.
+  SOFTWARE = 2,  ///< 软件重启（改设置后）/ Software restart (after a setting change).
+  WATCHDOG = 3,  ///< 看门狗 / Watchdog.
+  PANIC = 4,     ///< 异常 / Panic.
+  BROWNOUT = 5,  ///< 欠压 / Brown-out.
+  OTHER = 6,     ///< 其他（外部复位脚、深睡、USB/JTAG 等）/ Other (reset pin, deep
+                 ///< sleep, USB/JTAG...).
+};
+
 /// Wi-Fi 状态快照 / Wi-Fi status snapshot.
 struct WifiStatus
 {
@@ -56,6 +82,13 @@ struct WifiStatus
   uint8_t ip[4];
   /// 信号强度，未连接时为 0 / Signal strength; 0 when not connected.
   int8_t rssi;
+  /// 本次启动时 NVS 损坏，已擦除重建 / NVS was damaged at this boot and was erased and
+  /// rebuilt.
+  bool storage_repaired;
+  /// 上次清除热点参数的来源 / What last erased the credentials.
+  EraseSource last_erase;
+  /// 上次复位的原因 / Cause of the last reset.
+  ResetReason reset_reason;
 };
 
 /// Wi-Fi 设置 / Wi-Fi settings.
@@ -80,10 +113,11 @@ class WifiSettings
   ///        restart.
   virtual SaveResult Save(const char* ssid, const char* password) = 0;
 
-  /// @brief 清除已保存的热点参数；本来就没有也算成功 / Erase the saved credentials;
-  ///        succeeds even if none exist.
+  /// @brief 清除已保存的热点参数并记下来源；本来就没有也算成功 / Erase the saved
+  ///        credentials and record the source; succeeds even if none exist.
+  /// @param source 谁要求清除 / Who asked for the erase.
   /// @return 存储读写失败时返回 false / False when the storage access failed.
-  virtual bool Clear() = 0;
+  virtual bool Clear(EraseSource source) = 0;
 
   /// @brief 约 0.5 s 后重启，让新设置生效；立即返回 / Restart in about 0.5 s so the new
   ///        setting takes effect; returns at once.

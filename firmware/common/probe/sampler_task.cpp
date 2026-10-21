@@ -3,7 +3,6 @@
 
 #include "driver/gptimer.h"
 #include "esp_attr.h"
-#include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -62,7 +61,6 @@ class GptimerTick final : public Vendor::TickTimer
         gptimer_register_event_callbacks(t, &cbs, this) != ESP_OK ||
         gptimer_enable(t) != ESP_OK)
     {
-      ESP_LOGW("xrdap", "采样定时器创建失败，改为每 1 ms 查一次");
       return false;
     }
     timer_ = t;

@@ -21,7 +21,6 @@
 #include "daplink_v2_profile_swd.hpp"
 #include "debug/dap_serial_transport.hpp"
 #include "debug/swd_general_gpio.hpp"
-#include "esp_log.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
 #include "libxr.hpp"
@@ -35,8 +34,6 @@
 namespace
 {
 using namespace XrDap;
-
-constexpr const char* TAG = "xrdap";
 
 using SwdLink = LibXR::Debug::SwdGeneralGPIO<RegGpioPin, RegGpioPin>;
 using Swd = SwdWithClock<RegGpioPin>;
@@ -61,8 +58,12 @@ extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
   LibXR::PlatformInit(Config::kLibxrTimerPriority, 4096);
-  (void)RestartInit();  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on
-                        // failure
+  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on failure.
+  (void)RestartInit();
+  // NVS 在命令行、0x86、状态灯之前初始化一次；失败时它们报存储错误 / NVS is set up once
+  // before the console, 0x86 and the status light; on failure they report storage
+  // errors.
+  (void)WifiStaInitStorage();
 
   // GPIO 寄存器在哪个核上都能访问，SWD 对象直接在这里创建。
   static SwdSet swd_set;
@@ -89,8 +90,6 @@ extern "C" void app_main(void)
   static SerialLink link(adapter, uart);
   static SerialMux<SerialLink, LibXR::ESP32UART> mux(link, uart, WifiStaSettings());
   mux.Start(Config::kSwdCore, Config::kSerialPriority);
-  ESP_LOGI(TAG, "UART0 上的串口 DAP 链路已启动，SWCLK GPIO%d，SWDIO GPIO%d",
-           Config::kSwclkGpio, Config::kSwdioGpio);
 
   StartNetwork(
       dap, vendor,
