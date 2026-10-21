@@ -2,26 +2,22 @@
 #pragma once
 
 // 板上的状态灯（一颗 WS2812B）和 Wi-Fi 清除按键，引脚见 config.hpp。一个低优先级任务
-// 每 20 ms 刷新灯色、读一次按键。上电时彩虹扫过一圈，之后主色表示连接：
-//   红         有线：USB 已配置，或 5 s 内有经 USB、串口来的 DAP 命令
-//   蓝         无线：有网络调试客户端（OpenOCD TCP 或 USB/IP），或只连着 Wi-Fi
-//   紫         USB 和 Wi-Fi 都没连上；正在连 Wi-Fi 时呼吸
-// 上位机经 DAP_HostStatus 报告已连接时主色与紫色来回（2 s 一次），目标运行中时红蓝来回
-// （1 s 一次）；每条 DAP 命令把灯提亮再衰减，命令不断时约 12 Hz 闪烁。改配置时是紫色：
-// 按住按键快闪，按满 5 s 或经命令行、0x86 改了热点参数后常亮，随后重启。
+// 每 20 ms 读一次按键、按 XRDAP-Core 的状态灯规则（status_light.hpp）刷新灯色。这里只
+// 判断连接和设置状态：
+//   有线   USB 已配置，或 5 s 内有经 USB、串口来的 DAP 命令
+//   无线   有网络调试客户端（OpenOCD TCP 或 USB/IP），或只连着 Wi-Fi
+//   正在连 Wi-Fi 正在入网
+//   改设置 按住按键（快闪）；按满 5 s 或经命令行、0x86 改了热点参数后（常亮），随后重启
 //
 // On-board status light (one WS2812B) and Wi-Fi clear button; pins in config.hpp. A
-// low-priority task refreshes the light and reads the button every 20 ms. A rainbow
-// sweep runs at power-up; afterwards the main colour shows the connection:
-//   red        wired: USB configured, or a DAP command over USB or serial within 5 s
-//   blue       wireless: a network debug client (OpenOCD TCP or USB/IP), or only Wi-Fi
-//   purple     neither USB nor Wi-Fi; breathing while joining Wi-Fi
-// While the host reports connected through DAP_HostStatus the main colour fades to
-// purple and back every 2 s, and while the target runs red and blue alternate every
-// second; every DAP command brightens the light, which then fades (about 12 Hz under
-// steady traffic). Changing a setting is purple: fast blinking while the button is held,
-// solid after 5 s or after the credentials were changed from the console or 0x86, then
-// the probe restarts.
+// low-priority task reads the button every 20 ms and refreshes the light by XRDAP-Core's
+// status light rule (status_light.hpp). Only the link and setting state are decided
+// here:
+//   wired     USB configured, or a DAP command over USB or serial within 5 s
+//   wireless  a network debug client (OpenOCD TCP or USB/IP), or only Wi-Fi
+//   joining   Wi-Fi associating
+//   setting   button held (fast blink); solid after 5 s or after the credentials were
+//             changed from the console or 0x86, then the probe restarts
 
 #include <atomic>
 #include <cstdint>

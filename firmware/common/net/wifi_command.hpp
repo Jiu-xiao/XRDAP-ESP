@@ -2,13 +2,14 @@
 #pragma once
 
 // 厂商命令 0x86：经 DAP 本身（USB、串口、TCP 均可）查询、设置、清除 Wi-Fi 热点参数，
-// 无需另开串口终端。格式见 docs/protocol.md 3.7 节。
+// 无需另开串口终端。格式见 XRDAP-Core 的 docs/protocol.md 3.7 节。
 //   0x86 0x00                         查询：回状态、标志、IP、信号、热点名（不回密码）
 //   0x86 0x01 len ssid len password   保存热点参数，回复发出后约 0.5 秒重启
 //   0x86 0x02                         清除热点参数，回复发出后约 0.5 秒重启
 //
 // Vendor command 0x86: query, set or clear the Wi-Fi credentials over DAP itself (USB,
-// serial or TCP) without a separate serial terminal. See docs/protocol.md section 3.7.
+// serial or TCP) without a separate serial terminal. See section 3.7 of docs/protocol.md
+// in XRDAP-Core.
 //   0x86 0x00                         query: status, flags, IP, RSSI, SSID (no password)
 //   0x86 0x01 len ssid len password   save credentials; restart ~0.5 s after the reply
 //   0x86 0x02                         clear credentials; restart ~0.5 s after the reply

@@ -43,7 +43,7 @@ S3 的状态灯和按键（开发板：GPIO48 的 RGB 灯、BOOT 键；Lite 板�
 | 紫 | USB 和 Wi-Fi 都没连上；正在连 Wi-Fi 时呼吸 |
 | 主色与紫色来回，2 秒一次 | 上位机经 DAP_HostStatus 报告已连接 |
 | 红蓝来回，1 秒一次 | 上位机报告目标运行中 |
-| 闪亮 | 每条 DAP 命令（USB、串口、Wi-Fi 都算）把灯提亮再暗下去，命令不断时约 12 Hz 闪烁 |
+| 闪亮 | 每条 DAP 命令（USB、串口、Wi-Fi 都算）把灯提亮再暗下去，命令不断时约 15 Hz 闪烁 |
 | 紫色快闪 | 按键按住中；按满 5 秒变紫色常亮，清除热点参数并重启 |
 | 紫色常亮 | 刚改了热点参数（按键、命令行或 0x86 命令），马上重启 |
 
@@ -235,7 +235,7 @@ S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算（4 MHz 实测 4.03
 
 ### 自己编译
 
-需要 ESP-IDF v5.5。libxr 是 `third_party/libxr` 子模块。
+需要 ESP-IDF v5.5。libxr 是 `third_party/libxr` 子模块；厂商扩展、状态灯规则和探针身份来自 [XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)，是 `third_party/xrdap-core` 子模块。
 
 ```
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP.git
@@ -255,18 +255,17 @@ idf.py -B build-lite -D SDKCONFIG=build-lite/sdkconfig -D "SDKCONFIG_DEFAULTS=sd
 | 目录 | 内容 |
 |---|---|
 | `firmware/esp32s3`、`firmware/esp32c3`、`firmware/esp32` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级；S3 按板型选引脚），S3 的 SWD 引擎 |
-| `firmware/common/vendor` | XR 厂商扩展：协议、MEM-AP 访问、采样调度、帧缓冲、0x86 Wi-Fi 命令 |
-| `firmware/common/net` | Wi-Fi、OpenOCD TCP 服务、USB/IP 虚拟设备、mDNS |
+| `firmware/common/net` | Wi-Fi、0x86 Wi-Fi 命令、OpenOCD TCP 服务、USB/IP 虚拟设备、mDNS |
 | `firmware/common/serial`、`console` | 串口 DAP 链路、C3 的串口分流、Wi-Fi 命令行 |
-| `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤 |
+| `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤、采样任务和它的 gptimer |
 | `firmware/common/swd` | S3、C3 的专用 GPIO 引脚，传统 ESP32 的 GPIO 寄存器引脚，C3 和传统 ESP32 的 SWCLK 频率控制 |
-| `docs/protocol.md` | 串口帧、TCP 帧、厂商命令、探针身份、mDNS、USB/IP 设备 |
+| `third_party/xrdap-core` | XR 厂商扩展、状态灯规则、探针身份和协议文档（[XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)） |
 
 每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布 release。网页烧录站点由 `pages` 工作流发布：取最新 release 的固件和 main 上 `web/` 的页面，打标签的编译完成后、或 `web/` 有改动时重新发布（`web/make_site.py` 按 `web/boards.json` 为每块板生成 ESP Web Tools 的 manifest）。
 
 ### 厂商扩展
 
-除标准 CMSIS-DAP 命令外，探针实现了 0x80 到 0x86：一次读写多个地址、沿指针链读变量、在探针上按固定周期采样并由电脑批量取回、经 DAP 配 Wi-Fi。采样期间探针只接受 DAP_Info、DAP_HostStatus 和这组命令，所以采样和 OpenOCD 调试不能同时进行。格式见 [docs/protocol.md](docs/protocol.md)。
+除标准 CMSIS-DAP 命令外，探针实现了 0x80 到 0x86：一次读写多个地址、沿指针链读变量、在探针上按固定周期采样并由电脑批量取回、经 DAP 配 Wi-Fi。采样期间探针只接受 DAP_Info、DAP_HostStatus 和这组命令，所以采样和 OpenOCD 调试不能同时进行。格式见 XRDAP-Core 的 [docs/protocol.md](https://github.com/Jiu-xiao/XRDAP-Core/blob/main/docs/protocol.md)。
 
 ## 许可证
 

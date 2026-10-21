@@ -43,7 +43,7 @@ S3 status light and button (dev board: the RGB LED on GPIO48 and the BOOT key; L
 | Purple | Neither USB nor Wi-Fi connected; breathing while joining Wi-Fi |
 | Main colour fading to purple and back every 2 seconds | The host reported connected through DAP_HostStatus |
 | Red and blue alternating every second | The host reported the target running |
-| Flash | Every DAP command (USB, serial or Wi-Fi) brightens the light, which then fades; steady traffic flickers at about 12 Hz |
+| Flash | Every DAP command (USB, serial or Wi-Fi) brightens the light, which then fades; steady traffic flickers at about 15 Hz |
 | Fast purple blink | Button held; after 5 seconds it turns solid purple, the credentials are cleared and the probe restarts |
 | Solid purple | The credentials were just changed (button, console or command 0x86); the probe restarts |
 
@@ -237,7 +237,7 @@ On the S3, SWCLK high and low times are equal and the frequency is computed in C
 
 ### Building from source
 
-ESP-IDF v5.5 is required. libxr is the `third_party/libxr` submodule.
+ESP-IDF v5.5 is required. libxr is the `third_party/libxr` submodule; the vendor extension, the status light rule and the probe identity come from [XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core), the `third_party/xrdap-core` submodule.
 
 ```
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP.git
@@ -257,18 +257,17 @@ The board can also be chosen in `idf.py menuconfig` under XR-DAP → Board.
 | Directory | Content |
 |---|---|
 | `firmware/esp32s3`, `firmware/esp32c3`, `firmware/esp32` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities; the S3 picks pins by board), and the S3 SWD engine |
-| `firmware/common/vendor` | XR vendor extension: protocol, MEM-AP access, sampling scheduler, frame buffer, 0x86 Wi-Fi command |
-| `firmware/common/net` | Wi-Fi, OpenOCD TCP server, USB/IP virtual device, mDNS |
+| `firmware/common/net` | Wi-Fi, 0x86 Wi-Fi command, OpenOCD TCP server, USB/IP virtual device, mDNS |
 | `firmware/common/serial`, `console` | Serial DAP link, C3 serial splitting, Wi-Fi command line |
-| `firmware/common/probe` | Parameters, probe identity and start-up steps shared by all three chips |
+| `firmware/common/probe` | Parameters, probe identity, start-up steps, the sampling task and its gptimer, shared by all three chips |
 | `firmware/common/swd` | S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins, SWCLK frequency control for the C3 and classic ESP32 |
-| `docs/protocol.en.md` | Serial frame, TCP frame, vendor commands, probe identity, mDNS, USB/IP device |
+| `third_party/xrdap-core` | XR vendor extension, status light rule, probe identity and protocol document ([XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)) |
 
 Every push builds the four firmware images (S3, S3 Lite, C3, classic ESP32) and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release. The `pages` workflow publishes the web flasher from the newest release images and the page in `web/` on main, after a tagged build finishes or when `web/` changes (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
 
 ### Vendor extension
 
-Besides the standard CMSIS-DAP commands, the probe implements 0x80 to 0x86: reading and writing several addresses at once, reading variables along a pointer chain, sampling at a fixed period on the probe with the host fetching the results in batches, and configuring Wi-Fi through DAP. While sampling, the probe accepts only DAP_Info, DAP_HostStatus and this command group, so sampling and OpenOCD debugging cannot run at the same time. The formats are in [docs/protocol.en.md](docs/protocol.en.md).
+Besides the standard CMSIS-DAP commands, the probe implements 0x80 to 0x86: reading and writing several addresses at once, reading variables along a pointer chain, sampling at a fixed period on the probe with the host fetching the results in batches, and configuring Wi-Fi through DAP. While sampling, the probe accepts only DAP_Info, DAP_HostStatus and this command group, so sampling and OpenOCD debugging cannot run at the same time. The formats are in [docs/protocol.en.md](https://github.com/Jiu-xiao/XRDAP-Core/blob/main/docs/protocol.en.md) of XRDAP-Core.
 
 ## License
 

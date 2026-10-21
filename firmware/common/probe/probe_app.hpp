@@ -17,6 +17,7 @@
 #include "mdns_service.hpp"
 #include "probe_config.hpp"
 #include "probe_info.hpp"
+#include "sampler_task.hpp"
 #include "wifi_command.hpp"
 #include "wifi_sta.hpp"
 
@@ -33,9 +34,9 @@ template <typename DapT>
 void InstallVendor(DapT& dap, DapVendor& vendor, const char* product, int core,
                    unsigned sampling_priority)
 {
-  SetProbeInfo(dap, product);
+  SetProbeInfo(dap, ProbeIdentity{product, product, ProbeSerial(), kFirmwareVersion});
   WifiCommand::Install(vendor);
-  vendor.Begin(core, sampling_priority);
+  StartSamplerTask(vendor, core, sampling_priority);
   dap.SetCommandHook(&DapVendor::Hook, &vendor);
 }
 
