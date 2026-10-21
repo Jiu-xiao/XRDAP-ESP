@@ -5,12 +5,16 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 
+namespace
+{
+esp_timer_handle_t timer = nullptr;
+}  // namespace
+
 namespace XrDap
 {
 
 void RestartLater(uint32_t delay_ms)
 {
-  static esp_timer_handle_t timer = nullptr;
   if (timer == nullptr)
   {
     esp_timer_create_args_t args = {};
@@ -25,5 +29,7 @@ void RestartLater(uint32_t delay_ms)
   (void)esp_timer_stop(timer);
   (void)esp_timer_start_once(timer, static_cast<uint64_t>(delay_ms) * 1000U);
 }
+
+bool RestartPending() { return timer != nullptr && esp_timer_is_active(timer); }
 
 }  // namespace XrDap

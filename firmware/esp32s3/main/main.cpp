@@ -244,8 +244,9 @@ extern "C" void app_main(void)
   console.Start(0);
 
   // 状态灯在 Wi-Fi 连接之前就开始显示。
-  static StatusPanel panel(Config::kStatusLedGpio, Config::kWifiButtonGpio,
-                           vendor.Activity());
+  static StatusPanel panel(
+      Config::kStatusLedGpio, Config::kWifiButtonGpio, vendor.Activity(),
+      [](void* d) { return static_cast<Dap*>(d)->IsInited(); }, &dap);
   panel.Start(0);
 
   // 网络客户端连上、断开时：关闭或恢复 USB，更新状态灯。

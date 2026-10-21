@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// DAP 活动和上位机状态：数每条 DAP 命令，记下 DAP_HostStatus 报告的“已连接”“运行中”，
-// 给状态灯用。DAP_Disconnect 清除这两个状态；上位机异常退出没发 Disconnect 时，
-// kHostQuietMs 内没有任何命令也视为清除。
+// DAP 活动和上位机状态：数每条 DAP 命令，记下最近一条有线（USB、串口）命令的时间和
+// DAP_HostStatus 报告的“已连接”“运行中”，给状态灯用。DAP_Disconnect 清除这两个状态；
+// 上位机异常退出没发 Disconnect 时，kHostQuietMs 内没有任何命令也视为清除。
 //
-// DAP activity and host state: counts every DAP command and keeps the "connected" and
-// "running" flags reported by DAP_HostStatus, for status lights. DAP_Disconnect clears
-// both; when a host dies without a Disconnect, kHostQuietMs without any command clears
-// them as well.
+// DAP activity and host state: counts every DAP command and keeps the time of the last
+// wired (USB, serial) command and the "connected" and "running" flags reported by
+// DAP_HostStatus, for status lights. DAP_Disconnect clears both; when a host dies
+// without a Disconnect, kHostQuietMs without any command clears them as well.
 
 #include <atomic>
 #include <cstdint>
@@ -34,12 +34,21 @@ class DapActivity
     bool connected;
     /// 上位机报告目标运行中 / Host reported the target running.
     bool running;
+    /// kHostQuietMs 内有经 USB 或串口（有线）来的命令 / A command arrived over USB or
+    /// serial (wired) within kHostQuietMs.
+    bool wired;
   };
 
-  /// 命令线程对每条 DAP 命令调用 / Called by the command thread for every DAP command.
-  void Observe(const uint8_t* req, uint16_t len, uint32_t now_ms)
+  /// 命令线程对每条 DAP 命令调用；wired 表示命令经 USB 或串口而来 / Called by the
+  /// command thread for every DAP command; wired means it came over USB or serial.
+  void Observe(const uint8_t* req, uint16_t len, uint32_t now_ms, bool wired)
   {
     last_ms_.store(now_ms, std::memory_order_relaxed);
+    if (wired)
+    {
+      last_wired_ms_.store(now_ms, std::memory_order_relaxed);
+      any_wired_.store(true, std::memory_order_relaxed);
+    }
     commands_.fetch_add(1U, std::memory_order_relaxed);
     if (req[0] == kHostStatus && len >= 3U)
     {
@@ -58,9 +67,12 @@ class DapActivity
   State Read(uint32_t now_ms) const
   {
     const bool quiet = now_ms - last_ms_.load(std::memory_order_relaxed) > kHostQuietMs;
+    const bool wired =
+        any_wired_.load(std::memory_order_relaxed) &&
+        now_ms - last_wired_ms_.load(std::memory_order_relaxed) <= kHostQuietMs;
     return State{commands_.load(std::memory_order_relaxed),
                  !quiet && connected_.load(std::memory_order_relaxed),
-                 !quiet && running_.load(std::memory_order_relaxed)};
+                 !quiet && running_.load(std::memory_order_relaxed), wired};
   }
 
  private:
@@ -69,6 +81,8 @@ class DapActivity
 
   std::atomic<uint32_t> commands_{0U};
   std::atomic<uint32_t> last_ms_{0U};
+  std::atomic<uint32_t> last_wired_ms_{0U};
+  std::atomic<bool> any_wired_{false};
   std::atomic<bool> connected_{false};
   std::atomic<bool> running_{false};
 };

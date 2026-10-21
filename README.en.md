@@ -38,15 +38,16 @@ S3 status light and button (dev board: the RGB LED on GPIO48 and the BOOT key; L
 | Light | Meaning |
 |---|---|
 | One rainbow sweep | Power-up |
-| Blue | No Wi-Fi credentials, USB only |
-| Breathing yellow | Joining Wi-Fi |
-| Green | Wi-Fi joined |
-| Cyan | A network debug client (OpenOCD TCP or USB/IP) is connected |
-| White | The host reported connected through DAP_HostStatus; one breath per second while the target runs |
+| Red | Wired: USB connected to a PC, or a command over USB or serial within 5 seconds |
+| Blue | Wireless: a network debug client (OpenOCD TCP or USB/IP), or Wi-Fi only |
+| Purple | Neither USB nor Wi-Fi connected; breathing while joining Wi-Fi |
+| Main colour fading to purple and back every 2 seconds | The host reported connected through DAP_HostStatus |
+| Red and blue alternating every second | The host reported the target running |
 | Flash | Every DAP command (USB, serial or Wi-Fi) brightens the light, which then fades; steady traffic flickers at about 12 Hz |
-| Fast red blink | Button held; after 5 seconds it turns solid red, the credentials are cleared and the probe restarts |
+| Fast purple blink | Button held; after 5 seconds it turns solid purple, the credentials are cleared and the probe restarts |
+| Solid purple | The credentials were just changed (button, console or command 0x86); the probe restarts |
 
-When a host exits without DAP_Disconnect, 5 seconds without commands also returns the light to the Wi-Fi colour. The board's WS2812B runs from 5 V; its data high threshold is 0.65 × 5 V = 3.25 V, so 3.3 V drive is just enough and an individual LED may stay dark or show the wrong colour; debugging is not affected.
+With both USB and Wi-Fi connected, wired wins and the light is red. When a host exits without DAP_Disconnect, 5 seconds without commands also returns the light to the main colour. The board's WS2812B runs from 5 V; its data high threshold is 0.65 × 5 V = 3.25 V, so 3.3 V drive is just enough and an individual LED may stay dark or show the wrong colour; debugging is not affected.
 
 ### Flashing the firmware
 

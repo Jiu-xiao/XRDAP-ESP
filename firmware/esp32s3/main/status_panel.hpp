@@ -2,24 +2,26 @@
 #pragma once
 
 // 板上的状态灯（一颗 WS2812B）和 Wi-Fi 清除按键，引脚见 config.hpp。一个低优先级任务
-// 每 20 ms 刷新灯色、读一次按键。上电时彩虹扫过一圈，之后：
-//   底色       蓝：没有热点参数；黄色呼吸：正在连 Wi-Fi；绿：Wi-Fi 已连上；
-//              青：有网络调试客户端（OpenOCD TCP 或 USB/IP）
-//   白         上位机经 DAP_HostStatus 报告已连接；目标运行中时 1 s 一次呼吸
-//   闪亮       每条 DAP 命令（任何传输）把灯提亮再衰减，命令不断时约 12 Hz 闪烁
-//   红色快闪   按键按住中；按满 5 s 后红色常亮，清除热点参数并重启
+// 每 20 ms 刷新灯色、读一次按键。上电时彩虹扫过一圈，之后主色表示连接：
+//   红         有线：USB 已配置，或 5 s 内有经 USB、串口来的 DAP 命令
+//   蓝         无线：有网络调试客户端（OpenOCD TCP 或 USB/IP），或只连着 Wi-Fi
+//   紫         USB 和 Wi-Fi 都没连上；正在连 Wi-Fi 时呼吸
+// 上位机经 DAP_HostStatus 报告已连接时主色与紫色来回（2 s 一次），目标运行中时红蓝来回
+// （1 s 一次）；每条 DAP 命令把灯提亮再衰减，命令不断时约 12 Hz 闪烁。改配置时是紫色：
+// 按住按键快闪，按满 5 s 或经命令行、0x86 改了热点参数后常亮，随后重启。
 //
 // On-board status light (one WS2812B) and Wi-Fi clear button; pins in config.hpp. A
 // low-priority task refreshes the light and reads the button every 20 ms. A rainbow
-// sweep runs at power-up, then:
-//   base       blue: no credentials; breathing yellow: joining Wi-Fi; green: Wi-Fi
-//              joined; cyan: a network debug client (OpenOCD TCP or USB/IP)
-//   white      the host reported connected through DAP_HostStatus; one breath per
-//              second while the target runs
-//   flash      every DAP command (any transport) brightens the light, which then
-//              decays; steady traffic flickers at about 12 Hz
-//   fast red   button held; after 5 s solid red, the credentials are cleared and the
-//              probe restarts
+// sweep runs at power-up; afterwards the main colour shows the connection:
+//   red        wired: USB configured, or a DAP command over USB or serial within 5 s
+//   blue       wireless: a network debug client (OpenOCD TCP or USB/IP), or only Wi-Fi
+//   purple     neither USB nor Wi-Fi; breathing while joining Wi-Fi
+// While the host reports connected through DAP_HostStatus the main colour fades to
+// purple and back every 2 s, and while the target runs red and blue alternate every
+// second; every DAP command brightens the light, which then fades (about 12 Hz under
+// steady traffic). Changing a setting is purple: fast blinking while the button is held,
+// solid after 5 s or after the credentials were changed from the console or 0x86, then
+// the probe restarts.
 
 #include <atomic>
 #include <cstdint>
@@ -37,9 +39,15 @@ class StatusPanel
   /// @param led_gpio WS2812 数据脚 / WS2812 data pin.
   /// @param button_gpio 按键脚，按下接地，用内部上拉 / Button pin, shorted to ground when
   ///        pressed; the internal pull-up is used.
+  /// 查询 USB 是否已被主机配置 / Query whether USB is configured by the host.
+  using UsbConfiguredFn = bool (*)(void* ctx);
+
   /// @param dap DAP 活动来源，生命周期需长于本对象 / DAP activity source; must outlive
   ///        this object.
-  StatusPanel(int led_gpio, int button_gpio, const Vendor::DapActivity& dap);
+  /// @param usb_configured 查询 USB 是否已配置，从刷新任务里调用 / Queries whether USB
+  ///        is configured; called from the refresh task.
+  StatusPanel(int led_gpio, int button_gpio, const Vendor::DapActivity& dap,
+              UsbConfiguredFn usb_configured, void* usb_ctx);
 
   /// 在 core 上启动刷新任务 / Start the refresh task on core.
   void Start(int core);
@@ -54,6 +62,8 @@ class StatusPanel
 
   int button_gpio_;
   const Vendor::DapActivity& dap_;
+  UsbConfiguredFn usb_configured_;
+  void* usb_ctx_;
   led_strip_handle_t strip_ = nullptr;
   std::atomic<bool> client_{false};
 };

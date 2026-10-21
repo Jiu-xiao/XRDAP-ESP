@@ -12,4 +12,8 @@ namespace XrDap
 /// @note 再次调用会重新计时 / Calling again restarts the countdown.
 void RestartLater(uint32_t delay_ms);
 
+/// 是否已经安排了重启（刚改了热点参数等配置）/ Whether a restart is scheduled (a setting
+/// such as the Wi-Fi credentials was just changed).
+bool RestartPending();
+
 }  // namespace XrDap
