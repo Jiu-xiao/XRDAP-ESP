@@ -21,6 +21,7 @@
 #include <atomic>
 #include <cstdint>
 
+#include "dap_activity.hpp"
 #include "debug/swd.hpp"
 #include "mem_ap.hpp"
 #include "sampler.hpp"
@@ -98,6 +99,10 @@ class DapVendor
   /// 设置 USB 复位计数来源 / Set the USB reset-count source.
   void SetUsbResetSource(ResetCountFn fn, void* ctx);
 
+  /// DAP 活动和上位机状态，给状态灯读 / DAP activity and host state, read by status
+  /// lights.
+  const Vendor::DapActivity& Activity() const { return activity_; }
+
   /// libxr DAP 类的命令钩子入口，返回 true 表示命令已处理（回复在 resp/out）/ Entry for
   /// the libxr DAP class command hook; returns true when the command was handled (reply
   /// in resp/out).
@@ -129,6 +134,7 @@ class DapVendor
   uint16_t max_packet_;
   Vendor::MemAp mem_;
   Vendor::Sampler sampler_;
+  Vendor::DapActivity activity_;
 
   std::atomic<Transport> transport_{Transport::USB};
   std::atomic<Transport> owner_{Transport::USB};

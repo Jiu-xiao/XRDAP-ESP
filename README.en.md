@@ -37,13 +37,16 @@ Status light (WS2812) and button on the Lite board:
 
 | Light | Meaning |
 |---|---|
-| Solid blue | No Wi-Fi credentials, USB only |
-| Slow yellow blink | Joining Wi-Fi |
-| Solid green | Wi-Fi joined |
-| Solid cyan | A network debug client (OpenOCD TCP or USB/IP) is connected |
+| One rainbow sweep | Power-up |
+| Blue | No Wi-Fi credentials, USB only |
+| Breathing yellow | Joining Wi-Fi |
+| Green | Wi-Fi joined |
+| Cyan | A network debug client (OpenOCD TCP or USB/IP) is connected |
+| White | The host reported connected through DAP_HostStatus; one breath per second while the target runs |
+| Flash | Every DAP command (USB, serial or Wi-Fi) brightens the light, which then fades; steady traffic flickers at about 12 Hz |
 | Fast red blink | Button held; after 5 seconds it turns solid red, the credentials are cleared and the probe restarts |
 
-The board's WS2812 runs from 5 V with 3.3 V data, which is at the edge of its input threshold, so an individual LED may stay dark or show the wrong colour; debugging is not affected.
+When a host exits without DAP_Disconnect, 5 seconds without commands also returns the light to the Wi-Fi colour. The board's WS2812B runs from 5 V; its data high threshold is 0.65 × 5 V = 3.25 V, so 3.3 V drive is just enough and an individual LED may stay dark or show the wrong colour; debugging is not affected.
 
 ### Flashing the firmware
 

@@ -247,7 +247,8 @@ extern "C" void app_main(void)
   StatusPanel* panel = nullptr;
   if constexpr (Config::kStatusLedGpio >= 0)
   {
-    static StatusPanel status(Config::kStatusLedGpio, Config::kWifiButtonGpio);
+    static StatusPanel status(Config::kStatusLedGpio, Config::kWifiButtonGpio,
+                              vendor.Activity());
     status.Start(0);
     panel = &status;
   }
