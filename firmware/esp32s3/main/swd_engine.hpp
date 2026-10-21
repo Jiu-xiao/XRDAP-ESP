@@ -42,10 +42,14 @@
 #include "esp_attr.h"
 #include "esp_cpu.h"
 #include "hal/dedic_gpio_cpu_ll.h"
-#include "swd_bits.hpp"
 
 namespace XrDap
 {
+
+/// 输出使能是 APB 寄存器写，十几个 CPU 周期后才生效；切到输出后等这么久再发第一位数据 /
+/// The output enable is an APB register write that takes effect a dozen or so CPU
+/// cycles later; wait this long after switching to output before the first data bit.
+constexpr uint32_t kOutputEnableSettle = 16U;
 
 /// 汇编路径用到的引脚信息 / Pin information used by the assembly path.
 struct SwdFastPins
@@ -352,7 +356,7 @@ class SwdEngine final : public LibXR::Debug::Swd
 
     Drive();
     Pacer p = Begin();
-    ClockOutBits(p, SwdBits::MakeRequest(req), 8U);
+    ClockOutBits(p, LibXR::Debug::SwdProtocol::MakeRequest(req), 8U);
 
     // 释放 SWDIO，换向时钟，然后读 3 位 ACK
     Release();
@@ -362,7 +366,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     {
       ack |= (ClockIn(p) ? 1U : 0U) << i;
     }
-    resp.ack = SwdBits::DecodeAck(ack);
+    resp.ack = LibXR::Debug::SwdProtocol::DecodeAck(static_cast<uint8_t>(ack));
 
     if (resp.ack != Ack::OK)
     {
@@ -399,7 +403,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     {
       ClockIn(p);  // 换向时钟，之后主机驱动 SWDIO
       Drive();
-      p.t += SwdBits::kOutputEnableSettle;
+      p.t += kOutputEnableSettle;
       ClockOutBits(p, req.wdata, 32U);
       ClockOut(p, static_cast<uint32_t>(__builtin_parity(req.wdata)));
       if (req.port == LibXR::Debug::SwdProtocol::Port::AP)

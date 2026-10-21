@@ -8,7 +8,6 @@
 // large, so it lives in flash (linker.lf leaves this file out of IRAM). An instruction
 // cache miss only stretches one half period, which SWD, being synchronous, tolerates.
 
-#include "swd_bits.hpp"
 #include "swd_engine.hpp"
 
 namespace XrDap
@@ -19,9 +18,8 @@ using Request = LibXR::Debug::SwdProtocol::Request;
 using Response = LibXR::Debug::SwdProtocol::Response;
 using Ack = LibXR::Debug::SwdProtocol::Ack;
 
-using SwdBits::DecodeAck;
-using SwdBits::kOutputEnableSettle;
-using SwdBits::MakeRequest;
+using LibXR::Debug::SwdProtocol::DecodeAck;
+using LibXR::Debug::SwdProtocol::MakeRequest;
 
 inline uint32_t Now() { return esp_cpu_get_cycle_count(); }
 
@@ -136,7 +134,7 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
   // 释放 SWDIO：换向时钟 + 3 位 ACK（acc 的位 0 是换向时钟，位 1 到 3 是 ACK）
   pins.swdio->SetOutputEnable(false);
   const uint32_t ack_bits = ReadBits<N, 4>(raw, dm, dm | cm, sh);
-  resp.ack = DecodeAck((ack_bits >> 1) & 7U);
+  resp.ack = DecodeAck(static_cast<uint8_t>((ack_bits >> 1) & 7U));
 
   if (resp.ack != Ack::OK)
   {

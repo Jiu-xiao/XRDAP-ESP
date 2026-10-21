@@ -50,9 +50,36 @@ alignas(64) uint8_t ep1_dap[4096];
 alignas(64) uint8_t ep2_cdc[1024];
 alignas(64) uint8_t ep3_comm[128];
 
-using DapLink =
+using DapBase =
     LibXR::USB::DapLinkV2Class<SwdEngine, Config::kDapPacketSize, Config::kDapPacketCount,
                                Config::kDapPacketSize>;
+
+// USB 的 DAP 接口，另外数 USB 总线复位：计数变了，USB 的会话就结束（拔线、主机复位）/
+// The USB DAP interface, which also counts USB bus resets: a changed count ends the USB
+// session (unplug, host reset).
+class DapLink final : public DapBase
+{
+ public:
+  using DapBase::DapBase;
+
+  /// 总线复位次数，任何任务可读 / Bus reset count; readable from any task.
+  uint32_t ResetCount() const { return resets_.load(std::memory_order_relaxed); }
+
+  // libxr 在 USB 的 owner 上下文（中断或应用线程）里调用 / Called by libxr in the USB
+  // owner context (an interrupt or an application thread).
+  void OnDeviceEvent(bool in_isr, LibXR::USB::DeviceEvent event,
+                     uint8_t endpoint) override
+  {
+    if (event == LibXR::USB::DeviceEvent::RESET)
+    {
+      resets_.fetch_add(1U, std::memory_order_relaxed);
+    }
+    DapBase::OnDeviceEvent(in_isr, event, endpoint);
+  }
+
+ private:
+  std::atomic<uint32_t> resets_{0U};
+};
 
 // SWD 相关对象。必须在 Config::kSwdCore 上创建：专用 GPIO 只能在创建它的核上访问。
 struct SwdSet
@@ -168,9 +195,9 @@ extern "C" void app_main(void)
   usb.Start(false);
   // USB 总线复位（拔线、主机复位）结束 USB 的会话 / A USB bus reset (unplug, host reset)
   // ends the USB session.
-  probe.session.SetUsbResetSource(
-      [](void* ctx) -> uint32_t
-      { return static_cast<LibXR::ESP32USBDevice*>(ctx)->BusResetCount(); }, &usb);
+  probe.session.SetUsbResetSource([](void* ctx) -> uint32_t
+                                  { return static_cast<DapLink*>(ctx)->ResetCount(); },
+                                  &dap);
 
   // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里创建。
   if constexpr (Config::kSerialLink)
@@ -231,10 +258,7 @@ extern "C" void app_main(void)
       led, probe.activity,
       [](void*)
       {
-        // USB 是否已配置暂读 DAP 类的绑定标志，等 libxr 提供原子的设备配置状态后改读它 /
-        // USB configured is read from the DAP class bind flag until libxr offers an
-        // atomic device configured state.
-        return LinkInputs{net_client.load(), dap.IsInited(), WifiStaGetLink(),
+        return LinkInputs{net_client.load(), usb.IsConfigured(), WifiStaGetLink(),
                           RestartPending(), button != nullptr && button->Held()};
       },
       nullptr);
