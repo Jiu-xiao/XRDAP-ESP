@@ -3,9 +3,7 @@
 
 #include <cstring>
 
-#include "restart.hpp"
 #include "vendor_protocol.hpp"
-#include "wifi_sta.hpp"
 
 namespace XrDap
 {
@@ -20,14 +18,10 @@ constexpr uint8_t kFlagStarted = 0x01U;
 constexpr uint8_t kFlagConnected = 0x02U;
 }  // namespace
 
-void WifiCommand::Install(DapVendor& vendor)
-{
-  vendor.SetExtraCommand(kCmd, kFeature, &WifiCommand::Handle, nullptr);
-}
-
-bool WifiCommand::Handle(void*, const uint8_t* req, uint16_t len, uint8_t* resp,
+bool WifiCommand::Handle(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
                          uint16_t cap, uint16_t& out)
 {
+  auto& settings = *static_cast<WifiSettings*>(ctx);
   if (cap < 2U)
   {
     out = 0U;
@@ -41,20 +35,22 @@ bool WifiCommand::Handle(void*, const uint8_t* req, uint16_t len, uint8_t* resp,
   switch (req[1])
   {
     case kOpStatus:
-      return (len == 2U) ? Status(resp, cap, out) : Reply(resp, kStatusArg, out);
+      return (len == 2U) ? Status(settings, resp, cap, out)
+                         : Reply(resp, kStatusArg, out);
     case kOpSet:
-      return Set(req, len, resp, out);
+      return Set(settings, req, len, resp, out);
     case kOpClear:
-      return Clear(len, resp, out);
+      return Clear(settings, len, resp, out);
     default:
       return Reply(resp, kStatusArg, out);
   }
 }
 
-bool WifiCommand::Status(uint8_t* resp, uint16_t cap, uint16_t& out)
+bool WifiCommand::Status(WifiSettings& settings, uint8_t* resp, uint16_t cap,
+                         uint16_t& out)
 {
-  const WifiStatus st = WifiStaGetStatus();
-  const size_t ssid_len = strnlen(st.ssid, sizeof(st.ssid) - 1U);
+  const WifiStatus st = settings.Status();
+  const size_t ssid_len = strnlen(st.ssid, kSsidMax);
   if (cap < 9U + ssid_len)
   {
     return Reply(resp, kStatusResource, out);
@@ -71,7 +67,8 @@ bool WifiCommand::Status(uint8_t* resp, uint16_t cap, uint16_t& out)
 }
 
 // 0x86 0x01 ssid_len ssid[ssid_len] pw_len pw[pw_len]
-bool WifiCommand::Set(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t& out)
+bool WifiCommand::Set(WifiSettings& settings, const uint8_t* req, uint16_t len,
+                      uint8_t* resp, uint16_t& out)
 {
   if (len < 4U)
   {
@@ -83,39 +80,40 @@ bool WifiCommand::Set(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t&
     return Reply(resp, kStatusArg, out);
   }
   const uint8_t pw_len = req[3U + ssid_len];
-  if (len != 4U + ssid_len + pw_len || ssid_len > 32U || pw_len > 63U)
+  if (len != 4U + ssid_len + pw_len || ssid_len > kSsidMax || pw_len > kPasswordMax)
   {
     return Reply(resp, kStatusArg, out);
   }
-  char ssid[33] = {};
-  char password[64] = {};
+  char ssid[kSsidMax + 1U] = {};
+  char password[kPasswordMax + 1U] = {};
   std::memcpy(ssid, &req[3], ssid_len);
   std::memcpy(password, &req[4U + ssid_len], pw_len);
-  const esp_err_t err = WifiStaSave(ssid, password);
+  const WifiSettings::SaveResult result = settings.Save(ssid, password);
   std::memset(password, 0, sizeof(password));
-  if (err == ESP_ERR_INVALID_ARG)
+  if (result == WifiSettings::SaveResult::INVALID)
   {
     return Reply(resp, kStatusArg, out);
   }
-  if (err != ESP_OK)
+  if (result != WifiSettings::SaveResult::OK)
   {
     return Reply(resp, kStatusResource, out);
   }
-  RestartLater();
+  settings.RestartLater();
   return Reply(resp, kStatusOk, out);
 }
 
-bool WifiCommand::Clear(uint16_t len, uint8_t* resp, uint16_t& out)
+bool WifiCommand::Clear(WifiSettings& settings, uint16_t len, uint8_t* resp,
+                        uint16_t& out)
 {
   if (len != 2U)
   {
     return Reply(resp, kStatusArg, out);
   }
-  if (WifiStaClear() != ESP_OK)
+  if (!settings.Clear())
   {
     return Reply(resp, kStatusResource, out);
   }
-  RestartLater();
+  settings.RestartLater();
   return Reply(resp, kStatusOk, out);
 }
 

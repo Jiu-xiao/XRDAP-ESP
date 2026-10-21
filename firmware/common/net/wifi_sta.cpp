@@ -15,6 +15,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "nvs_flash.h"
+#include "restart.hpp"
 
 namespace
 {
@@ -124,18 +125,14 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   return (bits & kGotIp) ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
-esp_err_t WifiStaSave(const char* ssid, const char* password)
+namespace
 {
-  const size_t ssid_len = strlen(ssid);
-  const size_t pwd_len = strlen(password);
-  if (ssid_len < 1 || ssid_len > 32 || (pwd_len != 0 && (pwd_len < 8 || pwd_len > 63)))
-  {
-    return ESP_ERR_INVALID_ARG;
-  }
+esp_err_t SaveCredentials(const char* ssid, const char* password)
+{
   Credentials cred = {};
   cred.version = 1;
-  memcpy(cred.ssid, ssid, ssid_len);
-  memcpy(cred.password, password, pwd_len);
+  memcpy(cred.ssid, ssid, strlen(ssid));
+  memcpy(cred.password, password, strlen(password));
   nvs_handle_t nvs;
   esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
   if (err == ESP_OK)
@@ -151,7 +148,7 @@ esp_err_t WifiStaSave(const char* ssid, const char* password)
   return err;
 }
 
-esp_err_t WifiStaClear()
+esp_err_t ClearCredentials()
 {
   nvs_handle_t nvs;
   esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
@@ -172,7 +169,7 @@ esp_err_t WifiStaClear()
   return err;
 }
 
-WifiStatus WifiStaGetStatus()
+WifiStatus ReadStatus()
 {
   WifiStatus st = {};
   Credentials cred = {};
@@ -199,6 +196,34 @@ WifiStatus WifiStaGetStatus()
     }
   }
   return st;
+}
+
+/// NVS 里的热点参数 / Credentials kept in NVS.
+class NvsWifiSettings final : public WifiSettings
+{
+ public:
+  WifiStatus Status() override { return ReadStatus(); }
+
+  SaveResult Save(const char* ssid, const char* password) override
+  {
+    if (!CredentialsValid(ssid, password))
+    {
+      return SaveResult::INVALID;
+    }
+    return SaveCredentials(ssid, password) == ESP_OK ? SaveResult::OK
+                                                     : SaveResult::STORAGE;
+  }
+
+  bool Clear() override { return ClearCredentials() == ESP_OK; }
+
+  void RestartLater() override { XrDap::RestartLater(); }
+};
+}  // namespace
+
+WifiSettings& WifiStaSettings()
+{
+  static NvsWifiSettings settings;
+  return settings;
 }
 
 WifiLink WifiStaGetLink()

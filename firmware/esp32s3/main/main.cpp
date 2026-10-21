@@ -174,7 +174,7 @@ extern "C" void app_main(void)
 
   // XR 厂商扩展挂在 DAP 类的命令钩子上，USB、网络、串口行为一致。
   static DapVendor vendor(GetSwdSet().swd, Config::kDapPacketSize);
-  InstallVendor(dap, vendor, Config::kProductName, Config::kSwdCore,
+  InstallVendor(dap, vendor, WifiStaSettings(), Config::kProductName, Config::kSwdCore,
                 Config::kSamplingPriority);
 
   // libxr 在应用线程里执行 DAP 命令，循环调用 Step()。线程放在 SWD 核上，与核 0 的 USB
@@ -243,7 +243,7 @@ extern "C" void app_main(void)
   }
 
   // Wi-Fi 命令行在 USB 虚拟串口上，没有热点参数时也能用它来设置。
-  static UartConsole<LibXR::USB::CDCUart> console(cdc);
+  static UartConsole<LibXR::USB::CDCUart> console(cdc, WifiStaSettings());
   console.Start(0);
 
   // 状态灯在 Wi-Fi 连接之前就开始显示。

@@ -37,9 +37,10 @@ class SerialMux
  public:
   /// @param link DAP 串口链路 / DAP serial link.
   /// @param uart 共用的串口 / Shared serial port.
-  /// @note 两者生命周期都需长于本对象 / Both must outlive this object.
-  SerialMux(LinkT& link, UartT& uart)
-      : link_(link), uart_(uart), console_(&SerialMux::Write, this)
+  /// @param settings 命令行读写的 Wi-Fi 设置 / Wi-Fi settings the console works on.
+  /// @note 三者生命周期都需长于本对象 / All three must outlive this object.
+  SerialMux(LinkT& link, UartT& uart, WifiSettings& settings)
+      : link_(link), uart_(uart), console_(settings, &SerialMux::Write, this)
   {
   }
 

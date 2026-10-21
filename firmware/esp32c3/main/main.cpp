@@ -79,7 +79,7 @@ extern "C" void app_main(void)
 
   // XR 厂商扩展挂在 DAP 类的命令钩子上，串口、网络行为一致。
   static DapVendor vendor(swd_set.swd, Config::kDapPacketSize);
-  InstallVendor(dap, vendor, Config::kProductName, Config::kCore,
+  InstallVendor(dap, vendor, WifiStaSettings(), Config::kProductName, Config::kCore,
                 Config::kSamplingPriority);
 
   // USB Serial/JTAG 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令。
@@ -92,7 +92,7 @@ extern "C" void app_main(void)
                                  1});
   static SerialAdapter adapter(dap, vendor);
   static SerialLink link(adapter, usj);
-  static SerialMux<SerialLink, LibXR::ESP32CDCJtag> mux(link, usj);
+  static SerialMux<SerialLink, LibXR::ESP32CDCJtag> mux(link, usj, WifiStaSettings());
   mux.Start(Config::kCore, Config::kSerialPriority);
   ESP_LOGI(TAG, "USB Serial/JTAG 上的串口 DAP 链路已启动，SWCLK GPIO%d，SWDIO GPIO%d",
            Config::kSwclkGpio, Config::kSwdioGpio);
@@ -106,7 +106,7 @@ extern "C" void app_main(void)
       LibXR::UART::Configuration{Config::kConsoleBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1},
       /*enable_dma=*/false);
-  static UartConsole<LibXR::ESP32UART> console(console_uart);
+  static UartConsole<LibXR::ESP32UART> console(console_uart, WifiStaSettings());
   console.Start(Config::kCore);
 
   StartNetwork(

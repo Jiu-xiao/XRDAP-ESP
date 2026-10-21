@@ -4,9 +4,6 @@
 #include <cstdio>
 #include <cstring>
 
-#include "restart.hpp"
-#include "wifi_sta.hpp"
-
 namespace XrDap
 {
 namespace
@@ -161,29 +158,29 @@ void ConsoleCore::Handle(char* line)
     {
       password = const_cast<char*>("");
     }
-    const esp_err_t err = WifiStaSave(ssid, password);
-    if (err == ESP_ERR_INVALID_ARG)
+    const WifiSettings::SaveResult result = settings_.Save(ssid, password);
+    if (result == WifiSettings::SaveResult::INVALID)
     {
       Print("热点名要 1 到 32 个字节，密码要 8 到 63 个字节（或不填）\r\n");
       return;
     }
-    if (err != ESP_OK)
+    if (result != WifiSettings::SaveResult::OK)
     {
       Print("保存失败\r\n");
       return;
     }
     Print("已保存，设备重启后连接\r\n");
-    RestartLater();
+    settings_.RestartLater();
   }
   else if (strcmp(sub, "clear") == 0)
   {
-    if (WifiStaClear() != ESP_OK)
+    if (!settings_.Clear())
     {
       Print("清除失败\r\n");
       return;
     }
     Print("已清除，设备重启后不再连接 Wi-Fi\r\n");
-    RestartLater();
+    settings_.RestartLater();
   }
   else
   {
@@ -193,7 +190,7 @@ void ConsoleCore::Handle(char* line)
 
 void ConsoleCore::PrintStatus()
 {
-  const WifiStatus st = WifiStaGetStatus();
+  const WifiStatus st = settings_.Status();
   char buf[160];
   if (st.ssid[0] == 0)
   {
