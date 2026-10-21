@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-// SwdEngine 的高速路径（仅 ESP32-S3）：汇编写死每个半周期的指令，高低半周期指令数相同。
+// SwdEngine 的高速路径：汇编写死每个半周期的指令，高低半周期指令数相同。
 // 每一档展开后代码量较大，放在 flash 里（linker.lf 不把本文件放进 IRAM）。指令缓存
 // 未命中只会拉长某一个半周期，SWD 是同步协议，不影响正确性。
 //
-// SwdEngine fast path (ESP32-S3 only): the instructions of every half period are fixed
+// SwdEngine fast path: the instructions of every half period are fixed
 // in assembly, with the same count in the high and low halves. Each unrolled level is
 // large, so it lives in flash (linker.lf leaves this file out of IRAM). An instruction
 // cache miss only stretches one half period, which SWD, being synchronous, tolerates.
 
 #include "swd_bits.hpp"
 #include "swd_engine.hpp"
-
-#if XRDAP_SWD_FAST_PATH
 
 namespace XrDap
 {
@@ -232,5 +230,3 @@ uint32_t SwdFastMeasureHalfX16(size_t level, const SwdFastPins& pins)
 }
 
 }  // namespace XrDap
-
-#endif

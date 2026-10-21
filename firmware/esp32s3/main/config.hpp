@@ -50,8 +50,9 @@ constexpr int kSwdioGpio = 47;
 /// the SWDIO analog switch, driven low at start-up to connect kSwdioGpio to the target;
 /// -1 when there is none.
 constexpr int kSwdioSelectGpio = 36;
-/// 板上有没有接 UART0 的 USB 转串口芯片 / Whether a USB-UART chip is wired to UART0.
-constexpr bool kUsbUartOnBoard = false;
+/// 是否启用串口 DAP 链路；Lite 板没有 USB 转串口芯片 / Enable the serial DAP link; the
+/// Lite board has no USB-UART chip.
+constexpr bool kSerialLink = false;
 /// 状态灯（WS2812）数据脚 / Status light (WS2812) data pin.
 constexpr int kStatusLedGpio = 48;
 /// Wi-Fi 清除按键（按下接地）/ Wi-Fi clear button (shorts to ground).
@@ -64,8 +65,10 @@ constexpr int kSwdioGpio = 4;
 /// SWDIO 模拟开关的选择脚，-1 表示没有 / Select pin of the SWDIO analog switch; -1 when
 /// there is none.
 constexpr int kSwdioSelectGpio = -1;
-/// 板上有没有接 UART0 的 USB 转串口芯片 / Whether a USB-UART chip is wired to UART0.
-constexpr bool kUsbUartOnBoard = true;
+/// 是否启用串口 DAP 链路（libxr Topic 帧），走板上 USB 转串口芯片接的 UART0，因此系统
+/// 日志控制台已关闭 / Enable the serial DAP link (libxr Topic frames) on UART0, wired to
+/// the on-board USB-UART chip, so the system log console is disabled.
+constexpr bool kSerialLink = true;
 /// 状态灯（WS2812）数据脚；DevKitC-1 v1.0 一类的板子在 GPIO48，没有灯的板子上它只是
 /// 一个空闲引脚 / Status light (WS2812) data pin; GPIO48 on DevKitC-1 v1.0 style boards,
 /// and just an unused pin on boards without the LED.
@@ -87,10 +90,6 @@ constexpr unsigned kStepPriority = 10;
 /// 采样任务优先级，为 SWD 核上最高 / Sampling task priority, the highest on the SWD core.
 constexpr unsigned kSamplingPriority = 14;
 
-/// 是否启用串口 DAP 链路（libxr Topic 帧）。它占用板上 USB 转串口芯片接的 UART0，因此
-/// 系统日志控制台已关闭 / Enable the serial DAP link (libxr Topic frames). It uses UART0
-/// wired to the on-board USB-UART chip, so the system log console is disabled.
-constexpr bool kSerialLink = kUsbUartOnBoard;
 /// 串口 UART 号 / Serial UART number.
 constexpr int kSerialUart = 0;
 /// 串口 TX 引脚 / Serial TX pin.

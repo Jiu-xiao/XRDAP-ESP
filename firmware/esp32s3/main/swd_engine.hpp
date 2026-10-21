@@ -8,7 +8,7 @@
 //   SWCLK 下降沿一起变化，高低电平因此等长。
 // - 低速（半周期不短于开机标定的下限 min_half_）：按周期计数器上的绝对时刻发沿，下一个
 //   沿 = 上一个沿 + 半周期，两沿之间的计算都在等待时间里完成。频率准，占空比 50%。
-// - 高速（仅 ESP32-S3）：汇编写死每个半周期的指令，高低半周期指令数相同，每档的实际半
+// - 高速：汇编写死每个半周期的指令，高低半周期指令数相同，每档的实际半
 //   周期在开机时测得。
 // - 读数据在上升沿前一刻采样（CMSIS-DAP 的位置），目标在上升沿后才换下一位，裕量最大。
 // - 空闲时钟期间 SWDIO 为低：pyOCD 会发空闲时钟，高电平会被目标当成请求起始。
@@ -24,7 +24,7 @@
 // - Slow clocks (half period not below the boot-time calibrated min_half_): edges are
 //   issued at absolute times on the cycle counter, next edge = previous edge + half
 //   period, with all computation hidden in the wait. Accurate frequency, 50% duty.
-// - Fast clocks (ESP32-S3 only): assembly fixes the instructions of every half period,
+// - Fast clocks: assembly fixes the instructions of every half period,
 //   the same count in the high and low halves; the real half period of each level is
 //   measured at boot.
 // - Read data is sampled just before the rising edge (the CMSIS-DAP position); the
@@ -42,19 +42,11 @@
 #include "esp_attr.h"
 #include "esp_cpu.h"
 #include "hal/dedic_gpio_cpu_ll.h"
-#include "sdkconfig.h"
 #include "swd_bits.hpp"
-
-#if CONFIG_IDF_TARGET_ESP32S3
-#define XRDAP_SWD_FAST_PATH 1
-#else
-#define XRDAP_SWD_FAST_PATH 0
-#endif
 
 namespace XrDap
 {
 
-#if XRDAP_SWD_FAST_PATH
 /// 汇编路径用到的引脚信息 / Pin information used by the assembly path.
 struct SwdFastPins
 {
@@ -88,7 +80,6 @@ SwdFastXferFn SwdFastTransferFn(size_t level);
 /// Measure the half period of a level in 1/16 CPU cycle; SWDIO must be released before
 /// the call and SWCLK is left low.
 uint32_t SwdFastMeasureHalfX16(size_t level, const SwdFastPins& pins);
-#endif
 
 /// 专用 GPIO 上的 SWD 位带引擎 / SWD bit-bang engine on dedicated GPIO.
 /// @note 非线程安全；所有方法只能由同一个任务在创建 swclk、swdio 的核上调用 / Not
@@ -122,10 +113,9 @@ class SwdEngine final : public LibXR::Debug::Swd
     (void)SetClockHz(kDefaultHz);
   }
 
-  /// 设置 SWCLK 频率；0 取默认 1 MHz，其余限制在 1 kHz 到半个 CPU 频率之间，实际频率可
-  /// 用 ActualHz() 读取 / Set the SWCLK frequency; 0 selects the default 1 MHz and the
-  /// rest is clamped between 1 kHz and half the CPU frequency. Read the real value with
-  /// ActualHz().
+  /// 设置 SWCLK 频率；0 取默认 1 MHz，其余限制在 1 kHz 到半个 CPU 频率之间 / Set the
+  /// SWCLK frequency; 0 selects the default 1 MHz and the rest is clamped between 1 kHz
+  /// and half the CPU frequency.
   LibXR::ErrorCode SetClockHz(uint32_t hz) override
   {
     if (hz == 0U)
@@ -139,7 +129,6 @@ class SwdEngine final : public LibXR::Debug::Swd
         static_cast<uint32_t>((static_cast<uint64_t>(cpu_hz_) * 16U) /
                               (2U * hz64));  // 想要的半周期，单位 1/16 CPU 周期
     fast_ = nullptr;
-#if XRDAP_SWD_FAST_PATH
     // 想要的半周期比按时刻发沿的下限还短时，走汇编路径。
     if (want_x16 < min_half_ * 16U)
     {
@@ -155,30 +144,15 @@ class SwdEngine final : public LibXR::Debug::Swd
         pick = i;
       }
       fast_ = SwdFastTransferFn(pick);
-      fast_idx_ = pick;
       idle_ap_write_ = IdleClocksFor((cpu_hz_ * 8U) / fast_half_x16_[pick]);
       half_ = min_half_;  // 线复位、序列等操作仍走按时刻发沿的路径
       return LibXR::ErrorCode::OK;
     }
-#endif
     // 四舍五入到整数个 CPU 周期；Advance 不累计迟到量，平均半周期就是 half_。
     const uint32_t half = (want_x16 + 8U) / 16U;
     half_ = (half < min_half_) ? min_half_ : half;
     idle_ap_write_ = IdleClocksFor(cpu_hz_ / (2U * half_));
     return LibXR::ErrorCode::OK;
-  }
-
-  /// 当前 SetClockHz() 设定所对应的实际 SWCLK 频率，单位 Hz / Actual SWCLK frequency in
-  /// Hz for the current SetClockHz() setting.
-  uint32_t ActualHz() const
-  {
-#if XRDAP_SWD_FAST_PATH
-    if (fast_ != nullptr)
-    {
-      return (cpu_hz_ * 8U) / fast_half_x16_[fast_idx_];
-    }
-#endif
-    return cpu_hz_ / (2U * half_);
   }
 
   /// 关闭：SWCLK 与 SWDIO 都置高并释放 SWDIO / Close: drive SWCLK and SWDIO high, then
@@ -272,12 +246,10 @@ class SwdEngine final : public LibXR::Debug::Swd
   /// execution itself.
   LibXR::ErrorCode Transfer(const Request& req, Response& resp) override
   {
-#if XRDAP_SWD_FAST_PATH
     if (fast_ != nullptr)
     {
       return fast_(Pins(), req, resp);
     }
-#endif
     return PacedTransfer(req, resp);
   }
 
@@ -442,8 +414,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     return LibXR::ErrorCode::OK;
   }
 
-  // ------------------------------------------- 汇编路径（仅 S3，见 swd_fast_s3.cpp）
-#if XRDAP_SWD_FAST_PATH
+  // ------------------------------------------------- 汇编路径（见 swd_fast_s3.cpp）
   using FastXfer = LibXR::ErrorCode (*)(const SwdFastPins&, const Request&, Response&);
   static constexpr size_t kFastCount = kSwdFastLevels;
 
@@ -458,11 +429,7 @@ class SwdEngine final : public LibXR::Debug::Swd
   SwdFastPins Pins() const { return SwdFastPins{cm_, dm_, im_, &swdio_, idle_ap_write_}; }
 
   uint32_t fast_half_x16_[kFastCount] = {};
-  size_t fast_idx_ = 0;
   FastXfer fast_ = nullptr;
-#else
-  void* fast_ = nullptr;
-#endif
 
   // ------------------------------------------------------------ 标定
 
@@ -504,9 +471,7 @@ class SwdEngine final : public LibXR::Debug::Swd
       }
     }
     min_half_ = h;
-#if XRDAP_SWD_FAST_PATH
     CalibrateFast();
-#endif
     Out(dm_);
     Drive();
   }
