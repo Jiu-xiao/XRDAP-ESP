@@ -11,9 +11,6 @@ namespace XrDap
 {
 namespace
 {
-// 让提示先发出去 / Time for the message to go out.
-constexpr uint32_t kRestartDelayMs = 500U;
-
 // 取下一个词：以空格分隔，可以用双引号括起带空格的词。返回 false 表示没有更多的词。
 bool NextToken(char*& p, char*& token)
 {
@@ -176,7 +173,7 @@ void ConsoleCore::Handle(char* line)
       return;
     }
     Print("已保存，设备重启后连接\r\n");
-    RestartLater(kRestartDelayMs);
+    RestartLater();
   }
   else if (strcmp(sub, "clear") == 0)
   {
@@ -186,7 +183,7 @@ void ConsoleCore::Handle(char* line)
       return;
     }
     Print("已清除，设备重启后不再连接 Wi-Fi\r\n");
-    RestartLater(kRestartDelayMs);
+    RestartLater();
   }
   else
   {

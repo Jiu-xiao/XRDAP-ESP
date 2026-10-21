@@ -32,6 +32,7 @@
 #include "esp_uart.hpp"
 #include "libxr.hpp"
 #include "probe_app.hpp"
+#include "restart.hpp"
 #include "serial_link.hpp"
 #include "serial_mux.hpp"
 #include "swd_clock.hpp"
@@ -68,6 +69,8 @@ extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
   LibXR::PlatformInit(Config::kLibxrTimerPriority, 4096);
+  (void)RestartInit();  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on
+                        // failure
 
   // 单核芯片，专用 GPIO 在哪个任务里创建都可以用。
   static SwdSet swd_set;

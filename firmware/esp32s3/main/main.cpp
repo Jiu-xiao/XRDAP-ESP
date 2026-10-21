@@ -34,6 +34,7 @@
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "probe_info.hpp"
+#include "restart.hpp"
 #include "serial_link.hpp"
 #include "status_panel.hpp"
 #include "swd_engine.hpp"
@@ -141,6 +142,8 @@ extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
   LibXR::PlatformInit(Config::kLibxrTimerPriority, 8192);
+  (void)RestartInit();  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on
+                        // failure
 
   // 有 SWDIO 模拟开关的板子（Lite）先把开关接到 SWDIO 引脚那一侧，再建 SWD 对象。
   if constexpr (Config::kSwdioSelectGpio >= 0)

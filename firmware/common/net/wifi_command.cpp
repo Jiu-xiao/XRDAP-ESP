@@ -18,8 +18,6 @@ constexpr uint8_t kOpSet = 0x01U;
 constexpr uint8_t kOpClear = 0x02U;
 constexpr uint8_t kFlagStarted = 0x01U;
 constexpr uint8_t kFlagConnected = 0x02U;
-// 留出时间让回复发出去 / Time for the reply to go out.
-constexpr uint32_t kRestartDelayMs = 500U;
 }  // namespace
 
 void WifiCommand::Install(DapVendor& vendor)
@@ -103,7 +101,7 @@ bool WifiCommand::Set(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t&
   {
     return Reply(resp, kStatusResource, out);
   }
-  RestartLater(kRestartDelayMs);
+  RestartLater();
   return Reply(resp, kStatusOk, out);
 }
 
@@ -117,7 +115,7 @@ bool WifiCommand::Clear(uint16_t len, uint8_t* resp, uint16_t& out)
   {
     return Reply(resp, kStatusResource, out);
   }
-  RestartLater(kRestartDelayMs);
+  RestartLater();
   return Reply(resp, kStatusOk, out);
 }
 
