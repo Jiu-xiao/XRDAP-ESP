@@ -153,7 +153,7 @@ TEST(wifi_cmd_save_storage_failure)
 TEST(wifi_cmd_clear_then_restart)
 {
   FakeWifiSettings wifi;
-  CHECK_BYTES(Run(wifi, {0x86, 0x02}), (Bytes{0x86, 0x00}));
+  CHECK_BYTES(Run(wifi, {0x86, 0x02, 0xA5}), (Bytes{0x86, 0x00}));
   CHECK(wifi.clears == 1);
   CHECK(wifi.cleared_by == XrDap::EraseSource::VENDOR_COMMAND);
   CHECK(wifi.restarts == 1);
@@ -163,7 +163,7 @@ TEST(wifi_cmd_clear_storage_failure)
 {
   FakeWifiSettings wifi;
   wifi.storage_ok = false;
-  CHECK_BYTES(Run(wifi, {0x86, 0x02}), (Bytes{0x86, 0x03}));
+  CHECK_BYTES(Run(wifi, {0x86, 0x02, 0xA5}), (Bytes{0x86, 0x03}));
   CHECK(wifi.restarts == 0);
 }
 
@@ -173,12 +173,15 @@ TEST(wifi_cmd_tiny_buffer_gets_no_reply)
   CHECK(Run(wifi, {0x86, 0x00}, 1).empty());
 }
 
-// 清除只认协议规定的确认字节，别的都不清除 / Clear accepts only the confirmation the
-// protocol defines; anything else erases nothing.
+// 清除要带确认字节 0xA5（协议 3.7），缺了、错了或多了都回 01、不清除 / Clear needs the
+// confirm byte 0xA5 (protocol 3.7); missing, wrong or extra bytes get 01 and erase
+// nothing.
 TEST(wifi_cmd_clear_rejects_unexpected_bytes)
 {
   FakeWifiSettings wifi;
+  CHECK_BYTES(Run(wifi, {0x86, 0x02}), (Bytes{0x86, 0x01}));
   CHECK_BYTES(Run(wifi, {0x86, 0x02, 0x00}), (Bytes{0x86, 0x01}));
+  CHECK_BYTES(Run(wifi, {0x86, 0x02, 0xA5, 0xA5}), (Bytes{0x86, 0x01}));
   CHECK(wifi.clears == 0);
   CHECK(wifi.restarts == 0);
 }
