@@ -15,7 +15,7 @@ namespace XrDap
 {
 
 /// 探针固件版本 / Probe firmware version.
-inline constexpr char kFirmwareVersion[] = "0.5.4";
+inline constexpr char kFirmwareVersion[] = "0.5.5";
 /// 序列号前缀 / Serial number prefix.
 inline constexpr char kSerialPrefix[] = "XRobot-XRDAP-";
 /// 厂商名 / Vendor name.

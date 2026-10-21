@@ -33,7 +33,7 @@ Connect one probe to one target. GPIO5 of the classic ESP32 is a strapping pin, 
 
 The "Wireless DAP Lite" board (ESP32-S3 module, 2×5 header) uses its own image, `xrdap-esp32-s3-lite.bin`. SWCLK is GPIO37. SWDIO reaches the header through the on-board SGM3157 analog switch; the firmware holds the switch select pin GPIO36 low and drives and reads SWDIO on GPIO47. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available. Use a module without Octal PSRAM (WROOM-1-N4 or N8, MINI-1-N4 or N8); modules with Octal PSRAM use GPIO35 to 37. This image has not been tested on the real board yet.
 
-Status light (WS2812) and button on the Lite board:
+S3 status light and button (dev board: the RGB LED on GPIO48 and the BOOT key; Lite board: its WS2812 and SW2):
 
 | Light | Meaning |
 |---|---|

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 板上的状态灯（一颗 WS2812B）和 Wi-Fi 清除按键，Lite 板用。一个低优先级任务每 20 ms
-// 刷新灯色、读一次按键。上电时彩虹扫过一圈，之后：
+// 板上的状态灯（一颗 WS2812B）和 Wi-Fi 清除按键，引脚见 config.hpp。一个低优先级任务
+// 每 20 ms 刷新灯色、读一次按键。上电时彩虹扫过一圈，之后：
 //   底色       蓝：没有热点参数；黄色呼吸：正在连 Wi-Fi；绿：Wi-Fi 已连上；
 //              青：有网络调试客户端（OpenOCD TCP 或 USB/IP）
 //   白         上位机经 DAP_HostStatus 报告已连接；目标运行中时 1 s 一次呼吸
 //   闪亮       每条 DAP 命令（任何传输）把灯提亮再衰减，命令不断时约 12 Hz 闪烁
 //   红色快闪   按键按住中；按满 5 s 后红色常亮，清除热点参数并重启
 //
-// On-board status light (one WS2812B) and Wi-Fi clear button, used by the Lite board. A
+// On-board status light (one WS2812B) and Wi-Fi clear button; pins in config.hpp. A
 // low-priority task refreshes the light and reads the button every 20 ms. A rainbow
 // sweep runs at power-up, then:
 //   base       blue: no credentials; breathing yellow: joining Wi-Fi; green: Wi-Fi
