@@ -26,6 +26,10 @@ target_include_directories(xrdap_esp_tests PRIVATE
     ${COMMON}/net
     ${COMMON}/probe
     ${CORE})
+# USB/IP 描述符对照 XRDAP-Core 协议文档第 6 节 / USB/IP descriptors are checked against
+# section 6 of the XRDAP-Core protocol document.
+target_compile_definitions(xrdap_esp_tests PRIVATE
+    XRDAP_PROTOCOL_DOC="${CORE}/docs/protocol.en.md")
 if(MSVC)
   target_compile_options(xrdap_esp_tests PRIVATE /utf-8 /W4 /WX)
 else()

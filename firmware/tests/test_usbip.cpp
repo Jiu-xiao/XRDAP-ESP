@@ -8,6 +8,9 @@
 // RET_UNLINK), the CMSIS-DAP v2 specification (interface GUID), Microsoft's MS OS 2.0
 // descriptor specification, and the device parameters stated in the README (1D50:6199,
 // bcdDevice 0x0200).
+#include <cctype>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 #include "fakes.hpp"
@@ -352,4 +355,79 @@ TEST(usbip_ms_os_20_descriptor_set)
     guid += static_cast<char>(set[i]);
   }
   CHECK(guid.find("{CDB3B5AD-293B-4663-AA36-1AAE46463776}") != std::string::npos);
+}
+
+// XRDAP-Core docs/protocol.en.md 第 6 节的描述符字节是唯一来源，XRDAP-Host 的 usbip
+// 模块也 对照它：按顺序是设备、配置、限定、BOS、MS OS 2.0 描述符集 / The descriptor bytes
+// in section 6 of XRDAP-Core docs/protocol.en.md are the single source, which
+// XRDAP-Host's usbip module checks too: device, configuration, qualifier, BOS and MS
+// OS 2.0 set, in that order.
+namespace
+{
+std::vector<Bytes> DocDescriptors()
+{
+  std::vector<Bytes> blocks;
+  std::ifstream file(XRDAP_PROTOCOL_DOC, std::ios::binary);
+  CHECK(file.good());
+  const std::string text((std::istreambuf_iterator<char>(file)),
+                         std::istreambuf_iterator<char>());
+  const size_t start = text.find("Device descriptor (18 bytes)");
+  CHECK(start != std::string::npos);
+  const size_t end = text.find("```", start);
+  if (start == std::string::npos || end == std::string::npos)
+  {
+    return blocks;
+  }
+  size_t pos = start;
+  while (pos < end)
+  {
+    size_t eol = text.find('\n', pos);
+    eol = (eol == std::string::npos || eol > end) ? end : eol;
+    std::string line = text.substr(pos, eol - pos);
+    pos = eol + 1;
+    if (!line.empty() && line.back() == '\r')
+    {
+      line.pop_back();
+    }
+    // 全是两位十六进制数的行是数据，其余非空行开始一个新描述符 / A line of two-digit hex
+    // values is data; any other non-empty line starts a new descriptor.
+    Bytes row;
+    bool hex = !line.empty();
+    for (size_t i = 0; hex && i < line.size(); i += 3)
+    {
+      hex = i + 1 < line.size() && std::isxdigit(static_cast<unsigned char>(line[i])) &&
+            std::isxdigit(static_cast<unsigned char>(line[i + 1])) &&
+            (i + 2 == line.size() || line[i + 2] == ' ');
+      if (hex)
+      {
+        row.push_back(static_cast<uint8_t>(std::stoul(line.substr(i, 2), nullptr, 16)));
+      }
+    }
+    if (hex && !blocks.empty())
+    {
+      Test::Append(blocks.back(), row);
+    }
+    else if (!line.empty())
+    {
+      blocks.emplace_back();
+    }
+  }
+  return blocks;
+}
+}  // namespace
+
+TEST(usbip_descriptors_match_protocol_document)
+{
+  const std::vector<Bytes> doc = DocDescriptors();
+  CHECK(doc.size() == 5);
+  if (doc.size() != 5)
+  {
+    return;
+  }
+  Device d;
+  CHECK_BYTES(d.ControlIn({0x80, 0x06, 0x00, 0x01, 0, 0, 255, 0}, 255), doc[0]);
+  CHECK_BYTES(d.ControlIn({0x80, 0x06, 0x00, 0x02, 0, 0, 255, 0}, 255), doc[1]);
+  CHECK_BYTES(d.ControlIn({0x80, 0x06, 0x00, 0x06, 0, 0, 255, 0}, 255), doc[2]);
+  CHECK_BYTES(d.ControlIn({0x80, 0x06, 0x00, 0x0F, 0, 0, 255, 0}, 255), doc[3]);
+  CHECK_BYTES(d.ControlIn({0xC0, 0x20, 0, 0, 0x07, 0x00, 255, 0}, 255), doc[4]);
 }
