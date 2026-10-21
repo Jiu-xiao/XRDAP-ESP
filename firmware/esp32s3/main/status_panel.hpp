@@ -11,9 +11,9 @@
 // (status_light.hpp) and hands it to StatusLed. The button and the Wi-Fi settings are
 // not handled here.
 
-#include "dap_activity.hpp"
 #include "link_state.hpp"
 #include "status_led.hpp"
+#include "xrdap/activity/dap_activity.hpp"
 
 namespace XrDap
 {
@@ -31,7 +31,7 @@ class StatusPanel
   /// @param inputs 取输入的函数 / Function that takes the inputs.
   /// @param ctx 传给 inputs 的参数 / Argument passed to inputs.
   /// @note led、dap 的生命周期需长于本对象 / led and dap must outlive this object.
-  StatusPanel(StatusLed& led, const Vendor::DapActivity& dap, InputsFn inputs, void* ctx)
+  StatusPanel(StatusLed& led, const DapActivity& dap, InputsFn inputs, void* ctx)
       : led_(led), dap_(dap), inputs_(inputs), ctx_(ctx)
   {
   }
@@ -46,7 +46,7 @@ class StatusPanel
   void Run();
 
   StatusLed& led_;
-  const Vendor::DapActivity& dap_;
+  const DapActivity& dap_;
   InputsFn inputs_;
   void* ctx_;
 };

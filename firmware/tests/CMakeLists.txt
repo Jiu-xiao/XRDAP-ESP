@@ -25,9 +25,7 @@ target_include_directories(xrdap_esp_tests PRIVATE
     ${COMMON}/console
     ${COMMON}/net
     ${COMMON}/probe
-    ${CORE}/light
-    ${CORE}/vendor
-    ${CORE}/probe)
+    ${CORE})
 if(MSVC)
   target_compile_options(xrdap_esp_tests PRIVATE /utf-8 /W4 /WX)
 else()

@@ -7,7 +7,7 @@
 // rule (driven through RMT).
 
 #include "led_strip.h"
-#include "status_light.hpp"
+#include "xrdap/light/status_light.hpp"
 
 namespace XrDap
 {

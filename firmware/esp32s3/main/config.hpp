@@ -41,12 +41,6 @@ inline constexpr char kUsbProductName[] = "XR-DAP-S3 CMSIS-DAP";
 /// mDNS TXT 里的芯片名 / Chip name in the mDNS TXT.
 inline constexpr char kChipName[] = "esp32s3";
 
-/// 原生 USB 设备的版本号 / Release of the native USB device.
-constexpr uint16_t kUsbBcdDevice = 0x0100;
-static_assert(kUsbBcdDevice != kUsbipBcdDevice,
-              "Windows caches descriptors by VID, PID and release; the native USB device "
-              "and the USB/IP virtual device must differ");
-
 #if CONFIG_XRDAP_BOARD_LITE
 /// SWCLK 引脚 / SWCLK pin.
 constexpr int kSwclkGpio = 37;
@@ -96,6 +90,11 @@ constexpr int kSwdCore = 1;
 constexpr unsigned kLibxrTimerPriority = 3;
 /// DAP Step() 线程优先级 / DAP Step() thread priority.
 constexpr unsigned kStepPriority = 10;
+/// USB 线程等一条 USB 命令的最长时间。执行器在等待时持锁，没有主人时第一条 TCP 或串口
+/// 命令最多多等这么久 / Longest wait of the USB thread for one USB command. The executor
+/// holds its lock while waiting, so without an owner the first TCP or serial command
+/// waits at most this much longer.
+constexpr uint32_t kUsbWaitMs = 10;
 /// 采样任务优先级，为 SWD 核上最高 / Sampling task priority, the highest on the SWD core.
 constexpr unsigned kSamplingPriority = 14;
 

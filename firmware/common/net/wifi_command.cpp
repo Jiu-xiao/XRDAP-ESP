@@ -3,7 +3,7 @@
 
 #include <cstring>
 
-#include "vendor_protocol.hpp"
+#include "xrdap/vendor/vendor_protocol.hpp"
 
 namespace XrDap
 {
