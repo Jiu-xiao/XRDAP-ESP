@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 两种芯片共用的固定参数。各芯片自己的 config.hpp 包含本文件，再加上引脚、核和优先级。
+// 各芯片共用的固定参数。各芯片自己的 config.hpp 包含本文件，再加上引脚、核和优先级。
 //
-// Fixed parameters shared by both chips. Each chip's config.hpp includes this file and
+// Fixed parameters shared by every chip. Each chip's config.hpp includes this file and
 // adds its pins, cores and priorities.
 
 #include <cstdint>
@@ -36,9 +36,9 @@ constexpr uint16_t kUsbVid = 0x1D50;
 /// USB 产品号 / USB product ID.
 constexpr uint16_t kUsbPid = 0x6199;
 
-/// SWD 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档以减小边沿过冲和振铃；0 档在
-/// 10 MHz 以上错得更多 / SWD pad drive strength, 0 weakest to 3 strongest (IDF default
-/// 2). One step lower reduces edge overshoot and ringing; level 0 fails more above
-/// 10 MHz.
+/// SWD 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档以减小边沿过冲和振铃；0 档的
+/// 边沿太慢，高时钟下出错 / SWD pad drive strength, 0 weakest to 3 strongest (IDF
+/// default 2). One step lower reduces edge overshoot and ringing; level 0 has edges too
+/// slow for high clocks.
 constexpr int kPadDriveStrength = 1;
 }  // namespace XrDap::Config

@@ -8,8 +8,8 @@
       "en": "ESP32-S3 board"
     },
     "note": {
-      "zh": "插芯片原生 USB 口（D- GPIO19、D+ GPIO20）。",
-      "en": "Use the native USB port (D- GPIO19, D+ GPIO20)."
+      "zh": "插芯片原生 USB 口（D- GPIO19、D+ GPIO20）。连不上时按住 BOOT 插上 USB（或按住 BOOT 按一下 RST）进下载模式；BOOT 只用于下载，清除 Wi-Fi 用电脑端 xrdap wifi clear。",
+      "en": "Use the native USB port (D- GPIO19, D+ GPIO20). If it does not connect, hold BOOT while plugging in USB (or hold BOOT and press RST once) to enter download mode. BOOT is only for download mode; Wi-Fi is cleared from the PC with xrdap wifi clear."
     }
   },
   {

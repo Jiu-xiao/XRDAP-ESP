@@ -31,12 +31,12 @@ constexpr int kSwdioGpio = 19;
 
 /// 写一次 SWCLK 沿在每个时钟周期多出的 CPU 周期数，用来校正 SWCLK 频率；偏低就加大，
 /// 偏高就减小。传统 ESP32 的 GPIO 读写走外设总线（写约 12、读约 17 个 CPU 周期），比 S3
-/// 的专用 GPIO 慢得多；28 是按不同时钟下 MemAp 标定一轮的耗时推算的，没有用逻辑分析仪校准
-/// / Extra CPU cycles one SWCLK edge write adds to each clock period, used to calibrate
-/// the SWCLK frequency; raise it if the frequency is low, lower it if high. GPIO access
-/// on the classic ESP32 goes over the peripheral bus (about 12 CPU cycles per write, 17
-/// per read), much slower than the S3's dedicated GPIO; 28 was derived from MemAp
-/// calibration round times at several clocks, not measured with a logic analyzer.
+/// 的专用 GPIO 慢得多；28 由不同时钟下 MemAp 标定一轮的耗时推算 / Extra CPU cycles one
+/// SWCLK edge write adds to each clock period, used to calibrate the SWCLK frequency;
+/// raise it if the frequency is low, lower it if high. GPIO access on the classic ESP32
+/// goes over the peripheral bus (about 12 CPU cycles per write, 17 per read), much
+/// slower than the S3's dedicated GPIO; 28 follows from MemAp calibration round times at
+/// several clocks.
 constexpr uint32_t kEdgeWriteCycles = 28U;
 
 /// SWD、DAP 命令、采样和网络服务所在的核；Wi-Fi 和 lwIP 在核 0 / Core for SWD, DAP

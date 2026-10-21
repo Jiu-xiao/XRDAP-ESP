@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-用 ESP32-S3、ESP32-C3 或传统 ESP32 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。插 USB 线或走 Wi-Fi 都能用，Keil、pyOCD、probe-rs、OpenOCD 把它当普通的 CMSIS-DAP 探针；另外能在探针上按固定周期采样目标的变量，配合电脑端工具画曲线。已在 STM32G431KB、STM32F401RC 上测试。
+用 ESP32-S3、ESP32-C3 或传统 ESP32 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。插 USB 线或走 Wi-Fi 都能用，Keil、pyOCD、probe-rs、OpenOCD 把它当普通的 CMSIS-DAP 探针；另外能在探针上按固定周期采样目标的变量，配合电脑端工具画曲线。
 
 电脑端工具在 [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host)：一个 `xrdap` 可执行文件，不带参数是图形界面，带命令是命令行。
 
@@ -31,9 +31,9 @@
 
 一个目标只接一个探针。传统 ESP32 的 GPIO5 是启动配置引脚，所以换成 GPIO18、GPIO19；它的串口链路在 UART0（GPIO1、GPIO3），也就是板上 USB 转串口芯片那个口，插 USB 线即可。C3 要用芯片自带的 USB 口（D- GPIO18、D+ GPIO19）：USB 座直接连到这两个脚的开发板插上就行；USB 座接的是 USB 转串口芯片的板子（例如 ESP32-C3-DevKitM-1），另接一根 USB 线到排针的 GPIO18、GPIO19、5V、GND。
 
-“高速无线 DAP 调试器 Lite”板（ESP32-S3 模组，2×5 排针）用单独的固件 `xrdap-esp32-s3-lite.bin`：SWCLK 是 GPIO37；SWDIO 经板上的 SGM3157 模拟开关接到排针，固件把开关的选择脚 GPIO36 固定为低，用 GPIO47 收发 SWDIO。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi。模组要用不带 Octal PSRAM 的（WROOM-1-N4、N8，MINI-1-N4、N8），带 Octal PSRAM 的型号占用 GPIO35 到 37。这个固件还没有在实物上测过。
+“高速无线 DAP 调试器 Lite”板（ESP32-S3 模组，2×5 排针）用单独的固件 `xrdap-esp32-s3-lite.bin`：SWCLK 是 GPIO37；SWDIO 经板上的 SGM3157 模拟开关接到排针，固件把开关的选择脚 GPIO36 固定为低，用 GPIO47 收发 SWDIO。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi。模组要用不带 Octal PSRAM 的（WROOM-1-N4、N8，MINI-1-N4、N8），带 Octal PSRAM 的型号占用 GPIO35 到 37。
 
-S3 的状态灯和按键（开发板：GPIO48 的 RGB 灯、BOOT 键；Lite 板：板上的 WS2812、SW2 键）：
+S3 的状态灯（开发板：GPIO48 的 RGB 灯；Lite 板：板上的 WS2812）。Lite 板的 SW2 键按住 5 秒清除热点参数并重启。开发板的 BOOT 键只用于进下载模式：它接在 USB 转串口芯片的自动下载电路上，串口线的 DTR/RTS 能把它拉低，所以固件运行时不读它；开发板清除 Wi-Fi 用 `xrdap wifi clear` 或命令行 `wifi clear`（2.6）。
 
 | 灯 | 含义 |
 |---|---|
@@ -44,7 +44,7 @@ S3 的状态灯和按键（开发板：GPIO48 的 RGB 灯、BOOT 键；Lite 板�
 | 主色与紫色来回，2 秒一次 | 上位机经 DAP_HostStatus 报告已连接 |
 | 红蓝来回，1 秒一次 | 上位机报告目标运行中 |
 | 闪亮 | 每条 DAP 命令（USB、串口、Wi-Fi 都算）把灯提亮再暗下去，命令不断时约 15 Hz 闪烁 |
-| 紫色快闪 | 按键按住中；按满 5 秒变紫色常亮，清除热点参数并重启 |
+| 紫色快闪 | Lite 板 SW2 按住中；按满 5 秒变紫色常亮，清除热点参数并重启 |
 | 紫色常亮 | 刚改了热点参数（按键、命令行或 0x86 命令），马上重启 |
 
 USB 和 Wi-Fi 都连着时以有线为准，显示红色。上位机异常退出、没有发 DAP_Disconnect 时，5 秒内没有命令也回到主色。板上的 WS2812B 用 5V 供电，数据高电平门限是 0.65 × 5V = 3.25V，3.3V 驱动刚好够，个别灯珠可能不亮或颜色不对，不影响调试功能。
@@ -59,7 +59,7 @@ python -m esptool --chip esp32c3 write_flash 0x0 xrdap-esp32-c3.bin
 python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 ```
 
-升级用同样的命令，Wi-Fi 设置会保留。v0.5.1 及更早的 S3 镜像头写的是 8MB，烧到 4MB Flash 的板子（N4、部分 Lite 板）上会反复重启；用这些旧镜像时在 `write_flash` 后加 `--flash_size 4MB`。esptool 报 `Wrong boot mode` 进不了下载模式时（有的板子自动下载电路只能复位、拉不低 GPIO0），按住 BOOT，按一下 RESET（EN），再松开 BOOT，然后在命令里加 `--before no_reset`。
+升级用同样的命令，Wi-Fi 设置会保留。开发板的 BOOT 键只在烧录时用到。v0.5.1 及更早的 S3 镜像头写的是 8MB，烧到 4MB Flash 的板子（N4、部分 Lite 板）上会反复重启；用这些旧镜像时在 `write_flash` 后加 `--flash_size 4MB`。esptool 报 `Wrong boot mode` 进不了下载模式时（有的板子自动下载电路只能复位、拉不低 GPIO0），按住 BOOT，按一下 RESET（EN），再松开 BOOT，然后在命令里加 `--before no_reset`。
 
 Lite 板没有复位键和 USB 转串口，烧录前要手动进下载模式：拔下 USB，按住 SW1（接 GPIO0 的按键）再插上，然后松开。芯片进入下载模式后，电脑上出现原生 USB 的串口（`303A:1001`），再运行上面的命令；烧完后 esptool 复位芯片，新固件随即启动。
 
@@ -87,14 +87,14 @@ pyocd list
 probe-rs list
 ```
 
-Keil：Debug 选 CMSIS-DAP Debugger，Settings 里端口选 SW，SW Device 栏出现 IDCODE 即连上，Max Clock 先设 4 MHz。OpenOCD 和 probe-rs 实测可用，pyOCD 没有实测。
+Keil：Debug 选 CMSIS-DAP Debugger，Settings 里端口选 SW，SW Device 栏出现 IDCODE 即连上，Max Clock 先设 4 MHz。
 
 ### 2.2 C3 或传统 ESP32 插 USB，用 Keil、pyOCD、probe-rs、OpenOCD
 
-C3 的 USB 口是固定功能的 USB Serial/JTAG，传统 ESP32 的 USB 口接的是 USB 转串口芯片，电脑上都是一个串口。用 `xrdap share usbip` 把它变成 USB 探针（`COM7` 换成实际的口，Linux 上是 `/dev/ttyACM0` 或 `/dev/ttyUSB0`）：
+C3 的 USB 口是固定功能的 USB Serial/JTAG，传统 ESP32 的 USB 口接的是 USB 转串口芯片，电脑上都是一个串口。用 `xrdap share usbip` 把它变成 USB 探针（`COMx` 换成实际的口，Linux 上是 `/dev/ttyACM0` 或 `/dev/ttyUSB0`）：
 
 ```
-xrdap -p COM7 share usbip
+xrdap -p COMx share usbip
 ```
 
 再在另一个终端挂载：
@@ -110,18 +110,18 @@ usbip attach -r 127.0.0.1 -b 1-1
 先按 2.6 配好 Wi-Fi。探针在 3240 端口提供 USB/IP，直接挂载，不需要 `xrdap`：
 
 ```
-usbip list -r xrdap-721384.local
-usbip attach -r xrdap-721384.local -b 1-1
+usbip list -r xrdap-xxxxxx.local
+usbip attach -r xrdap-xxxxxx.local -b 1-1
 ```
 
-`xrdap-721384.local` 是探针的 mDNS 主机名（`xrdap-` 加 MAC 后 6 位），也可以写 IP；`xrdap list` 会列出来。挂载后用法同 2.1，用完 `usbip detach -p 0`。
+`xrdap-xxxxxx.local` 是探针的 mDNS 主机名（`xxxxxx` 是 MAC 后 6 位十六进制），也可以写 IP；`xrdap list` 会列出来。挂载后用法同 2.1，用完 `usbip detach -p 0`。
 
 ### 2.4 走 Wi-Fi，OpenOCD 直连
 
 OpenOCD 也可以不经 USB/IP，用它的 CMSIS-DAP TCP 后端直连探针的 3241 端口：
 
 ```
-openocd -c "adapter driver cmsis-dap; cmsis-dap backend tcp; cmsis-dap tcp host xrdap-721384.local; cmsis-dap tcp port 3241; transport select swd" -f target/stm32f4x.cfg
+openocd -c "adapter driver cmsis-dap; cmsis-dap backend tcp; cmsis-dap tcp host xrdap-xxxxxx.local; cmsis-dap tcp port 3241; transport select swd" -f target/stm32f4x.cfg
 ```
 
 TCP 后端还不在 OpenOCD 的正式版里，见第 3 节“OpenOCD 版本”。
@@ -135,16 +135,18 @@ TCP 后端还不在 OpenOCD 的正式版里，见第 3 节“OpenOCD 版本”�
 探针连在电脑上（USB 或串口都行）时，在 `xrdap` 图形界面里连上探针，展开“Wi-Fi”填热点名和密码，点“保存并重启”；或者用命令行：
 
 ```
-xrdap wifi set 热点名 密码
+xrdap wifi set lab 密码
 xrdap wifi status
 ```
 
-保存后探针约 0.5 秒后重启并连接热点。换热点再 `set` 一次；`xrdap wifi clear` 清除后不再连 Wi-Fi。热点断了探针会一直重连。
+`lab` 换成热点名。保存后探针约 0.5 秒后重启并连接热点。换热点再 `set` 一次；`xrdap wifi clear` 清除后不再连 Wi-Fi。热点断了探针会一直重连。
 
-不装 `xrdap` 时也可以用串口终端：S3 插 USB 后多出的虚拟串口，或 C3 的 USB 口（终端不要动 DTR/RTS），输入 `wifi set 热点名 密码`、`wifi status`、`wifi clear`、`help`。
+热点参数存在 NVS 里，删除它的有 `wifi clear`、0x86 清除命令、Lite 板的 SW2 长按，以及 NVS 分区损坏（写满或格式版本不符）时探针在启动时做的擦除重建。每次删除都记下来源。命令行 `wifi status` 和 0x86 的状态回复给出上次清除的来源和上次复位的原因（上电、软件重启、看门狗、异常、欠压），热点参数不见了时据此判断原因。
+
+不装 `xrdap` 时也可以用串口终端：S3 插 USB 后多出的虚拟串口，或 C3 的 USB 口（终端不要动 DTR/RTS），输入 `wifi set lab 密码`、`wifi status`、`wifi clear`、`help`。
 
 ```
-python -m serial.tools.miniterm COM7 115200 --dtr 0 --rts 0
+python -m serial.tools.miniterm COMx 115200 --dtr 0 --rts 0
 ```
 
 ## 3. 参考
@@ -161,12 +163,12 @@ python -m serial.tools.miniterm COM7 115200 --dtr 0 --rts 0
 
 `xrdap` 按串口芯片自动选波特率：CH343 等先试 4 Mbaud，CP2102、CH340 用 921600，不用手写 `--baud`。
 
-几种连接共用一个 DAP，同一时间只服务一个客户端，3240 和 3241 也互斥（一个连着时另一个排队）。网络客户端连着时 S3 的原生 USB 暂时关闭，断开后恢复。客户端没有正常断开时约 11 秒后释放。
+Wi-Fi 的 3240 和 3241 同一时间只服务一个客户端（一个连着时另一个排队）。网络客户端连着时 S3 的原生 USB 暂时关闭，断开后恢复。客户端没有正常断开时约 11 秒后释放。
 
 ### 找到探针
 
-- 序列号：`XRobot-XRDAP-` 加出厂 MAC 的 12 位大写十六进制，例如 `XRobot-XRDAP-E8069093EF1C`。USB 描述符、DAP_Info、mDNS 里都是这个值，多块探针时用它区分（OpenOCD 用 `adapter serial`，pyOCD 用 `-u`，probe-rs 用 `--probe`）。
-- mDNS：主机名 `xrdap-` 加 MAC 后 3 字节小写（上例为 `xrdap-93ef1c.local`），服务 `_xrdap._tcp`，TXT 记录 `serial`、`chip`、`fw`。
+- 序列号：`XRobot-XRDAP-` 加出厂 MAC 的 12 位大写十六进制，例如 `XRobot-XRDAP-0123456789AB`。USB 描述符、DAP_Info、mDNS 里都是这个值，多块探针时用它区分（OpenOCD 用 `adapter serial`，pyOCD 用 `-u`，probe-rs 用 `--probe`）。
+- mDNS：主机名 `xrdap-` 加 MAC 后 3 字节小写（上例为 `xrdap-6789ab.local`），服务 `_xrdap._tcp`，TXT 记录 `serial`、`chip`、`fw`。
 - `xrdap list` 列出 USB、串口、局域网上的探针，同一块探针的几种连接放在一起。
 
 ### USB/IP 客户端
@@ -187,7 +189,7 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6199", MODE="0666"
 ### OpenOCD 版本
 
 - 走 USB（2.1）和 USB/IP（2.2、2.3）用的是 OpenOCD 的 USB 后端，正式版 0.12.0 就行。
-- 2.4 的 CMSIS-DAP TCP 后端不在任何正式版里（最新正式版 0.12.0 发布于 2023 年），要从 master 自己编译。Windows 上 master 在 2026-08-15 的提交 e89e73839d53 之前有套接字处理的 bug（把“暂时没有数据”当错误，启动等十几秒并刷屏 `error reading header`），要用包含这个提交的版本。
+- 2.4 的 CMSIS-DAP TCP 后端不在正式版 0.12.0 里，要从 master 自己编译。Windows 上 master 在提交 e89e73839d53 之前有套接字处理的 bug（把“暂时没有数据”当错误，启动等十几秒并刷屏 `error reading header`），要用包含这个提交的版本。
 
 ### Windows 上的驱动
 
@@ -199,7 +201,7 @@ pnputil /remove-device "USB\VID_1D50&PID_6199\<序列号>" /subtree
 
 ### 性能
 
-S3，目标 STM32G431KB，杜邦线：
+下面是典型值，实际结果随目标芯片和接线变化。S3：
 
 | 项目 | 结果 |
 |---|---|
@@ -217,7 +219,7 @@ S3，目标 STM32G431KB，杜邦线：
 | 8 | 167 µs | 220 µs | 251 µs |
 | 32 | 604 µs | 681 µs | 608 µs |
 
-OpenOCD 读 STM32F401 的 128 KiB（Linux，4 MHz 请求）：
+OpenOCD 读 128 KiB（4 MHz 请求）：
 
 | 路径 | S3 | C3 |
 |---|---|---|
@@ -227,11 +229,11 @@ OpenOCD 读 STM32F401 的 128 KiB（Linux，4 MHz 请求）：
 
 C3 是单核，Wi-Fi 收发和采样在同一个核上：经 Wi-Fi 采样 4 个变量 1 ms 不跳拍，500 µs 约跳 0.2% 的拍。
 
-传统 ESP32（CP2102，921600 baud，目标 STM32G431，杜邦线）：SWD 1 到 40 MHz 请求下读写全部正确；GPIO 寄存器在外设总线上（写一次约 12 个 CPU 周期，读一次约 17 个），请求 5 MHz 以上都按全速跑，`xrdap info` 报告的单次访问约 30 µs（约 150 个 SWCLK 周期，折合不到 5 MHz）；探针端采样 8 个变量 1 ms、1 个变量 200 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share usbip`，OpenOCD 读 128 KiB 3.4 s。经 Wi-Fi：4 个变量 500 µs、8 个变量 600 µs、1 个变量 150 µs 不丢帧（150 µs 时 5 秒内跳 1 拍）；Linux 上 USB/IP 挂载后 OpenOCD 读 128 KiB 3.2 s，TCP 后端 2.3 s。
+传统 ESP32（串口 921600 baud）：SWD 1 到 40 MHz 请求下读写全部正确；GPIO 寄存器在外设总线上（写一次约 12 个 CPU 周期，读一次约 17 个），请求 5 MHz 以上都按全速跑，`xrdap info` 报告的单次访问约 30 µs（约 150 个 SWCLK 周期，折合不到 5 MHz）；探针端采样 8 个变量 1 ms、1 个变量 200 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share usbip`，OpenOCD 读 128 KiB 3.4 s。经 Wi-Fi：4 个变量 500 µs、8 个变量 600 µs、1 个变量 150 µs 不丢帧（150 µs 时偶尔跳 1 拍）；USB/IP 挂载后 OpenOCD 读 128 KiB 3.2 s，TCP 后端 2.3 s。
 
 ### SWD 时钟和接线
 
-S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算（4 MHz 实测 4.03 MHz；请求 25 MHz 及以上时用最快的一档，约 23.7 MHz，未用示波器量过）。C3 和传统 ESP32 用 libxr 的通用 GPIO 位带，频率由每个 SWCLK 沿之后的忙等决定，校正值（`config.hpp` 的 `kEdgeWriteCycles`）是按不同时钟下单次访问的耗时推算的，没有用逻辑分析仪校准。能跑多快取决于线长、目标板上拉和走线，先用 4 MHz；高时钟出错时先看 SWCLK、SWDIO 波形，缩短线或加串联电阻。引脚驱动强度设为 1（IDF 默认 2），减小过冲和振铃。
+S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算；请求 25 MHz 及以上时用最快的一档，约 23.7 MHz。C3 和传统 ESP32 用 libxr 的通用 GPIO 位带，频率由每个 SWCLK 沿之后的忙等决定，校正值是 `config.hpp` 的 `kEdgeWriteCycles`。能跑多快取决于线长、目标板上拉和走线，先用 4 MHz；高时钟出错时先看 SWCLK、SWDIO 波形，缩短线或加串联电阻。引脚驱动强度设为 1（IDF 默认 2），减小过冲和振铃。
 
 ### 自己编译
 
@@ -241,7 +243,7 @@ S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算（4 MHz 实测 4.03
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP.git
 cd XRDAP-ESP/firmware/esp32s3      # C3 是 firmware/esp32c3，传统 ESP32 是 firmware/esp32
 idf.py build
-idf.py -p COM3 flash
+idf.py -p COMx flash
 ```
 
 `idf.py build merge-bin` 生成和 release 相同的合并镜像 `build/merged-binary.bin`。Lite 板的固件在 `firmware/esp32s3` 里多叠加一份配置：
@@ -252,16 +254,25 @@ idf.py -B build-lite -D SDKCONFIG=build-lite/sdkconfig -D "SDKCONFIG_DEFAULTS=sd
 
 也可以在 `idf.py menuconfig` 的 XR-DAP → Board 里选板型。
 
+命令行、0x86、TCP 帧、USB/IP 和状态灯输入这些纯逻辑不依赖 ESP-IDF，`firmware/tests` 是它们在电脑上运行的单元测试（CMake 和 C++17 编译器，GCC 或 MSVC）：
+
+```
+cmake -S firmware/tests -B build-tests
+cmake --build build-tests
+ctest --test-dir build-tests
+```
+
 | 目录 | 内容 |
 |---|---|
 | `firmware/esp32s3`、`firmware/esp32c3`、`firmware/esp32` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级；S3 按板型选引脚），S3 的 SWD 引擎 |
-| `firmware/common/net` | Wi-Fi、0x86 Wi-Fi 命令、OpenOCD TCP 服务、USB/IP 虚拟设备、mDNS |
+| `firmware/common/net` | Wi-Fi 和热点参数存储、0x86 Wi-Fi 命令、OpenOCD TCP 服务、USB/IP 虚拟设备、mDNS |
 | `firmware/common/serial`、`console` | 串口 DAP 链路、C3 的串口分流、Wi-Fi 命令行 |
-| `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤、采样任务和它的 gptimer |
+| `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤、重启、状态灯输入、采样任务和它的 gptimer |
+| `firmware/tests` | 电脑上运行的单元测试 |
 | `firmware/common/swd` | S3、C3 的专用 GPIO 引脚，传统 ESP32 的 GPIO 寄存器引脚，C3 和传统 ESP32 的 SWCLK 频率控制 |
 | `third_party/xrdap-core` | XR 厂商扩展、状态灯规则、探针身份和协议文档（[XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)） |
 
-每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布 release。网页烧录站点由 `pages` 工作流发布：取最新 release 的固件和 main 上 `web/` 的页面，打标签的编译完成后、或 `web/` 有改动时重新发布（`web/make_site.py` 按 `web/boards.json` 为每块板生成 ESP Web Tools 的 manifest）。
+每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）、运行单元测试并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布 release。网页烧录站点由 `pages` 工作流发布：取最新 release 的固件和 main 上 `web/` 的页面，打标签的编译完成后、或 `web/` 有改动时重新发布（`web/make_site.py` 按 `web/boards.json` 为每块板生成 ESP Web Tools 的 manifest）。
 
 ### 厂商扩展
 

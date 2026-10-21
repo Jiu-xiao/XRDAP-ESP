@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// ESP32-C3 版 XR-DAP 的固定参数；两种芯片共用的在 probe_config.hpp。
+// ESP32-C3 版 XR-DAP 的固定参数；各芯片共用的在 probe_config.hpp。
 //
 // Fixed parameters of the ESP32-C3 XR-DAP firmware; shared ones are in probe_config.hpp.
 
@@ -28,10 +28,9 @@ constexpr int kSwclkGpio = 5;
 constexpr int kSwdioGpio = 4;
 
 /// 写一次 SWCLK 沿在每个时钟周期多出的 CPU 周期数，用来校正 SWCLK 频率；偏低就加大，
-/// 偏高就减小。这个值还没有用逻辑分析仪在 C3 上校准过 / Extra CPU cycles one SWCLK edge
-/// write adds to each clock period, used to calibrate the SWCLK frequency; raise it if
-/// the frequency is low, lower it if high. Not yet calibrated on the C3 with a logic
-/// analyzer.
+/// 偏高就减小 / Extra CPU cycles one SWCLK edge write adds to each clock period, used
+/// to calibrate the SWCLK frequency; raise it if the frequency is low, lower it if
+/// high.
 constexpr uint32_t kEdgeWriteCycles = 13U;
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
