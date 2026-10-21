@@ -104,8 +104,8 @@ constexpr int kSerialUart = 0;
 constexpr int kSerialTxGpio = 43;
 /// 串口 RX 引脚 / Serial RX pin.
 constexpr int kSerialRxGpio = 44;
-/// 串口波特率。板上 CH343 在 4 Mbaud 下可靠，5 Mbaud 不行 / Serial baud rate. The
-/// on-board CH343 is reliable at 4 Mbaud but not at 5 Mbaud.
+/// 串口波特率，取板上 USB 转串口芯片（CH343）能稳定工作的最高速率 / Serial baud rate,
+/// the highest the on-board USB-UART chip (CH343) runs reliably.
 constexpr uint32_t kSerialBaud = 4000000;
 /// 串口 DAP 任务优先级 / Serial DAP task priority.
 constexpr unsigned kSerialPriority = 12;

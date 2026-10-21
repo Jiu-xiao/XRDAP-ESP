@@ -21,10 +21,10 @@ inline constexpr char kFirmwareVersion[] = "0.5.5";
 
 /// 出厂 MAC（eFuse 中的 6 字节）/ Factory MAC (6 bytes from eFuse).
 const uint8_t* ProbeMac();
-/// 序列号，例如 XRobot-XRDAP-E8069093EF1C / Serial, e.g. XRobot-XRDAP-E8069093EF1C.
+/// 序列号，例如 XRobot-XRDAP-0123456789AB / Serial, e.g. XRobot-XRDAP-0123456789AB.
 const char* ProbeSerial();
-/// mDNS 主机名，例如 xrdap-93ef1c（MAC 后 3 字节，小写）/ mDNS host name, e.g.
-/// xrdap-93ef1c (last 3 MAC bytes, lower case).
+/// mDNS 主机名，例如 xrdap-6789ab（MAC 后 3 字节，小写）/ mDNS host name, e.g.
+/// xrdap-6789ab (last 3 MAC bytes, lower case).
 const char* ProbeHostname();
 
 }  // namespace XrDap
