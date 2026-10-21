@@ -1,67 +1,54 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 板上的状态灯（一颗 WS2812B）和 Wi-Fi 清除按键，引脚见 config.hpp。一个低优先级任务
-// 每 20 ms 读一次按键、按 XRDAP-Core 的状态灯规则（status_light.hpp）刷新灯色。这里只
-// 判断连接和设置状态：
-//   有线   USB 已配置，或 5 s 内有经 USB、串口来的 DAP 命令
-//   无线   有网络调试客户端（OpenOCD TCP 或 USB/IP），或只连着 Wi-Fi
-//   正在连 Wi-Fi 正在入网
-//   改设置 按住按键（快闪）；按满 5 s 或经命令行、0x86 改了热点参数后（常亮），随后重启
+// 状态灯刷新：一个低优先级任务每 20 ms 取一次输入（组合根给的 LinkInputs 和 DAP 活动），
+// 按 link_state.hpp 换成连接和设置状态，再按 XRDAP-Core 的灯语（status_light.hpp）算出
+// 一帧交给 StatusLed。按键和 Wi-Fi 设置不在这里。
 //
-// On-board status light (one WS2812B) and Wi-Fi clear button; pins in config.hpp. A
-// low-priority task reads the button every 20 ms and refreshes the light by XRDAP-Core's
-// status light rule (status_light.hpp). Only the link and setting state are decided
-// here:
-//   wired     USB configured, or a DAP command over USB or serial within 5 s
-//   wireless  a network debug client (OpenOCD TCP or USB/IP), or only Wi-Fi
-//   joining   Wi-Fi associating
-//   setting   button held (fast blink); solid after 5 s or after the credentials were
-//             changed from the console or 0x86, then the probe restarts
-
-#include <atomic>
-#include <cstdint>
+// Status light refresh: a low-priority task takes the inputs every 20 ms (the
+// LinkInputs from the composition root and the DAP activity), turns them into link and
+// setting states with link_state.hpp, computes a frame with XRDAP-Core's light rule
+// (status_light.hpp) and hands it to StatusLed. The button and the Wi-Fi settings are
+// not handled here.
 
 #include "dap_activity.hpp"
-#include "led_strip.h"
+#include "link_state.hpp"
+#include "status_led.hpp"
 
 namespace XrDap
 {
 
-/// 状态灯和 Wi-Fi 清除按键 / Status light and Wi-Fi clear button.
+/// 状态灯刷新任务 / Status light refresh task.
 class StatusPanel
 {
  public:
-  /// @param led_gpio WS2812 数据脚 / WS2812 data pin.
-  /// @param button_gpio 按键脚，按下接地，用内部上拉 / Button pin, shorted to ground when
-  ///        pressed; the internal pull-up is used.
-  /// 查询 USB 是否已被主机配置 / Query whether USB is configured by the host.
-  using UsbConfiguredFn = bool (*)(void* ctx);
+  /// 取一次输入，在刷新任务里调用，须可在任意任务调用 / Take the inputs once; called in
+  /// the refresh task, so it must be callable from any task.
+  using InputsFn = LinkInputs (*)(void* ctx);
 
-  /// @param dap DAP 活动来源，生命周期需长于本对象 / DAP activity source; must outlive
-  ///        this object.
-  /// @param usb_configured 查询 USB 是否已配置，从刷新任务里调用 / Queries whether USB
-  ///        is configured; called from the refresh task.
-  StatusPanel(int led_gpio, int button_gpio, const Vendor::DapActivity& dap,
-              UsbConfiguredFn usb_configured, void* usb_ctx);
+  /// @param led 状态灯 / Status light.
+  /// @param dap DAP 活动来源 / DAP activity source.
+  /// @param inputs 取输入的函数 / Function that takes the inputs.
+  /// @param ctx 传给 inputs 的参数 / Argument passed to inputs.
+  /// @note led、dap 的生命周期需长于本对象 / led and dap must outlive this object.
+  StatusPanel(StatusLed& led, const Vendor::DapActivity& dap, InputsFn inputs, void* ctx)
+      : led_(led), dap_(dap), inputs_(inputs), ctx_(ctx)
+  {
+  }
 
-  /// 在 core 上启动刷新任务 / Start the refresh task on core.
-  void Start(int core);
-
-  /// 网络客户端连上或断开时调用，可在任意任务调用 / Call when a network client connects
-  /// or leaves; callable from any task.
-  void SetNetworkClient(bool connected) { client_.store(connected); }
+  /// @brief 在指定的核上启动刷新任务 / Start the refresh task on a core.
+  /// @return 任务创建失败（内存不足）时返回 false，灯不亮 / False when the task could not
+  ///         be created (out of memory); the light stays dark.
+  bool Start(int core);
 
  private:
   static void TaskEntry(void* arg);
   void Run();
 
-  int button_gpio_;
+  StatusLed& led_;
   const Vendor::DapActivity& dap_;
-  UsbConfiguredFn usb_configured_;
-  void* usb_ctx_;
-  led_strip_handle_t strip_ = nullptr;
-  std::atomic<bool> client_{false};
+  InputsFn inputs_;
+  void* ctx_;
 };
 
 }  // namespace XrDap
