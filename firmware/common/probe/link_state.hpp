@@ -20,8 +20,8 @@
 
 #include <cstdint>
 
-#include "status_light.hpp"
 #include "wifi_settings.hpp"
+#include "xrdap/light/status_light.hpp"
 
 namespace XrDap
 {

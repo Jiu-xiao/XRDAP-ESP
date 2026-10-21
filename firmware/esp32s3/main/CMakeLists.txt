@@ -3,4 +3,3 @@ idf_component_register(SRCS "main.cpp" "hold_button.cpp" "status_led.cpp" "statu
                        INCLUDE_DIRS "." ${XRDAP_COMMON_INCLUDES}
                        REQUIRES ${XRDAP_COMMON_REQUIRES}
                        LDFRAGMENTS "../../common/linker.lf")
-target_compile_definitions(${COMPONENT_LIB} PRIVATE ${XRDAP_COMMON_DEFINES})

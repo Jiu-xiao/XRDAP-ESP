@@ -11,7 +11,7 @@
 
 #include <cstdint>
 
-#include "probe_identity.hpp"
+#include "xrdap/probe/probe_identity.hpp"
 
 namespace XrDap
 {

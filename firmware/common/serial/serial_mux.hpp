@@ -2,15 +2,16 @@
 #pragma once
 
 // 一个串口同时跑 DAP 链路和文本命令行，无需切换模式。读到的每块数据先交给 DAP 链路
-// （DapSerialTransport::Feed），它自己找帧头、校验 CRC，非帧字节直接丢弃。这一块没有执行
-// 任何 DAP 帧、且最近 kQuietMs 内也没有 DAP 帧时，才把字节交给命令行（ConsoleCore）。
+// （XRDAP-Core SerialLink::Feed），它自己找帧头、校验
+// CRC，非帧字节直接丢弃。这一块没有执行 任何 DAP 帧、且最近 kQuietMs 内也没有 DAP
+// 帧时，才把字节交给命令行（ConsoleCore）。
 // 命令行只在收到一行人打的命令并回车后才输出，行内出现控制字符就整行丢弃，所以调试工具
 // 不会收到命令行插进来的字。串口终端打开该口即可输入 help、wifi set 等命令；
 // 电脑端 xrdap 照常连接。
 //
 // Runs the DAP link and a text console on one serial port without mode switching. Each
-// chunk read is first fed to the DAP link (DapSerialTransport::Feed), which finds frame
-// headers and checks CRC itself and discards non-frame bytes. Only when the chunk
+// chunk read is first fed to the DAP link (XRDAP-Core SerialLink::Feed), which finds
+// frame headers and checks CRC itself and discards non-frame bytes. Only when the chunk
 // executed no DAP frame and no DAP frame was seen within kQuietMs are the bytes passed
 // to the console (ConsoleCore). The console prints only after a human-typed line ends
 // with Enter and drops any line containing control characters, so debug tools never
@@ -29,7 +30,7 @@ namespace XrDap
 {
 
 /// 串口复用器 / Serial multiplexer.
-/// @tparam LinkT DapSerialTransport 类型 / DapSerialTransport type.
+/// @tparam LinkT XRDAP-Core 的 SerialLink 类型 / XRDAP-Core SerialLink type.
 /// @tparam UartT libxr UART 类型 / libxr UART type.
 template <typename LinkT, typename UartT>
 class SerialMux
@@ -75,7 +76,7 @@ class SerialMux
     for (;;)
     {
       // 零长度读等到队列非空（不取走字节），再按实际字节数取一块，与
-      // DapSerialTransport::Poll 相同。
+      // SerialLink::Poll 相同。
       LibXR::ReadOperation wait_op(wait_sem, 50U);
       if (uart_.Read(LibXR::RawData(static_cast<void*>(nullptr), 0U), wait_op) !=
           LibXR::ErrorCode::OK)
@@ -94,10 +95,9 @@ class SerialMux
         continue;
       }
 
-      const uint32_t frames_before = link_.GetStats().frames;
-      link_.Feed(buf_, take);
+      const uint32_t ran = link_.Feed(buf_, take);
       const uint32_t now = NowMs();
-      if (link_.GetStats().frames != frames_before)
+      if (ran != 0U)
       {
         seen_frame = true;
         last_frame_ms = now;

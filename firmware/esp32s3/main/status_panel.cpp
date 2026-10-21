@@ -4,7 +4,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "status_light.hpp"
+#include "xrdap/light/status_light.hpp"
 
 namespace XrDap
 {
@@ -32,7 +32,7 @@ void StatusPanel::Run()
     vTaskDelay(pdMS_TO_TICKS(kTickMs));
     const uint32_t now = NowMs();
     const LinkInputs in = inputs_(ctx_);
-    const Vendor::DapActivity::State dap = dap_.Read(now);
+    const DapActivity::State dap = dap_.Read(now);
     led_.Show(rule.Update(ClassifyLink(in, dap.wired), ClassifySetting(in), dap, now));
   }
 }

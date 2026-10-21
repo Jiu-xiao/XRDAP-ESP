@@ -23,7 +23,8 @@
 #include <cstring>
 
 #include "probe_config.hpp"
-#include "probe_identity.hpp"
+#include "xrdap/probe/family.hpp"
+#include "xrdap/probe/probe_identity.hpp"
 
 namespace XrDap
 {
@@ -146,9 +147,9 @@ class UsbipDevice
   static constexpr size_t kHeaderLen = 48;
   static constexpr size_t kUsbDeviceLen = 312;
   static constexpr char kBusId[] = "1-1";
-  static constexpr uint16_t kVid = Config::kUsbVid;
-  static constexpr uint16_t kPid = Config::kUsbPid;
-  static constexpr uint16_t kBcdDevice = Config::kUsbipBcdDevice;
+  static constexpr uint16_t kVid = Family::kUsbVid;
+  static constexpr uint16_t kPid = Family::kUsbPid;
+  static constexpr uint16_t kBcdDevice = Family::kBcdUsbip;
   static constexpr uint8_t kMsVendorCode = 0x20;
   static constexpr size_t kMaxPacket = Config::kDapPacketSize;
   static constexpr char kMsName[] = "DeviceInterfaceGUIDs";

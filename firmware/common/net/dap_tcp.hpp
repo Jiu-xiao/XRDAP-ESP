@@ -9,8 +9,11 @@
 // USB/IP virtual device on a second port (see usbip_device.hpp). Only one client is
 // served at a time across both ports; requests are executed and answered in order. Only
 // the sockets live here (listen, accept, keepalive); the protocols are in the session
-// classes.
+// classes. Requests run through XRDAP-Core's executor as Transport::TCP: while another
+// transport owns the probe they are answered busy, and a closed connection ends the TCP
+// session.
 
+#include <atomic>
 #include <cstdint>
 
 #include "dap_tcp_session.hpp"
@@ -20,21 +23,27 @@
 #include "probe_config.hpp"
 #include "socket_io.hpp"
 #include "usbip_device.hpp"
+#include "xrdap/session/session_owner.hpp"
 
 namespace XrDap
 {
 
 /// DAP over TCP 服务 / DAP over TCP server.
-/// @tparam DapT 需提供 ExecuteExternal() / Must provide ExecuteExternal().
-template <typename DapT>
+/// @tparam ExecT XRDAP-Core 的 Executor<DapT> / XRDAP-Core's Executor<DapT>.
+template <typename ExecT>
 class DapTcpServer
 {
  public:
   /// @brief 构造服务对象，不创建任务 / Construct the server without creating a task.
-  /// @param dap 执行请求的 DAP 实例，生命周期需长于本对象 / DAP instance that runs the
-  ///        requests; must outlive this object.
+  /// @param exec 命令执行器，生命周期需长于本对象 / Command executor; must outlive this
+  ///        object.
   /// @param port 监听端口 / Listening port.
-  DapTcpServer(DapT& dap, uint16_t port) : port_(port), session_(dap), usbip_(dap) {}
+  /// @param client 有客户端时置 true，可为空 / Set to true while a client is connected;
+  ///        may be null.
+  DapTcpServer(ExecT& exec, uint16_t port, std::atomic<bool>* client)
+      : exec_{exec}, port_(port), client_(client), session_(exec_), usbip_(exec_)
+  {
+  }
 
   /// @brief 在另一个端口同时提供 USB/IP 虚拟设备，需在 Start() 之前调用 / Also serve the
   ///        USB/IP virtual device on a second port; call before Start().
@@ -46,22 +55,6 @@ class DapTcpServer
   {
     usbip_port_ = port;
     usbip_.SetStrings(product, serial);
-  }
-
-  /// @brief 设置连接交接回调，需在 Start() 之前调用 / Set the handover hooks; call before
-  ///        Start().
-  /// @param on_connect 客户端连上时在服务任务中调用 / Called in the server task when a
-  ///        client connects.
-  /// @param on_disconnect 客户端断开后在服务任务中调用 / Called in the server task after
-  ///        the client is gone.
-  /// @param ctx 传给两个回调的参数 / Argument passed to both hooks.
-  /// @note USB 和 TCP 共用同一个 DAP 实例，应用用这两个回调在传输之间交接 / USB and TCP
-  ///       share one DAP instance; the hooks let the application hand it over.
-  void SetHooks(void (*on_connect)(void*), void (*on_disconnect)(void*), void* ctx)
-  {
-    on_connect_ = on_connect;
-    on_disconnect_ = on_disconnect;
-    hook_ctx_ = ctx;
   }
 
   /// @brief 在指定的核上启动服务任务 / Start the server task pinned to a core.
@@ -78,6 +71,20 @@ class DapTcpServer
 
  private:
   static constexpr uint32_t kStackSize = 12288;
+
+  /// 会话类用的执行入口：请求以 Transport::TCP 经执行器执行 / Execution entry for the
+  /// session classes: requests run through the executor as Transport::TCP.
+  struct TcpExec
+  {
+    ExecT& exec;
+
+    int ExecuteExternal(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
+                        uint16_t& out)
+    {
+      exec.Execute(Transport::TCP, req, len, resp, cap, out);
+      return 0;
+    }
+  };
 
   static void TaskEntry(void* arg) { static_cast<DapTcpServer*>(arg)->Run(); }
 
@@ -121,17 +128,20 @@ class DapTcpServer
 
   void Connected()
   {
-    if (on_connect_)
+    if (client_ != nullptr)
     {
-      on_connect_(hook_ctx_);
+      client_->store(true);
     }
   }
 
+  // 连接关了，TCP 是主人时它的会话结束，采样随之停止 / The connection closed; if TCP owns
+  // the probe its session ends and sampling stops with it.
   void Disconnected()
   {
-    if (on_disconnect_)
+    exec_.exec.EndSession(Transport::TCP);
+    if (client_ != nullptr)
     {
-      on_disconnect_(hook_ctx_);
+      client_->store(false);
     }
   }
 
@@ -192,13 +202,12 @@ class DapTcpServer
     }
   }
 
+  TcpExec exec_;
   uint16_t port_;
+  std::atomic<bool>* client_;
   uint16_t usbip_port_ = 0;
-  DapTcpSession<DapT, Config::kDapPacketSize> session_;
-  UsbipDevice<DapT> usbip_;
-  void (*on_connect_)(void*) = nullptr;
-  void (*on_disconnect_)(void*) = nullptr;
-  void* hook_ctx_ = nullptr;
+  DapTcpSession<TcpExec, Config::kDapPacketSize> session_;
+  UsbipDevice<TcpExec> usbip_;
 };
 
 }  // namespace XrDap

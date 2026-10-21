@@ -1,45 +1,43 @@
 // SPDX-License-Identifier: Apache-2.0
 // XR-DAP-S3：基于 libxr 的 ESP32-S3 CMSIS-DAP 调试探针。
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
-//   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针；有网络客户端时
-//          USB 关闭，客户端走后 USB 恢复。
+//   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针。
 //   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap 使用（板上有 USB
 //         转串口芯片时，见 config.hpp 的板型）。
-// 三种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。
+// 三种传输经 XRDAP-Core 的同一个执行器驱动 DAP 和 XR 厂商扩展（多地址读写、指针链、
+// 探针端采样）；同一时间只有一条传输拥有探针，别的传输收到“忙”。
 //
 // XR-DAP-S3: a CMSIS-DAP debug probe for the ESP32-S3 built on libxr.
 //   USB:    a Bulk v2 DAP interface plus a CDC virtual serial port.
-//   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe;
-//           USB is shut down while a network client is connected and restored after.
+//   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe.
 //   Serial: CMSIS-DAP in libxr Topic frames on UART0, for the PC-side xrdap (on boards
 //           with a USB-UART chip, see the board choice in config.hpp).
-// All three transports share one DAP instance and the XR vendor extension (multi-address
-// access, pointer chains, probe-side sampling).
+// All three transports drive DAP and the XR vendor extension (multi-address access,
+// pointer chains, probe-side sampling) through XRDAP-Core's one executor; one transport
+// owns the probe at a time and the others get busy.
 #include <atomic>
 #include <cstdint>
 
 #include "cdc_uart.hpp"
 #include "config.hpp"
-#include "dap_vendor.hpp"
 #include "daplink_v2_profile_swd.hpp"
-#include "debug/dap_serial_transport.hpp"
 #include "dedic_gpio_pin.hpp"
 #include "driver/gpio.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
 #include "esp_usb_dev.hpp"
 #include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "hold_button.hpp"
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "probe_info.hpp"
 #include "restart.hpp"
-#include "serial_link.hpp"
 #include "status_panel.hpp"
 #include "swd_engine.hpp"
 #include "uart_console.hpp"
+#include "xrdap/probe/family.hpp"
+#include "xrdap/serial/serial_link.hpp"
 
 namespace
 {
@@ -52,8 +50,9 @@ alignas(64) uint8_t ep1_dap[4096];
 alignas(64) uint8_t ep2_cdc[1024];
 alignas(64) uint8_t ep3_comm[128];
 
-using Dap = LibXR::USB::DapLinkV2Class<SwdEngine, Config::kDapPacketSize,
-                                       Config::kDapPacketCount, Config::kDapPacketSize>;
+using DapLink =
+    LibXR::USB::DapLinkV2Class<SwdEngine, Config::kDapPacketSize, Config::kDapPacketCount,
+                               Config::kDapPacketSize>;
 
 // SWD 相关对象。必须在 Config::kSwdCore 上创建：专用 GPIO 只能在创建它的核上访问。
 struct SwdSet
@@ -70,68 +69,6 @@ SwdSet& GetSwdSet()
   static SwdSet set;
   return set;
 }
-
-// 网络客户端连接期间关闭 USB，断开后重新打开，两条路不会同时驱动 DAP。USB 栈的开关在
-// 核 0（USB 中断所在核）的专用任务里做，网络服务任务只等它完成。
-class UsbSwitch
-{
- public:
-  explicit UsbSwitch(LibXR::ESP32USBDevice& usb) : usb_(usb) {}
-
-  void Start()
-  {
-    xTaskCreatePinnedToCore(&UsbSwitch::TaskEntry, "usbctl", 4096, this, 6, nullptr, 0);
-  }
-
-  /// StartNetwork 的 on_client 回调 / on_client callback for StartNetwork.
-  static void OnNetworkClient(bool connected, void* ctx)
-  {
-    static_cast<UsbSwitch*>(ctx)->Request(connected ? Command::DOWN : Command::UP);
-  }
-
- private:
-  enum class Command
-  {
-    DOWN,
-    UP
-  };
-
-  static void TaskEntry(void* arg) { static_cast<UsbSwitch*>(arg)->Run(); }
-
-  void Request(Command cmd)
-  {
-    command_ = cmd;
-    xSemaphoreGive(request_);
-    xSemaphoreTake(done_, portMAX_DELAY);
-  }
-
-  void Run()
-  {
-    for (;;)
-    {
-      xSemaphoreTake(request_, portMAX_DELAY);
-      if (command_ == Command::DOWN && active_)
-      {
-        usb_.Stop(false);
-        usb_.Deinit(false);
-        active_ = false;
-      }
-      else if (command_ == Command::UP && !active_)
-      {
-        usb_.Init(false);
-        usb_.Start(false);
-        active_ = true;
-      }
-      xSemaphoreGive(done_);
-    }
-  }
-
-  LibXR::ESP32USBDevice& usb_;
-  SemaphoreHandle_t request_ = xSemaphoreCreateBinary();
-  SemaphoreHandle_t done_ = xSemaphoreCreateBinary();
-  volatile Command command_ = Command::UP;
-  bool active_ = true;
-};
 
 }  // namespace
 
@@ -170,22 +107,40 @@ extern "C" void app_main(void)
     vTaskDelay(1);
   }
 
-  static Dap dap(LibXR::USB::Endpoint::EPNumber::EP1, LibXR::USB::Endpoint::EPNumber::EP1,
-                 GetSwdSet().swd, nullptr);
+  static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
+                     LibXR::USB::Endpoint::EPNumber::EP1, GetSwdSet().swd, nullptr);
 
-  // XR 厂商扩展挂在 DAP 类的命令钩子上，USB、网络、串口行为一致。
-  static DapVendor vendor(GetSwdSet().swd, Config::kDapPacketSize);
-  InstallVendor(dap, vendor, WifiStaSettings(), Config::kProductName, Config::kSwdCore,
-                Config::kSamplingPriority);
+  // 会话主人、厂商扩展和执行器；所有传输经执行器驱动 DAP / Session owner, vendor
+  // extension and executor; every transport drives DAP through the executor.
+  static ProbeCore<DapLink> probe(dap, GetSwdSet().swd);
+  InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName, Config::kSwdCore,
+               Config::kSamplingPriority);
 
-  // libxr 在应用线程里执行 DAP 命令，循环调用 Step()。线程放在 SWD 核上，与核 0 的 USB
-  // 中断分开，避免互相抢占。
+  // USB 的 DAP 命令在应用线程里经执行器执行。线程放在 SWD 核上，与核 0 的 USB 中断分开。
+  // 执行器在等命令时也持锁：USB 是主人或没有主人时等 kUsbWaitMs，别的传输是主人时 USB
+  // 只会收到“忙”，就不等、隔一拍再查，免得拖慢主人的命令。每轮让出一次，同优先级的 TCP
+  // 任务能拿到锁。
+  // USB DAP commands run through the executor in an application thread on the SWD core,
+  // apart from the USB interrupt on core 0. The executor holds its lock while waiting for
+  // a command: it waits kUsbWaitMs while USB owns the probe or nobody does; while another
+  // transport owns it USB would only get busy, so it polls once per tick instead of
+  // slowing the owner down. Each round yields once so the TCP task at the same priority
+  // gets the lock.
   xTaskCreatePinnedToCore(
       [](void*)
       {
         for (;;)
         {
-          (void)dap.Step();
+          const Transport owner = probe.session.Owner();
+          if (owner == Transport::NONE || owner == Transport::USB)
+          {
+            (void)probe.exec.StepUsb(Config::kUsbWaitMs);
+          }
+          else if (probe.exec.StepUsb(0) != LibXR::ErrorCode::OK)
+          {
+            vTaskDelay(1);
+          }
+          taskYIELD();
         }
       },
       "dapstep", 8192, nullptr, Config::kStepPriority, nullptr, Config::kSwdCore);
@@ -206,20 +161,21 @@ extern "C" void app_main(void)
           {LibXR::RawData{ep2_cdc, sizeof(ep2_cdc)}},
           {LibXR::RawData{ep3_comm, sizeof(ep3_comm)}, true},
       },
-      LibXR::USB::DeviceDescriptor::PacketSize0::SIZE_64, Config::kUsbVid,
-      Config::kUsbPid, Config::kUsbBcdDevice, {&lang}, {{&dap, &cdc}},
+      LibXR::USB::DeviceDescriptor::PacketSize0::SIZE_64, Family::kUsbVid,
+      Family::kUsbPid, Family::kBcdEsp32S3, {&lang}, {{&dap, &cdc}},
       LibXR::ConstRawData{ProbeMac(), 6});
   usb.Init(false);
   usb.Start(false);
-  vendor.SetUsbResetSource(
+  // USB 总线复位（拔线、主机复位）结束 USB 的会话 / A USB bus reset (unplug, host reset)
+  // ends the USB session.
+  probe.session.SetUsbResetSource(
       [](void* ctx) -> uint32_t
       { return static_cast<LibXR::ESP32USBDevice*>(ctx)->BusResetCount(); }, &usb);
 
   // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里创建。
   if constexpr (Config::kSerialLink)
   {
-    using SerialAdapter = SerialDap<Dap>;
-    using SerialLink = LibXR::DapSerialTransport<SerialAdapter, Config::kDapPacketSize>;
+    using Link = SerialLink<Executor<DapLink>, Config::kDapPacketSize>;
     static LibXR::ESP32UART uart(
         static_cast<uart_port_t>(Config::kSerialUart), Config::kSerialTxGpio,
         Config::kSerialRxGpio, LibXR::ESP32UART::PIN_NO_CHANGE,
@@ -228,16 +184,16 @@ extern "C" void app_main(void)
         LibXR::UART::Configuration{Config::kSerialBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                    1},
         /*enable_dma=*/false);
-    static SerialAdapter adapter(dap, vendor);
-    static SerialLink link(adapter, uart);
+    static Link link(probe.exec, uart);
     link.SetThreadStarter(
-        [](void*, const SerialLink::ThreadConfig&, void (*entry)(void*), void* arg)
+        [](void*, const Link::ThreadConfig&, void (*entry)(void*), void* arg)
         {
           xTaskCreatePinnedToCore(entry, "dap_serial", 8192, arg, Config::kSerialPriority,
                                   nullptr, Config::kSwdCore);
-        });
-    // 只在工作线程建不起来时失败，此时只是没有串口链路 / Fails only when the worker
-    // cannot be created; the probe then simply has no serial link.
+        },
+        nullptr);
+    // 串口不可读写时失败，此时只是没有串口链路 / Fails only when the UART cannot read or
+    // write; the probe then simply has no serial link.
     (void)link.Start();
   }
 
@@ -272,7 +228,7 @@ extern "C" void app_main(void)
   static std::atomic<bool> net_client{false};
   static StatusLed led(Config::kStatusLedGpio);
   static StatusPanel panel(
-      led, vendor.Activity(),
+      led, probe.activity,
       [](void*)
       {
         // USB 是否已配置暂读 DAP 类的绑定标志，等 libxr 提供原子的设备配置状态后改读它 /
@@ -284,23 +240,6 @@ extern "C" void app_main(void)
       nullptr);
   (void)panel.Start(0);
 
-  // 网络客户端连上、断开时：关闭或恢复 USB，更新状态灯。
-  struct ClientHooks
-  {
-    UsbSwitch& usb;
-
-    static void OnClient(bool connected, void* ctx)
-    {
-      UsbSwitch::OnNetworkClient(connected, &static_cast<ClientHooks*>(ctx)->usb);
-      net_client.store(connected);
-    }
-  };
-  static UsbSwitch usb_switch(usb);
-  static ClientHooks hooks{usb_switch};
-  if (StartNetwork(dap, vendor,
-                   {Config::kChipName, Config::kUsbProductName, Config::kSwdCore,
-                    &ClientHooks::OnClient, &hooks}))
-  {
-    usb_switch.Start();
-  }
+  (void)StartNetwork(
+      probe, {Config::kChipName, Config::kUsbProductName, Config::kSwdCore, &net_client});
 }

@@ -4,7 +4,8 @@
 //         CMSIS-DAP，配合电脑端 xrdap 使用（xrdap share 再转给其他调试工具）；同一个口
 //         也是 Wi-Fi 命令行（serial_mux.hpp）。
 //   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针，与 S3 版相同。
-// 两种传输共用同一个 DAP 实例和 XR 厂商扩展（多地址读写、指针链、探针端采样）。C3 没有
+// 两种传输经 XRDAP-Core 的同一个执行器驱动 DAP 和 XR 厂商扩展（多地址读写、指针链、
+// 探针端采样），同一时间只有一条传输拥有探针。C3 没有
 // 能做自定义 USB 设备的 USB 控制器，所以没有 S3 版的 USB CMSIS-DAP 接口。与 S3 版共用的
 // 源文件在 firmware/common 下。
 //
@@ -14,16 +15,15 @@
 //           debug tools); the same port is also the Wi-Fi console (serial_mux.hpp).
 //   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe,
 //           as on the S3.
-// Both transports share one DAP instance and the XR vendor extension (multi-address
-// access, pointer chains, probe-side sampling). The C3 has no USB controller usable for
+// Both transports drive DAP and the XR vendor extension (multi-address access, pointer
+// chains, probe-side sampling) through XRDAP-Core's one executor; one transport owns the
+// probe at a time. The C3 has no USB controller usable for
 // custom USB devices, so it lacks the S3's USB CMSIS-DAP interface. Sources shared with
 // the S3 build live in firmware/common.
 #include <cstdint>
 
 #include "config.hpp"
-#include "dap_vendor.hpp"
 #include "daplink_v2_profile_swd.hpp"
-#include "debug/dap_serial_transport.hpp"
 #include "debug/swd_general_gpio.hpp"
 #include "dedic_gpio_pin.hpp"
 #include "esp_cdc_jtag.hpp"
@@ -32,10 +32,10 @@
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "restart.hpp"
-#include "serial_link.hpp"
 #include "serial_mux.hpp"
 #include "swd_clock.hpp"
 #include "uart_console.hpp"
+#include "xrdap/serial/serial_link.hpp"
 
 namespace
 {
@@ -45,8 +45,9 @@ using SwdLink = LibXR::Debug::SwdGeneralGPIO<DedicGpioPin, DedicGpioPin>;
 // DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal() 执行命令，所以不需要
 // S3 版循环调用 Step() 的线程；端点号用不到，随便填。
 using Swd = SwdWithClock<DedicGpioPin>;
-using Dap = LibXR::USB::DapLinkV2Class<Swd, Config::kDapPacketSize,
-                                       Config::kDapPacketCount, Config::kDapPacketSize>;
+using DapLink =
+    LibXR::USB::DapLinkV2Class<Swd, Config::kDapPacketSize, Config::kDapPacketCount,
+                               Config::kDapPacketSize>;
 
 struct SwdSet
 {
@@ -75,25 +76,24 @@ extern "C" void app_main(void)
 
   // 单核芯片，专用 GPIO 在哪个任务里创建都可以用。
   static SwdSet swd_set;
-  static Dap dap(LibXR::USB::Endpoint::EPNumber::EP1, LibXR::USB::Endpoint::EPNumber::EP1,
-                 swd_set.swd, nullptr);
+  static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
+                     LibXR::USB::Endpoint::EPNumber::EP1, swd_set.swd, nullptr);
 
-  // XR 厂商扩展挂在 DAP 类的命令钩子上，串口、网络行为一致。
-  static DapVendor vendor(swd_set.swd, Config::kDapPacketSize);
-  InstallVendor(dap, vendor, WifiStaSettings(), Config::kProductName, Config::kCore,
-                Config::kSamplingPriority);
+  // 会话主人、厂商扩展和执行器；串口和网络都经执行器驱动 DAP / Session owner, vendor
+  // extension and executor; serial and network both drive DAP through the executor.
+  static ProbeCore<DapLink> probe(dap, swd_set.swd);
+  InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName, Config::kCore,
+               Config::kSamplingPriority);
 
   // USB Serial/JTAG 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令。
   // 控制台不能用这个口（sdkconfig 里控制台已关掉）。
-  using SerialAdapter = SerialDap<Dap>;
-  using SerialLink = LibXR::DapSerialTransport<SerialAdapter, Config::kDapPacketSize>;
+  using Link = SerialLink<Executor<DapLink>, Config::kDapPacketSize>;
   static LibXR::ESP32CDCJtag usj(
       /*rx_buffer_size=*/8192, /*tx_buffer_size=*/4096, /*tx_queue_size=*/5,
       LibXR::UART::Configuration{Config::kSerialBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1});
-  static SerialAdapter adapter(dap, vendor);
-  static SerialLink link(adapter, usj);
-  static SerialMux<SerialLink, LibXR::ESP32CDCJtag> mux(link, usj, WifiStaSettings());
+  static Link link(probe.exec, usj);
+  static SerialMux<Link, LibXR::ESP32CDCJtag> mux(link, usj, WifiStaSettings());
   mux.Start(Config::kCore, Config::kSerialPriority);
 
   // UART0 上也有一个命令行，给引出了 UART0 的开发板用。
@@ -108,7 +108,6 @@ extern "C" void app_main(void)
   static UartConsole<LibXR::ESP32UART> console(console_uart, WifiStaSettings());
   console.Start(Config::kCore);
 
-  StartNetwork(
-      dap, vendor,
-      {Config::kChipName, Config::kUsbProductName, Config::kCore, nullptr, nullptr});
+  (void)StartNetwork(
+      probe, {Config::kChipName, Config::kUsbProductName, Config::kCore, nullptr});
 }
