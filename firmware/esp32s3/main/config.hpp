@@ -41,10 +41,11 @@ inline constexpr char kUsbProductName[] = "XR-DAP-S3 CMSIS-DAP";
 /// mDNS TXT 里的芯片名 / Chip name in the mDNS TXT.
 inline constexpr char kChipName[] = "esp32s3";
 
-/// USB 设备版本号；USB/IP 虚拟设备用 0x0200，Windows 按 VID、PID、版本号缓存描述符，两者
-/// 不能相同 / USB device release; the USB/IP virtual device uses 0x0200. Windows caches
-/// descriptors by VID, PID and release, so the two must differ.
+/// 原生 USB 设备的版本号 / Release of the native USB device.
 constexpr uint16_t kUsbBcdDevice = 0x0100;
+static_assert(kUsbBcdDevice != kUsbipBcdDevice,
+              "Windows caches descriptors by VID, PID and release; the native USB device "
+              "and the USB/IP virtual device must differ");
 
 #if CONFIG_XRDAP_BOARD_LITE
 /// SWCLK 引脚 / SWCLK pin.
