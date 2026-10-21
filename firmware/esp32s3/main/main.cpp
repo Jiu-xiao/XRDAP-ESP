@@ -15,6 +15,7 @@
 //           with a USB-UART chip, see the board choice in config.hpp).
 // All three transports share one DAP instance and the XR vendor extension (multi-address
 // access, pointer chains, probe-side sampling).
+#include <atomic>
 #include <cstdint>
 
 #include "cdc_uart.hpp"
@@ -30,6 +31,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "hold_button.hpp"
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "probe_info.hpp"
@@ -243,27 +245,58 @@ extern "C" void app_main(void)
   static UartConsole<LibXR::USB::CDCUart> console(cdc, WifiStaSettings());
   console.Start(0);
 
-  // 状态灯在 Wi-Fi 连接之前就开始显示。
+  // Wi-Fi 清除按键（只有 Lite 板有）：按满即清除并重启 / Wi-Fi clear button (Lite board
+  // only): clear and restart once the hold time is reached.
+  static HoldButton* button = nullptr;
+  if constexpr (Config::kWifiButtonGpio >= 0)
+  {
+    static HoldButton hold(
+        Config::kWifiButtonGpio, Config::kWifiClearHoldMs,
+        [](void*)
+        {
+          WifiSettings& wifi = WifiStaSettings();
+          if (wifi.Clear(EraseSource::BUTTON))
+          {
+            wifi.RestartLater();
+          }
+        },
+        nullptr);
+    if (hold.Start(0))
+    {
+      button = &hold;
+    }
+  }
+
+  // 状态灯在 Wi-Fi 连接之前就开始显示；输入都在这里取 / The status light starts before
+  // Wi-Fi joins; all of its inputs are taken here.
+  static std::atomic<bool> net_client{false};
+  static StatusLed led(Config::kStatusLedGpio);
   static StatusPanel panel(
-      Config::kStatusLedGpio, Config::kWifiButtonGpio, vendor.Activity(),
-      [](void* d) { return static_cast<Dap*>(d)->IsInited(); }, &dap);
-  panel.Start(0);
+      led, vendor.Activity(),
+      [](void*)
+      {
+        // USB 是否已配置暂读 DAP 类的绑定标志，等 libxr 提供原子的设备配置状态后改读它 /
+        // USB configured is read from the DAP class bind flag until libxr offers an
+        // atomic device configured state.
+        return LinkInputs{net_client.load(), dap.IsInited(), WifiStaGetLink(),
+                          RestartPending(), button != nullptr && button->Held()};
+      },
+      nullptr);
+  (void)panel.Start(0);
 
   // 网络客户端连上、断开时：关闭或恢复 USB，更新状态灯。
   struct ClientHooks
   {
     UsbSwitch& usb;
-    StatusPanel& panel;
 
     static void OnClient(bool connected, void* ctx)
     {
-      auto* self = static_cast<ClientHooks*>(ctx);
-      UsbSwitch::OnNetworkClient(connected, &self->usb);
-      self->panel.SetNetworkClient(connected);
+      UsbSwitch::OnNetworkClient(connected, &static_cast<ClientHooks*>(ctx)->usb);
+      net_client.store(connected);
     }
   };
   static UsbSwitch usb_switch(usb);
-  static ClientHooks hooks{usb_switch, panel};
+  static ClientHooks hooks{usb_switch};
   if (StartNetwork(dap, vendor,
                    {Config::kChipName, Config::kUsbProductName, Config::kSwdCore,
                     &ClientHooks::OnClient, &hooks}))

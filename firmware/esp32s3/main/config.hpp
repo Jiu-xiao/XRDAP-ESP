@@ -4,22 +4,27 @@
 // ESP32-S3 版 XR-DAP 的固定参数；各芯片共用的在 probe_config.hpp。引脚按板型（Kconfig 的
 // XRDAP_BOARD）选：
 //   默认：ESP32-S3 开发板，SWCLK GPIO5、SWDIO GPIO4，串口链路走板上 USB 转串口芯片；
-//         GPIO48 的 RGB 灯（WS2812）显示状态，BOOT 键（GPIO0）长按清除 Wi-Fi。
+//         GPIO48 的 RGB 灯（WS2812）显示状态。BOOT 键（GPIO0）只用于进下载模式：它接在
+//         USB 转串口芯片的自动下载电路上，串口线的 DTR/RTS 能把它拉低，所以不当运行时
+//         按键；清除 Wi-Fi 用电脑端（命令行 wifi clear 或 0x86）。
 //   Lite：“高速无线 DAP 调试器 Lite”，SWCLK GPIO37；SWDIO 经 SGM3157 模拟开关接到目标，
 //         开关的 IN（GPIO36）固定为低，NC 端的 GPIO47 当双向 SWDIO 用；没有 USB 转串口
-//         芯片，不开串口链路；GPIO48 的 WS2812 显示状态，GPIO21 的按键长按清除 Wi-Fi
-//         （status_panel.hpp）。
+//         芯片，不开串口链路；GPIO48 的 WS2812 显示状态，GPIO21 的按键长按 5 s 清除
+//         Wi-Fi（hold_button.hpp）。
 //
 // Fixed parameters of the ESP32-S3 XR-DAP firmware; shared ones are in probe_config.hpp.
 // Pins depend on the board (Kconfig XRDAP_BOARD):
 //   Default: ESP32-S3 dev board, SWCLK GPIO5, SWDIO GPIO4, serial link through the
-//            on-board USB-UART chip; the RGB LED (WS2812) on GPIO48 shows the state and
-//            a long press of the BOOT key (GPIO0) clears Wi-Fi.
+//            on-board USB-UART chip; the RGB LED (WS2812) on GPIO48 shows the state. The
+//            BOOT key (GPIO0) is for download mode only: it sits on the USB-UART
+//            auto-download circuit, where the serial DTR/RTS lines can pull it low, so it
+//            is not a runtime button; Wi-Fi is cleared from the PC (console wifi clear or
+//            0x86).
 //   Lite:    "Wireless DAP Lite", SWCLK GPIO37; SWDIO reaches the target through an
 //            SGM3157 analog switch whose IN (GPIO36) is held low, so GPIO47 on its NC
 //            side serves as the bidirectional SWDIO; no USB-UART chip, so no serial
-//            link; the WS2812 on GPIO48 shows the state and a long press of the GPIO21
-//            button clears Wi-Fi (status_panel.hpp).
+//            link; the WS2812 on GPIO48 shows the state and holding the GPIO21 button
+//            for 5 s clears Wi-Fi (hold_button.hpp).
 
 #include <cstdint>
 
@@ -73,10 +78,13 @@ constexpr bool kSerialLink = true;
 /// 一个空闲引脚 / Status light (WS2812) data pin; GPIO48 on DevKitC-1 v1.0 style boards,
 /// and just an unused pin on boards without the LED.
 constexpr int kStatusLedGpio = 48;
-/// Wi-Fi 清除按键：BOOT 键，按下接地 / Wi-Fi clear button: the BOOT key, shorts to
-/// ground.
-constexpr int kWifiButtonGpio = 0;
+/// 没有 Wi-Fi 清除按键，BOOT 键只用于下载模式（见文件开头）/ No Wi-Fi clear button; the
+/// BOOT key is for download mode only (see the top of this file).
+constexpr int kWifiButtonGpio = -1;
 #endif
+
+/// 按住 Wi-Fi 清除按键多久才清除 / How long the Wi-Fi clear button must be held.
+constexpr uint32_t kWifiClearHoldMs = 5000;
 
 /// SWD 位带、DAP 的 Step() 线程、采样和网络服务所在的核。专用 GPIO 只能在创建它的核上
 /// 访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the DAP
