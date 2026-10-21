@@ -19,6 +19,18 @@ jobs:
           pip install clang-format==21.1.8
           git ls-files 'firmware/*.hpp' 'firmware/*.cpp' 'firmware/*.c' | xargs clang-format --dry-run --Werror
 
+  # 纯逻辑（命令行、0x86、TCP 帧、USB/IP、状态灯输入）在电脑上的单元测试
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 单元测试
+        run: |
+          git submodule update --init third_party/xrdap-core
+          cmake -S firmware/tests -B build-tests
+          cmake --build build-tests
+          ctest --test-dir build-tests --output-on-failure
+
   firmware:
     strategy:
       fail-fast: false
