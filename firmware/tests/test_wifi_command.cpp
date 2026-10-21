@@ -172,3 +172,13 @@ TEST(wifi_cmd_tiny_buffer_gets_no_reply)
   FakeWifiSettings wifi;
   CHECK(Run(wifi, {0x86, 0x00}, 1).empty());
 }
+
+// 清除只认协议规定的确认字节，别的都不清除 / Clear accepts only the confirmation the
+// protocol defines; anything else erases nothing.
+TEST(wifi_cmd_clear_rejects_unexpected_bytes)
+{
+  FakeWifiSettings wifi;
+  CHECK_BYTES(Run(wifi, {0x86, 0x02, 0x00}), (Bytes{0x86, 0x01}));
+  CHECK(wifi.clears == 0);
+  CHECK(wifi.restarts == 0);
+}

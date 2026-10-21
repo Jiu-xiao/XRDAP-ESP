@@ -51,7 +51,8 @@ class WifiCommand
   static bool Status(WifiSettings& settings, uint8_t* resp, uint16_t cap, uint16_t& out);
   static bool Set(WifiSettings& settings, const uint8_t* req, uint16_t len, uint8_t* resp,
                   uint16_t& out);
-  static bool Clear(WifiSettings& settings, uint16_t len, uint8_t* resp, uint16_t& out);
+  static bool Clear(WifiSettings& settings, const uint8_t* req, uint16_t len,
+                    uint8_t* resp, uint16_t& out);
 };
 
 }  // namespace XrDap
