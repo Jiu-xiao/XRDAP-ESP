@@ -3,7 +3,6 @@
 
 #include "driver/gpio.h"
 #include "esp_err.h"
-#include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -13,7 +12,6 @@
 
 namespace
 {
-constexpr const char* TAG = "xrdap_panel";
 /// 刷新周期 / Refresh period.
 constexpr uint32_t kTickMs = 20;
 /// 按住按键多久清除热点参数 / How long the button must be held to clear the credentials.
@@ -88,8 +86,7 @@ void StatusPanel::Run()
     held_ms = pressed ? held_ms + kTickMs : 0;
     if (held_ms >= kWifiClearHoldMs && !RestartPending())
     {
-      ESP_LOGW(TAG, "按键按住 %u ms，清除热点参数并重启", (unsigned)kWifiClearHoldMs);
-      (void)WifiStaSettings().Clear();
+      (void)WifiStaSettings().Clear(EraseSource::BUTTON);
       RestartLater();
     }
 

@@ -110,7 +110,7 @@ bool StartNetwork(DapT& dap, DapVendor& vendor, const NetworkOptions& opt)
   {
     return false;
   }
-  MdnsStart(opt.chip, Config::kTcpPort);
+  (void)MdnsStart(opt.chip, Config::kTcpPort);
   return true;
 }
 

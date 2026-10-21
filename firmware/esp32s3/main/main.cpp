@@ -24,7 +24,6 @@
 #include "debug/dap_serial_transport.hpp"
 #include "dedic_gpio_pin.hpp"
 #include "driver/gpio.h"
-#include "esp_log.h"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
 #include "esp_usb_dev.hpp"
@@ -43,8 +42,6 @@
 namespace
 {
 using namespace XrDap;
-
-constexpr const char* TAG = "xrdap";
 
 // S3 的 IN 端点只有 EP0 和 EP1 到 EP4。EP1 是 DAP（收发共用），EP2 是 CDC 数据，EP3 的
 // IN 是 CDC 通知。缓冲按 64 字节对齐（DMA 缓存行），每个方向至少两倍最大包长。
@@ -116,14 +113,12 @@ class UsbSwitch
         usb_.Stop(false);
         usb_.Deinit(false);
         active_ = false;
-        ESP_LOGI(TAG, "网络客户端已连接，USB 关闭");
       }
       else if (command_ == Command::UP && !active_)
       {
         usb_.Init(false);
         usb_.Start(false);
         active_ = true;
-        ESP_LOGI(TAG, "网络客户端已断开，USB 恢复");
       }
       xSemaphoreGive(done_);
     }
@@ -142,8 +137,12 @@ extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
   LibXR::PlatformInit(Config::kLibxrTimerPriority, 8192);
-  (void)RestartInit();  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on
-                        // failure
+  // 失败时 RestartLater 立即重启 / RestartLater restarts at once on failure.
+  (void)RestartInit();
+  // NVS 在命令行、0x86、状态灯之前初始化一次；失败时它们报存储错误 / NVS is set up once
+  // before the console, 0x86 and the status light; on failure they report storage
+  // errors.
+  (void)WifiStaInitStorage();
 
   // 有 SWDIO 模拟开关的板子（Lite）先把开关接到 SWDIO 引脚那一侧，再建 SWD 对象。
   if constexpr (Config::kSwdioSelectGpio >= 0)
@@ -213,7 +212,6 @@ extern "C" void app_main(void)
   vendor.SetUsbResetSource(
       [](void* ctx) -> uint32_t
       { return static_cast<LibXR::ESP32USBDevice*>(ctx)->BusResetCount(); }, &usb);
-  ESP_LOGI(TAG, "USB 已启动");
 
   // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里创建。
   if constexpr (Config::kSerialLink)
@@ -236,10 +234,9 @@ extern "C" void app_main(void)
           xTaskCreatePinnedToCore(entry, "dap_serial", 8192, arg, Config::kSerialPriority,
                                   nullptr, Config::kSwdCore);
         });
-    if (link.Start() != LibXR::ErrorCode::OK)
-    {
-      ESP_LOGE(TAG, "串口 DAP 链路启动失败");
-    }
+    // 只在工作线程建不起来时失败，此时只是没有串口链路 / Fails only when the worker
+    // cannot be created; the probe then simply has no serial link.
+    (void)link.Start();
   }
 
   // Wi-Fi 命令行在 USB 虚拟串口上，没有热点参数时也能用它来设置。

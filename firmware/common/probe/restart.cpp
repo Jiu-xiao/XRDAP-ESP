@@ -37,4 +37,27 @@ void RestartLater()
 
 bool RestartPending() { return timer != nullptr && esp_timer_is_active(timer); }
 
+ResetReason LastResetReason()
+{
+  switch (esp_reset_reason())
+  {
+    case ESP_RST_POWERON:
+      return ResetReason::POWER_ON;
+    case ESP_RST_SW:
+      return ResetReason::SOFTWARE;
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+      return ResetReason::WATCHDOG;
+    case ESP_RST_PANIC:
+      return ResetReason::PANIC;
+    case ESP_RST_BROWNOUT:
+      return ResetReason::BROWNOUT;
+    case ESP_RST_UNKNOWN:
+      return ResetReason::UNKNOWN;
+    default:
+      return ResetReason::OTHER;
+  }
+}
+
 }  // namespace XrDap

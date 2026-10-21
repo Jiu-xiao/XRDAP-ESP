@@ -16,6 +16,12 @@ constexpr uint8_t kOpSet = 0x01U;
 constexpr uint8_t kOpClear = 0x02U;
 constexpr uint8_t kFlagStarted = 0x01U;
 constexpr uint8_t kFlagConnected = 0x02U;
+constexpr uint8_t kFlagStorageRepaired = 0x04U;
+// 状态回复：命令、状态、标志、IP(4)、信号、热点名长度，热点名，清除来源、复位原因 /
+// Status reply: command, status, flags, IP(4), RSSI, SSID length, SSID, erase source,
+// reset reason.
+constexpr size_t kStatusHead = 9U;
+constexpr size_t kStatusTail = 2U;
 }  // namespace
 
 bool WifiCommand::Handle(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
@@ -51,18 +57,22 @@ bool WifiCommand::Status(WifiSettings& settings, uint8_t* resp, uint16_t cap,
 {
   const WifiStatus st = settings.Status();
   const size_t ssid_len = strnlen(st.ssid, kSsidMax);
-  if (cap < 9U + ssid_len)
+  const size_t total = kStatusHead + ssid_len + kStatusTail;
+  if (cap < total)
   {
     return Reply(resp, kStatusResource, out);
   }
   resp[1] = kStatusOk;
   resp[2] = static_cast<uint8_t>((st.started ? kFlagStarted : 0U) |
-                                 (st.connected ? kFlagConnected : 0U));
+                                 (st.connected ? kFlagConnected : 0U) |
+                                 (st.storage_repaired ? kFlagStorageRepaired : 0U));
   std::memcpy(&resp[3], st.ip, 4U);
   resp[7] = static_cast<uint8_t>(st.rssi);
   resp[8] = static_cast<uint8_t>(ssid_len);
-  std::memcpy(&resp[9], st.ssid, ssid_len);
-  out = static_cast<uint16_t>(9U + ssid_len);
+  std::memcpy(&resp[kStatusHead], st.ssid, ssid_len);
+  resp[kStatusHead + ssid_len] = static_cast<uint8_t>(st.last_erase);
+  resp[kStatusHead + ssid_len + 1U] = static_cast<uint8_t>(st.reset_reason);
+  out = static_cast<uint16_t>(total);
   return true;
 }
 
@@ -109,7 +119,7 @@ bool WifiCommand::Clear(WifiSettings& settings, uint16_t len, uint8_t* resp,
   {
     return Reply(resp, kStatusArg, out);
   }
-  if (!settings.Clear())
+  if (!settings.Clear(EraseSource::VENDOR_COMMAND))
   {
     return Reply(resp, kStatusResource, out);
   }

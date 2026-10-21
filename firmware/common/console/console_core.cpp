@@ -41,6 +41,44 @@ bool NextToken(char*& p, char*& token)
   }
   return true;
 }
+
+const char* EraseSourceText(EraseSource source)
+{
+  switch (source)
+  {
+    case EraseSource::BUTTON:
+      return "按键";
+    case EraseSource::CONSOLE:
+      return "命令行 wifi clear";
+    case EraseSource::VENDOR_COMMAND:
+      return "DAP 命令 0x86";
+    case EraseSource::STORAGE_REPAIR:
+      return "NVS 损坏后擦除";
+    default:
+      return "无";
+  }
+}
+
+const char* ResetReasonText(ResetReason reason)
+{
+  switch (reason)
+  {
+    case ResetReason::POWER_ON:
+      return "上电";
+    case ResetReason::SOFTWARE:
+      return "软件重启";
+    case ResetReason::WATCHDOG:
+      return "看门狗";
+    case ResetReason::PANIC:
+      return "异常";
+    case ResetReason::BROWNOUT:
+      return "欠压";
+    case ResetReason::OTHER:
+      return "其他";
+    default:
+      return "未知";
+  }
+}
 }  // namespace
 
 void ConsoleCore::Reset()
@@ -174,7 +212,7 @@ void ConsoleCore::Handle(char* line)
   }
   else if (strcmp(sub, "clear") == 0)
   {
-    if (!settings_.Clear())
+    if (!settings_.Clear(EraseSource::CONSOLE))
     {
       Print("清除失败\r\n");
       return;
@@ -192,6 +230,13 @@ void ConsoleCore::PrintStatus()
 {
   const WifiStatus st = settings_.Status();
   char buf[160];
+  if (st.storage_repaired)
+  {
+    Print("NVS 损坏，本次启动时已擦除重建\r\n");
+  }
+  snprintf(buf, sizeof(buf), "上次清除：%s\r\n上次复位：%s\r\n",
+           EraseSourceText(st.last_erase), ResetReasonText(st.reset_reason));
+  Print(buf);
   if (st.ssid[0] == 0)
   {
     Print("没有保存热点参数，用 wifi set 设置\r\n");
