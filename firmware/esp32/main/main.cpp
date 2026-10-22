@@ -27,7 +27,6 @@
 #include "reg_gpio_pin.hpp"
 #include "restart.hpp"
 #include "serial_mux.hpp"
-#include "swd_clock.hpp"
 #include "xrdap/serial/serial_link.hpp"
 
 namespace
@@ -35,21 +34,20 @@ namespace
 using namespace XrDap;
 
 using SwdLink = LibXR::Debug::SwdGeneralGPIO<RegGpioPin, RegGpioPin>;
-using Swd = SwdWithClock<RegGpioPin>;
 // DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal()
 // 执行命令；端点号用不到。
 using DapLink =
-    LibXR::USB::DapLinkV2Class<Swd, Config::kDapPacketSize, Config::kDapPacketCount,
+    LibXR::USB::DapLinkV2Class<SwdLink, Config::kDapPacketSize, Config::kDapPacketCount,
                                Config::kDapPacketSize>;
 
 struct SwdSet
 {
   RegGpioPin swclk{Config::kSwclkGpio, /*pull_up=*/false, Config::kPadDriveStrength};
   RegGpioPin swdio{Config::kSwdioGpio, /*pull_up=*/true, Config::kPadDriveStrength};
-  // 延时参数填 0：SwdGeneralGPIO 走全速路径，SWCLK 频率由 swd_clock.hpp 里设定。
-  SwdLink link{swclk, swdio, 0u};
-  Swd swd{link, swclk, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000U,
-          Config::kEdgeWriteCycles};
+  // SWCLK 频率由 libxr 按 Config::kSwdTiming 换算成延时循环次数 / libxr turns the
+  // SWCLK frequency into delay-loop counts with Config::kSwdTiming.
+  SwdLink swd{swclk, swdio, CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000U,
+              Config::kSwdTiming};
 };
 
 }  // namespace

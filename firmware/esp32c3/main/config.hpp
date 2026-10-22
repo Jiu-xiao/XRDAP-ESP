@@ -7,6 +7,7 @@
 
 #include <cstdint>
 
+#include "debug/swd_general_gpio.hpp"
 #include "probe_config.hpp"
 
 namespace XrDap::Config
@@ -27,11 +28,14 @@ constexpr int kSwclkGpio = 5;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 4;
 
-/// 写一次 SWCLK 沿在每个时钟周期多出的 CPU 周期数，用来校正 SWCLK 频率；偏低就加大，
-/// 偏高就减小 / Extra CPU cycles one SWCLK edge write adds to each clock period, used
-/// to calibrate the SWCLK frequency; raise it if the frequency is low, lower it if
-/// high.
-constexpr uint32_t kEdgeWriteCycles = 13U;
+/// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N，不带延时
+/// c。暂定值：a、c 由此前标定的每半周期写沿开销（13 个周期，每周期两次）换算，b 按延时
+/// 循环每次约 3 个周期估计；要在硬件上用 ccount 扫一遍 N 后改成实测值 / Timing of libxr's
+/// SwdGeneralGPIO (CPU cycles x10): a + b*N per SWCLK period with delay, c without.
+/// Provisional: a and c are converted from the previous calibration of the edge-write
+/// cost per half period (13 cycles, twice per period); b assumes about 3 cycles per
+/// delay-loop iteration. Replace with values from a ccount sweep of N on hardware.
+inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{60, 260, 260};
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
 constexpr int kCore = 0;

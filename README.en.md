@@ -235,7 +235,7 @@ Classic ESP32 (serial at 921600 baud): reads and writes are correct for SWD cloc
 
 ### SWD clock and wiring
 
-On the S3, SWCLK high and low times are equal and the frequency is computed in CPU cycles; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz. The C3 and the classic ESP32 use libxr's generic GPIO bit-banging, where the frequency comes from a busy-wait after each SWCLK edge; the correction value is `kEdgeWriteCycles` in `config.hpp`. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
+On the S3, SWCLK high and low times are equal and the frequency is computed in CPU cycles; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz. The C3 and the classic ESP32 use libxr's generic GPIO bit-banging; libxr turns the requested frequency into delay-loop counts with `kSwdTiming` in `config.hpp` (CPU cycles per SWCLK period), and the clock lands within half a step of the request. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
 
 ### Building from source
 
@@ -271,7 +271,7 @@ ctest --test-dir build-tests
 | `firmware/common/serial`, `console` | Serial DAP link, C3 serial splitting, Wi-Fi command line |
 | `firmware/common/probe` | Parameters, probe identity, start-up steps, restart, status light inputs, the sampling task and its gptimer, shared by all three chips |
 | `firmware/tests` | Unit tests that run on a PC |
-| `firmware/common/swd` | S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins, SWCLK frequency control for the C3 and classic ESP32 |
+| `firmware/common/swd` | S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins |
 | `third_party/xrdap-core` | XR vendor extension, status light rule, probe identity and protocol document ([XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)) |
 
 Every push builds the four firmware images (S3, S3 Lite, C3, classic ESP32), runs the unit tests and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release. The `pages` workflow publishes the web flasher from the newest release images and the page in `web/` on main, after a tagged build finishes or when `web/` changes (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
