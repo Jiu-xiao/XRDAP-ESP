@@ -233,7 +233,7 @@ C3 是单核，Wi-Fi 收发和采样在同一个核上：经 Wi-Fi 采样 4 个�
 
 ### SWD 时钟和接线
 
-S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算；请求 25 MHz 及以上时用最快的一档，约 23.7 MHz。C3 和传统 ESP32 用 libxr 的通用 GPIO 位带，频率由每个 SWCLK 沿之后的忙等决定，校正值是 `config.hpp` 的 `kEdgeWriteCycles`。能跑多快取决于线长、目标板上拉和走线，先用 4 MHz；高时钟出错时先看 SWCLK、SWDIO 波形，缩短线或加串联电阻。引脚驱动强度设为 1（IDF 默认 2），减小过冲和振铃。
+S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算；请求 25 MHz 及以上时用最快的一档，约 23.7 MHz。C3 和传统 ESP32 用 libxr 的通用 GPIO 位带，频率由 libxr 按 `config.hpp` 的 `kSwdTiming`（每个 SWCLK 周期的 CPU 周期数）换算成延时循环次数，实际时钟与请求值相差不超过半档。能跑多快取决于线长、目标板上拉和走线，先用 4 MHz；高时钟出错时先看 SWCLK、SWDIO 波形，缩短线或加串联电阻。引脚驱动强度设为 1（IDF 默认 2），减小过冲和振铃。
 
 ### 自己编译
 
@@ -269,7 +269,7 @@ ctest --test-dir build-tests
 | `firmware/common/serial`、`console` | 串口 DAP 链路、C3 的串口分流、Wi-Fi 命令行 |
 | `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤、重启、状态灯输入、采样任务和它的 gptimer |
 | `firmware/tests` | 电脑上运行的单元测试 |
-| `firmware/common/swd` | S3、C3 的专用 GPIO 引脚，传统 ESP32 的 GPIO 寄存器引脚，C3 和传统 ESP32 的 SWCLK 频率控制 |
+| `firmware/common/swd` | S3、C3 的专用 GPIO 引脚，传统 ESP32 的 GPIO 寄存器引脚 |
 | `third_party/xrdap-core` | XR 厂商扩展、状态灯规则、探针身份和协议文档（[XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)） |
 
 每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）、运行单元测试并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布 release。网页烧录站点由 `pages` 工作流发布：取最新 release 的固件和 main 上 `web/` 的页面，打标签的编译完成后、或 `web/` 有改动时重新发布（`web/make_site.py` 按 `web/boards.json` 为每块板生成 ESP Web Tools 的 manifest）。

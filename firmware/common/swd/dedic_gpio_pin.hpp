@@ -7,7 +7,6 @@
 #include "driver/gpio.h"
 #include "esp_attr.h"
 #include "esp_check.h"
-#include "esp_cpu.h"
 #include "gpio.hpp"
 #include "hal/dedic_gpio_cpu_ll.h"
 #include "hal/gpio_ll.h"
@@ -86,24 +85,11 @@ class DedicGpioPin final : public LibXR::GPIO
   /// bidirectional.
   bool Read() override { return (dedic_gpio_cpu_ll_read_in() & in_mask_) != 0U; }
 
-  /// 写引脚电平；设置了 edge_spin_cycles 时写完后忙等 / Write the level; busy-waits
-  /// afterwards when edge spin cycles are set.
+  /// 写引脚电平 / Write the level.
   void Write(bool value) override
   {
     dedic_gpio_cpu_ll_write_mask(out_mask_, value ? out_mask_ : 0U);
-    if (edge_spin_cycles_ != 0U)
-    {
-      // 每个沿之后等固定的 CPU 周期数，用来设定 SWCLK 频率。
-      const uint32_t t0 = esp_cpu_get_cycle_count();
-      while ((esp_cpu_get_cycle_count() - t0) < edge_spin_cycles_)
-      {
-      }
-    }
   }
-
-  /// 每次写沿之后等待的 CPU 周期数，0 表示不等待（全速） / CPU cycles to wait after each
-  /// edge write; 0 means no wait (full speed).
-  void SetEdgeSpinCycles(uint32_t cycles) { edge_spin_cycles_ = cycles; }
 
   /// 专用 GPIO 输出寄存器中本引脚的位，供 SwdEngine 一条指令同时写两个引脚 / Bit of this
   /// pin in the dedicated-GPIO output register, so SwdEngine can drive two pins with one
@@ -154,7 +140,6 @@ class DedicGpioPin final : public LibXR::GPIO
   dedic_gpio_bundle_handle_t bundle_ = nullptr;
   uint32_t out_mask_ = 0U;
   uint32_t in_mask_ = 0U;
-  uint32_t edge_spin_cycles_ = 0U;
 };
 
 }  // namespace XrDap

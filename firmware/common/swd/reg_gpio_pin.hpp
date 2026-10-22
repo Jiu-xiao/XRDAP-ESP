@@ -4,7 +4,6 @@
 #include <cstdint>
 
 #include "driver/gpio.h"
-#include "esp_cpu.h"
 #include "gpio.hpp"
 #include "soc/gpio_reg.h"
 
@@ -45,24 +44,11 @@ class RegGpioPin final : public LibXR::GPIO
   /// 读引脚电平 / Read the pin level.
   bool Read() override { return (REG_READ(GPIO_IN_REG) & mask_) != 0U; }
 
-  /// 写引脚电平；设置了 edge_spin_cycles 时写完后忙等 / Write the level; busy-waits
-  /// afterwards when edge spin cycles are set.
+  /// 写引脚电平 / Write the level.
   void Write(bool value) override
   {
     REG_WRITE(value ? GPIO_OUT_W1TS_REG : GPIO_OUT_W1TC_REG, mask_);
-    if (edge_spin_cycles_ != 0U)
-    {
-      // 每个沿之后等固定的 CPU 周期数，用来设定 SWCLK 频率。
-      const uint32_t t0 = esp_cpu_get_cycle_count();
-      while ((esp_cpu_get_cycle_count() - t0) < edge_spin_cycles_)
-      {
-      }
-    }
   }
-
-  /// 每次写沿之后等待的 CPU 周期数，0 表示不等待（全速） / CPU cycles to wait after each
-  /// edge write; 0 means no wait (full speed).
-  void SetEdgeSpinCycles(uint32_t cycles) { edge_spin_cycles_ = cycles; }
 
   /// 不支持中断 / Interrupts are not supported.
   LibXR::ErrorCode EnableInterrupt() override { return LibXR::ErrorCode::NOT_SUPPORT; }
@@ -93,7 +79,6 @@ class RegGpioPin final : public LibXR::GPIO
 
   uint32_t mask_;
   bool output_enabled_ = false;
-  uint32_t edge_spin_cycles_ = 0U;
 };
 
 }  // namespace XrDap
