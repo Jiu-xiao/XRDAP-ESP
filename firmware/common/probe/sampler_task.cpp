@@ -26,6 +26,10 @@ class GptimerTick final : public Vendor::TickTimer
     cfg.clk_src = GPTIMER_CLK_SRC_DEFAULT;
     cfg.direction = GPTIMER_COUNT_UP;
     cfg.resolution_hz = 1000000U;
+    // C 语言中断能用的最高级别，核 1 上别的 1、2 级中断推迟不了节拍 / The highest level
+    // C interrupt handlers can use, so other level 1 and 2 interrupts on the core cannot
+    // delay the tick.
+    cfg.intr_priority = 3;
     gptimer_event_callbacks_t cbs = {};
     cbs.on_alarm = &GptimerTick::OnAlarm;
     gptimer_handle_t t = nullptr;
