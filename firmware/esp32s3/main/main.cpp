@@ -144,30 +144,15 @@ extern "C" void app_main(void)
                Config::kSamplingPriority);
 
   // USB 的 DAP 命令在应用线程里经执行器执行。线程放在 SWD 核上，与核 0 的 USB 中断分开。
-  // 执行器在等命令时也持锁：USB 是主人或没有主人时等 kUsbWaitMs，别的传输是主人时 USB
-  // 只会收到“忙”，就不等、隔一拍再查，免得拖慢主人的命令。每轮让出一次，同优先级的 TCP
-  // 任务能拿到锁。
-  // USB DAP commands run through the executor in an application thread on the SWD core,
-  // apart from the USB interrupt on core 0. The executor holds its lock while waiting for
-  // a command: it waits kUsbWaitMs while USB owns the probe or nobody does; while another
-  // transport owns it USB would only get busy, so it polls once per tick instead of
-  // slowing the owner down. Each round yields once so the TCP task at the same priority
-  // gets the lock.
+  // 等命令时不占执行轮次，别的传输照常执行 / USB DAP commands run through the executor in
+  // an application thread on the SWD core, apart from the USB interrupt on core 0.
+  // Waiting for a command takes no executor turn, so the other transports run meanwhile.
   xTaskCreatePinnedToCore(
       [](void*)
       {
         for (;;)
         {
-          const Transport owner = probe.session.Owner();
-          if (owner == Transport::NONE || owner == Transport::USB)
-          {
-            (void)probe.exec.StepUsb(Config::kUsbWaitMs);
-          }
-          else if (probe.exec.StepUsb(0) != LibXR::ErrorCode::OK)
-          {
-            vTaskDelay(1);
-          }
-          taskYIELD();
+          (void)probe.exec.StepUsb(UINT32_MAX);
         }
       },
       "dapstep", 8192, nullptr, Config::kStepPriority, nullptr, Config::kSwdCore);
