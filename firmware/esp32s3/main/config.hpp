@@ -90,11 +90,6 @@ constexpr int kSwdCore = 1;
 constexpr unsigned kLibxrTimerPriority = 3;
 /// DAP Step() 线程优先级 / DAP Step() thread priority.
 constexpr unsigned kStepPriority = 10;
-/// USB 线程等一条 USB 命令的最长时间。执行器在等待时持锁，没有主人时第一条 TCP 或串口
-/// 命令最多多等这么久 / Longest wait of the USB thread for one USB command. The executor
-/// holds its lock while waiting, so without an owner the first TCP or serial command
-/// waits at most this much longer.
-constexpr uint32_t kUsbWaitMs = 10;
 /// 采样任务优先级，为 SWD 核上最高 / Sampling task priority, the highest on the SWD core.
 constexpr unsigned kSamplingPriority = 14;
 
