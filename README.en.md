@@ -238,7 +238,7 @@ Classic ESP32 (serial at 921600 baud): reads and writes are correct for SWD cloc
 
 ### SWD clock and wiring
 
-On the S3, SWCLK high and low times are equal and the frequency is computed in CPU cycles; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz. The C3 and the classic ESP32 use libxr's generic GPIO bit-banging; libxr turns the requested frequency into delay-loop counts with `kSwdTiming` in `config.hpp` (CPU cycles per SWCLK period), and the clock lands within half a step of the request. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
+On the S3, SWCLK high and low times are equal and the frequency is computed in CPU cycles; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz. The C3 and the classic ESP32 use libxr's generic GPIO bit-banging; libxr turns the requested frequency into delay-loop counts with `kSwdTiming` in `config.hpp` (CPU cycles per SWCLK period), and the clock lands within half a step of the request; on the C3 the fastest step is about 5.2 MHz, and higher requests run at that step. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
 
 ### Building from source
 

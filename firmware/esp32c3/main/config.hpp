@@ -28,16 +28,21 @@ constexpr int kSwclkGpio = 5;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 4;
 
-/// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N，不带延时
-/// c。160 MHz 下用 CPU 周期计数器实测：请求字节、读数据相、写数据相和 SWJ 序列按 N >= 2
-/// 拟合，b = 8.0（一次延时循环 4 个周期），a 取各路径的平均 24.7；c 取不带延时时最短的一条
-/// 路径 9.6，所以选无延时路径时任何路径都不会比请求的时钟快 / Timing of libxr's
-/// SwdGeneralGPIO (CPU cycles x10): a + b*N per SWCLK period with delay, c without.
-/// Measured with the CPU cycle counter at 160 MHz: the request byte, read and write data
-/// phases and SWJ sequence fit b = 8.0 (4 cycles per delay-loop iteration) for N >= 2, and
-/// a is their mean, 24.7; c is the shortest path without delay, 9.6, so the no-delay path
-/// is never faster than the request on any path.
-inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{80, 247, 96};
+/// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N。160 MHz
+/// 下用 CPU 周期计数器实测：请求字节、读数据相、写数据相和 SWJ 序列按 N >= 2 拟合，
+/// b = 8.0（一次延时循环 4 个周期），a 取各路径的平均 24.7。c 设为 0，不用无延时路径：
+/// 无延时时读一位在 SWCLK 拉低后紧接着采 SWDIO，离上一个上升沿只有十几 ns，目标还没送出
+/// 新的一位（实测读到上一位，Cortex-M4 和 M7 目标都会出错）；N = 1 在采样前多等约 25 ns，
+/// 没有错误。最快一档是 N = 1，约 5.2 MHz / Timing of libxr's SwdGeneralGPIO (CPU
+/// cycles x10): a + b*N per SWCLK period with delay. Measured with the CPU cycle counter
+/// at 160 MHz: the request byte, read and write data phases and SWJ sequence fit b = 8.0
+/// (4 cycles per delay-loop iteration) for N >= 2, and a is their mean, 24.7. c is 0, so
+/// the path without delay is never used: there a read samples SWDIO right after pulling
+/// SWCLK low, a dozen ns after the previous rising edge, before the target drives the new
+/// bit (measured: the previous bit is read, on Cortex-M4 and M7 targets). N = 1 waits
+/// about 25 ns more before sampling and reads correctly. The fastest step is N = 1,
+/// about 5.2 MHz.
+inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{80, 247, 0};
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
 constexpr int kCore = 0;
