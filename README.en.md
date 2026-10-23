@@ -187,7 +187,7 @@ On Linux, add a udev rule so that a normal user can open the device:
 SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6199", MODE="0666"
 ```
 
-The virtual device has VID:PID 1D50:6199 and bcdDevice 0x0200. The S3 native USB uses 0x0100. They differ because Windows caches descriptors by these three values.
+The virtual device has VID:PID 1D50:6199 and bcdDevice 0x0200. The S3 native USB uses 0x0100 and the S2 0x0500. They differ because Windows caches descriptors by these three values.
 
 ### OpenOCD version
 

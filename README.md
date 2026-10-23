@@ -187,7 +187,7 @@ Linux 上普通用户要能打开设备，加 udev 规则：
 SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6199", MODE="0666"
 ```
 
-虚拟设备的 VID:PID 是 1D50:6199，bcdDevice 0x0200（S3 原生 USB 是 0x0100，两者不同是因为 Windows 按这三项缓存描述符）。
+虚拟设备的 VID:PID 是 1D50:6199，bcdDevice 0x0200（S3 原生 USB 是 0x0100，S2 是 0x0500，几者不同是因为 Windows 按这三项缓存描述符）。
 
 ### OpenOCD 版本
 

@@ -192,7 +192,7 @@ extern "C" void app_main(void)
           {LibXR::RawData{ep3_comm, sizeof(ep3_comm)}, true},
       },
       LibXR::USB::DeviceDescriptor::PacketSize0::SIZE_64, Family::kUsbVid,
-      Family::kUsbPid, Family::kBcdEsp32S3, {&lang}, {{&dap, &cdc}},
+      Family::kUsbPid, Config::kUsbBcdDevice, {&lang}, {{&dap, &cdc}},
       LibXR::ConstRawData{ProbeMac(), 6});
   usb.Init(false);
   usb.Start(false);
