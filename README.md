@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-用 ESP32-S3、ESP32-C3 或传统 ESP32 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。插 USB 线或走 Wi-Fi 都能用，Keil、pyOCD、probe-rs、OpenOCD 把它当普通的 CMSIS-DAP 探针；另外能在探针上按固定周期采样目标的变量，配合电脑端工具画曲线。
+用 ESP32-S3、ESP32-S2、ESP32-C3 或传统 ESP32 做的 CMSIS-DAP 调试探针，基于 [libxr](https://github.com/xrobot-org/libxr)。插 USB 线或走 Wi-Fi 都能用，Keil、pyOCD、probe-rs、OpenOCD 把它当普通的 CMSIS-DAP 探针；另外能在探针上按固定周期采样目标的变量，配合电脑端工具画曲线。
 
 电脑端工具在 [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host)：一个 `xrdap` 可执行文件，不带参数是图形界面，带命令是命令行。
 
@@ -33,7 +33,9 @@
 
 “高速无线 DAP 调试器 Lite”板（ESP32-S3 模组，2×5 排针）用单独的固件 `xrdap-esp32-s3-lite.bin`：SWCLK 是 GPIO37；SWDIO 经板上的 SGM3157 模拟开关接到排针，固件把开关的选择脚 GPIO36 固定为低，用 GPIO47 收发 SWDIO。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi。模组要用不带 Octal PSRAM 的（WROOM-1-N4、N8，MINI-1-N4、N8），带 Octal PSRAM 的型号占用 GPIO35 到 37。
 
-S3 的状态灯（开发板：GPIO48 的 RGB 灯；Lite 板：板上的 WS2812）。Lite 板的 SW2 键按住 5 秒清除热点参数并重启。开发板的 BOOT 键只用于进下载模式：它接在 USB 转串口芯片的自动下载电路上，串口线的 DTR/RTS 能把它拉低，所以固件运行时不读它；开发板清除 Wi-Fi 用 `xrdap wifi clear` 或命令行 `wifi clear`（2.6）。
+ESP32-S2 板（ESP32-S2FH4，芯片内 4 MB Flash，没有 PSRAM，2×5 排针）用固件 `xrdap-esp32-s2.bin`：SWCLK 是 GPIO37，SWDIO 是 GPIO35（经 0 Ω 电阻，板上的 SGM3157 不焊），目标 nRESET 是 GPIO40（开漏，上电时不复位目标）。排针上的 TDI、TDO 留给以后的 JTAG，目标串口 TXD、RXD 暂不使用。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi，用法同 S3（2.1、2.3、2.4）。S2 是单核，内部 RAM 只有 320 KB，Wi-Fi 缓冲和任务栈都比 S3 小，采样路径不放进 IRAM。这个固件还没有在实物上测过。
+
+S3、S2 的状态灯（S3 开发板：GPIO48 的 RGB 灯；Lite 板：板上的 WS2812；S2 板：GPIO17 的 WS2812）。Lite 板的 SW2 键、S2 板的 KEY 键按住 5 秒清除热点参数并重启。开发板的 BOOT 键只用于进下载模式：它接在 USB 转串口芯片的自动下载电路上，串口线的 DTR/RTS 能把它拉低，所以固件运行时不读它；开发板清除 Wi-Fi 用 `xrdap wifi clear` 或命令行 `wifi clear`（2.6）。
 
 | 灯 | 含义 |
 |---|---|
@@ -44,17 +46,18 @@ S3 的状态灯（开发板：GPIO48 的 RGB 灯；Lite 板：板上的 WS2812�
 | 主色与紫色来回，2 秒一次 | 上位机经 DAP_HostStatus 报告已连接 |
 | 红蓝来回，1 秒一次 | 上位机报告目标运行中 |
 | 闪亮 | 每条 DAP 命令（USB、串口、Wi-Fi 都算）把灯提亮再暗下去，命令不断时约 15 Hz 闪烁 |
-| 紫色快闪 | Lite 板 SW2 按住中；按满 5 秒变紫色常亮，清除热点参数并重启 |
+| 紫色快闪 | Lite 板 SW2 或 S2 板 KEY 按住中；按满 5 秒变紫色常亮，清除热点参数并重启 |
 | 紫色常亮 | 刚改了热点参数（按键、命令行或 0x86 命令），马上重启 |
 
 USB 和 Wi-Fi 都连着时以有线为准，显示红色。上位机异常退出、没有发 DAP_Disconnect 时，5 秒内没有命令也回到主色。板上的 WS2812B 用 5V 供电，数据高电平门限是 0.65 × 5V = 3.25V，3.3V 驱动刚好够，个别灯珠可能不亮或颜色不对，不影响调试功能。
 
 ### 烧固件
 
-用 Chrome 或 Edge 桌面版打开[网页烧录](https://jiu-xiao.github.io/XRDAP-ESP/)，选板子后点“烧录固件”。也可以用命令行：在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-s3-lite.bin`（Lite 板）、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
+用 Chrome 或 Edge 桌面版打开[网页烧录](https://jiu-xiao.github.io/XRDAP-ESP/)，选板子后点“烧录固件”。也可以用命令行：在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-s3-lite.bin`（Lite 板）、`xrdap-esp32-s2.bin`（S2 板）、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
+python -m esptool --chip esp32s2 write_flash 0x0 xrdap-esp32-s2.bin
 python -m esptool --chip esp32c3 write_flash 0x0 xrdap-esp32-c3.bin
 python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 ```
@@ -241,15 +244,16 @@ S3 上 SWCLK 高低电平等长，频率按 CPU 周期计算；请求 25 MHz 及
 
 ```
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP.git
-cd XRDAP-ESP/firmware/esp32s3      # C3 是 firmware/esp32c3，传统 ESP32 是 firmware/esp32
+cd XRDAP-ESP/firmware/esp32sx      # S2、S3 共用；C3 是 firmware/esp32c3，传统 ESP32 是 firmware/esp32
 idf.py build
 idf.py -p COMx flash
 ```
 
-`idf.py build merge-bin` 生成和 release 相同的合并镜像 `build/merged-binary.bin`。Lite 板的固件在 `firmware/esp32s3` 里多叠加一份配置：
+`idf.py build merge-bin` 生成和 release 相同的合并镜像 `build/merged-binary.bin`。`firmware/esp32sx` 默认编 S3 开发板。Lite 板多叠加一份配置，S2 板换目标（`sdkconfig.defaults.esp32s2` 随目标自动叠加）：
 
 ```
 idf.py -B build-lite -D SDKCONFIG=build-lite/sdkconfig -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.lite" build merge-bin
+idf.py -D IDF_TARGET=esp32s2 -B build-s2 -D SDKCONFIG=build-s2/sdkconfig build merge-bin
 ```
 
 也可以在 `idf.py menuconfig` 的 XR-DAP → Board 里选板型。
@@ -264,7 +268,7 @@ ctest --test-dir build-tests
 
 | 目录 | 内容 |
 |---|---|
-| `firmware/esp32s3`、`firmware/esp32c3`、`firmware/esp32` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级；S3 按板型选引脚），S3 的 SWD 引擎 |
+| `firmware/esp32sx`、`firmware/esp32c3`、`firmware/esp32` | 各芯片的工程：`main.cpp`、`config.hpp`（引脚、核、优先级；`esp32sx` 是 S2、S3 共用的工程，按目标和板型选），S2、S3 的 SWD 引擎和状态灯 |
 | `firmware/common/net` | Wi-Fi 和热点参数存储、0x86 Wi-Fi 命令、OpenOCD TCP 服务、USB/IP 虚拟设备、mDNS |
 | `firmware/common/serial`、`console` | 串口 DAP 链路、C3 的串口分流、Wi-Fi 命令行 |
 | `firmware/common/probe` | 三种芯片共用的参数、探针身份、启动步骤、重启、状态灯输入、采样任务和它的 gptimer |
@@ -272,7 +276,7 @@ ctest --test-dir build-tests
 | `firmware/common/swd` | S3、C3 的专用 GPIO 引脚，传统 ESP32 的 GPIO 寄存器引脚 |
 | `third_party/xrdap-core` | XR 厂商扩展、状态灯规则、探针身份和协议文档（[XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)） |
 
-每次推送都由 GitHub Actions 编译四个固件（S3、S3 Lite、C3、传统 ESP32）、运行单元测试并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布 release。网页烧录站点由 `pages` 工作流发布：取最新 release 的固件和 main 上 `web/` 的页面，打标签的编译完成后、或 `web/` 有改动时重新发布（`web/make_site.py` 按 `web/boards.json` 为每块板生成 ESP Web Tools 的 manifest）。
+每次推送都由 GitHub Actions 编译五个固件（S3、S3 Lite、S2、C3、传统 ESP32）、运行单元测试并检查格式（clang-format 21.1.8），打 `v*` 标签自动发布 release。网页烧录站点由 `pages` 工作流发布：取最新 release 的固件和 main 上 `web/` 的页面，打标签的编译完成后、或 `web/` 有改动时重新发布（`web/make_site.py` 按 `web/boards.json` 为每块板生成 ESP Web Tools 的 manifest）。
 
 ### 厂商扩展
 

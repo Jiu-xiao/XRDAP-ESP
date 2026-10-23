@@ -46,8 +46,8 @@ class UartConsole
   /// @brief 在指定的核上启动命令行任务 / Start the console task on a core.
   void Start(int core)
   {
-    xTaskCreatePinnedToCore(&UartConsole::TaskEntry, "console", 4096, this,
-                            Config::kConsolePriority, nullptr, core);
+    xTaskCreatePinnedToCore(&UartConsole::TaskEntry, "console", Config::kConsoleStack,
+                            this, Config::kConsolePriority, nullptr, core);
   }
 
  private:

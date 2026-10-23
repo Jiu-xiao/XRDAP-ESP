@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// XR-DAP-S3：基于 libxr 的 ESP32-S3 CMSIS-DAP 调试探针。
+// XR-DAP-S3 / XR-DAP-S2：基于 libxr 的 ESP32-S3、ESP32-S2 CMSIS-DAP 调试探针（芯片原生
+// USB OTG；板型见 config.hpp）。
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
 //   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针。
 //   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap 使用（板上有 USB
@@ -7,7 +8,8 @@
 // 三种传输经 XRDAP-Core 的同一个执行器驱动 DAP 和 XR 厂商扩展（多地址读写、指针链、
 // 探针端采样）；同一时间只有一条传输拥有探针，别的传输收到“忙”。
 //
-// XR-DAP-S3: a CMSIS-DAP debug probe for the ESP32-S3 built on libxr.
+// XR-DAP-S3 / XR-DAP-S2: a CMSIS-DAP debug probe for the ESP32-S3 and ESP32-S2 built on
+// libxr (the chip's native USB OTG; boards in config.hpp).
 //   USB:    a Bulk v2 DAP interface plus a CDC virtual serial port.
 //   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe.
 //   Serial: CMSIS-DAP in libxr Topic frames on UART0, for the PC-side xrdap (on boards
@@ -23,6 +25,7 @@
 #include "daplink_v2_profile_swd.hpp"
 #include "dedic_gpio_pin.hpp"
 #include "driver/gpio.h"
+#include "esp_gpio.hpp"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
 #include "esp_usb_dev.hpp"
@@ -102,7 +105,7 @@ SwdSet& GetSwdSet()
 extern "C" void app_main(void)
 {
   static LibXR::ESP32Timebase timebase;
-  LibXR::PlatformInit(Config::kLibxrTimerPriority, 8192);
+  LibXR::PlatformInit(Config::kLibxrTimerPriority, Config::kLibxrTimerStack);
   // 失败时 RestartLater 立即重启 / RestartLater restarts at once on failure.
   (void)RestartInit();
   // NVS 在命令行、0x86、状态灯之前初始化一次；失败时它们报存储错误 / NVS is set up once
@@ -134,8 +137,21 @@ extern "C" void app_main(void)
     vTaskDelay(1);
   }
 
+  // 目标 nRESET（有的板子才有）：开漏，先写高再设方向，上电时不复位目标 / Target nRESET
+  // (on boards that have it): open drain, written high before the direction is set, so
+  // power-up does not reset the target.
+  LibXR::GPIO* nreset = nullptr;
+  if constexpr (Config::kNresetGpio >= 0)
+  {
+    static LibXR::ESP32GPIO pin(static_cast<gpio_num_t>(Config::kNresetGpio));
+    (void)pin.Write(true);
+    (void)pin.SetConfig(
+        {LibXR::GPIO::Direction::OUTPUT_OPEN_DRAIN, LibXR::GPIO::Pull::UP});
+    nreset = &pin;
+  }
+
   static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
-                     LibXR::USB::Endpoint::EPNumber::EP1, GetSwdSet().swd, nullptr);
+                     LibXR::USB::Endpoint::EPNumber::EP1, GetSwdSet().swd, nreset);
 
   // 会话主人、厂商扩展和执行器；所有传输经执行器驱动 DAP / Session owner, vendor
   // extension and executor; every transport drives DAP through the executor.
@@ -155,7 +171,8 @@ extern "C" void app_main(void)
           (void)probe.exec.StepUsb(UINT32_MAX);
         }
       },
-      "dapstep", 8192, nullptr, Config::kStepPriority, nullptr, Config::kSwdCore);
+      "dapstep", Config::kStepStack, nullptr, Config::kStepPriority, nullptr,
+      Config::kSwdCore);
 
   // USB
   static LibXR::USB::CDCUart cdc(LibXR::USB::Endpoint::EPNumber::EP2,

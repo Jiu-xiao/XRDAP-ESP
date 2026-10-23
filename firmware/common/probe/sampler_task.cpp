@@ -5,12 +5,12 @@
 #include "esp_attr.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "probe_config.hpp"
 
 namespace XrDap
 {
 namespace
 {
-constexpr uint32_t kTaskStack = 8192;
 
 /// gptimer 按 1 MHz 计数，每个周期报警一次并自动重装 / A gptimer counting at 1 MHz that
 /// alarms and reloads once per period.
@@ -86,7 +86,8 @@ bool StartSamplerTask(DapVendor& vendor, int core, unsigned priority)
                tick.Create();
                static_cast<DapVendor*>(arg)->RunSamplerTask(tick);
              },
-             "dap_sampler", kTaskStack, &vendor, priority, nullptr, core) == pdPASS;
+             "dap_sampler", Config::kSamplerStack, &vendor, priority, nullptr,
+             core) == pdPASS;
 }
 
 }  // namespace XrDap

@@ -2,7 +2,7 @@
 
 [中文](README.md)
 
-A CMSIS-DAP debug probe built on ESP32-S3, ESP32-C3 or the classic ESP32, based on [libxr](https://github.com/xrobot-org/libxr). It works over a USB cable or over Wi-Fi. Keil, pyOCD, probe-rs and OpenOCD treat it as an ordinary CMSIS-DAP probe. The probe can also sample target variables at a fixed period, and a host tool plots the curves.
+A CMSIS-DAP debug probe built on ESP32-S3, ESP32-S2, ESP32-C3 or the classic ESP32, based on [libxr](https://github.com/xrobot-org/libxr). It works over a USB cable or over Wi-Fi. Keil, pyOCD, probe-rs and OpenOCD treat it as an ordinary CMSIS-DAP probe. The probe can also sample target variables at a fixed period, and a host tool plots the curves.
 
 The host tool is in [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host): a single `xrdap` executable. Without arguments it starts the GUI; with a command it runs as a command-line tool.
 
@@ -33,7 +33,9 @@ Connect one probe to one target. GPIO5 of the classic ESP32 is a strapping pin, 
 
 The "Wireless DAP Lite" board (ESP32-S3 module, 2×5 header) uses its own image, `xrdap-esp32-s3-lite.bin`. SWCLK is GPIO37. SWDIO reaches the header through the on-board SGM3157 analog switch; the firmware holds the switch select pin GPIO36 low and drives and reads SWDIO on GPIO47. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available. Use a module without Octal PSRAM (WROOM-1-N4 or N8, MINI-1-N4 or N8); modules with Octal PSRAM use GPIO35 to 37.
 
-S3 status light (dev board: the RGB LED on GPIO48; Lite board: its WS2812). Holding SW2 on the Lite board for 5 seconds clears the credentials and restarts the probe. The dev board's BOOT key is for download mode only: it sits on the USB-to-serial chip's auto-download circuit, where the serial DTR/RTS lines can pull it low, so the running firmware does not read it. On the dev board, Wi-Fi is cleared with `xrdap wifi clear` or the console command `wifi clear` (2.6).
+The ESP32-S2 board (ESP32-S2FH4 with 4 MB flash in the package and no PSRAM, 2×5 header) uses the image `xrdap-esp32-s2.bin`. SWCLK is GPIO37, SWDIO is GPIO35 (through a 0 ohm resistor; the on-board SGM3157 is not fitted), and target nRESET is GPIO40 (open drain, so power-up does not reset the target). TDI and TDO on the header are kept for JTAG later, and the target TXD and RXD are not used yet. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available, used as on the S3 (2.1, 2.3, 2.4). The S2 is single-core with only 320 KB of internal RAM, so its Wi-Fi buffers and task stacks are smaller than on the S3 and the sampling path is not placed in IRAM. This image has not been tested on a real board yet.
+
+S3 and S2 status light (S3 dev board: the RGB LED on GPIO48; Lite board: its WS2812; S2 board: the WS2812 on GPIO17). Holding SW2 on the Lite board or KEY on the S2 board for 5 seconds clears the credentials and restarts the probe. The dev board's BOOT key is for download mode only: it sits on the USB-to-serial chip's auto-download circuit, where the serial DTR/RTS lines can pull it low, so the running firmware does not read it. On the dev board, Wi-Fi is cleared with `xrdap wifi clear` or the console command `wifi clear` (2.6).
 
 | Light | Meaning |
 |---|---|
@@ -44,17 +46,18 @@ S3 status light (dev board: the RGB LED on GPIO48; Lite board: its WS2812). Hold
 | Main colour fading to purple and back every 2 seconds | The host reported connected through DAP_HostStatus |
 | Red and blue alternating every second | The host reported the target running |
 | Flash | Every DAP command (USB, serial or Wi-Fi) brightens the light, which then fades; steady traffic flickers at about 15 Hz |
-| Fast purple blink | SW2 held on the Lite board; after 5 seconds it turns solid purple, the credentials are cleared and the probe restarts |
+| Fast purple blink | SW2 on the Lite board or KEY on the S2 board held; after 5 seconds it turns solid purple, the credentials are cleared and the probe restarts |
 | Solid purple | The credentials were just changed (button, console or command 0x86); the probe restarts |
 
 With both USB and Wi-Fi connected, wired wins and the light is red. When a host exits without DAP_Disconnect, 5 seconds without commands also returns the light to the main colour. The board's WS2812B runs from 5 V; its data high threshold is 0.65 × 5 V = 3.25 V, so 3.3 V drive is just enough and an individual LED may stay dark or show the wrong colour; debugging is not affected.
 
 ### Flashing the firmware
 
-Open the [web flasher](https://jiu-xiao.github.io/XRDAP-ESP/) in desktop Chrome or Edge, choose the board and press Flash firmware. From the command line instead, download `xrdap-esp32-s3.bin`, `xrdap-esp32-s3-lite.bin` (Lite board), `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
+Open the [web flasher](https://jiu-xiao.github.io/XRDAP-ESP/) in desktop Chrome or Edge, choose the board and press Flash firmware. From the command line instead, download `xrdap-esp32-s3.bin`, `xrdap-esp32-s3-lite.bin` (Lite board), `xrdap-esp32-s2.bin` (S2 board), `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
+python -m esptool --chip esp32s2 write_flash 0x0 xrdap-esp32-s2.bin
 python -m esptool --chip esp32c3 write_flash 0x0 xrdap-esp32-c3.bin
 python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 ```
@@ -243,15 +246,16 @@ ESP-IDF v5.5 is required. libxr is the `third_party/libxr` submodule; the vendor
 
 ```
 git clone --recurse-submodules https://github.com/Jiu-xiao/XRDAP-ESP.git
-cd XRDAP-ESP/firmware/esp32s3      # for the C3 use firmware/esp32c3, for the classic ESP32 firmware/esp32
+cd XRDAP-ESP/firmware/esp32sx      # shared by S2 and S3; for the C3 use firmware/esp32c3, for the classic ESP32 firmware/esp32
 idf.py build
 idf.py -p COMx flash
 ```
 
-`idf.py build merge-bin` produces the same merged image as the release, `build/merged-binary.bin`. The Lite board image adds one more configuration layer in `firmware/esp32s3`:
+`idf.py build merge-bin` produces the same merged image as the release, `build/merged-binary.bin`. `firmware/esp32sx` builds the S3 dev board by default. The Lite board adds one more configuration layer, and the S2 board changes the target (`sdkconfig.defaults.esp32s2` is layered automatically for it):
 
 ```
 idf.py -B build-lite -D SDKCONFIG=build-lite/sdkconfig -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.lite" build merge-bin
+idf.py -D IDF_TARGET=esp32s2 -B build-s2 -D SDKCONFIG=build-s2/sdkconfig build merge-bin
 ```
 
 The board can also be chosen in `idf.py menuconfig` under XR-DAP → Board.
@@ -266,7 +270,7 @@ ctest --test-dir build-tests
 
 | Directory | Content |
 |---|---|
-| `firmware/esp32s3`, `firmware/esp32c3`, `firmware/esp32` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities; the S3 picks pins by board), and the S3 SWD engine |
+| `firmware/esp32sx`, `firmware/esp32c3`, `firmware/esp32` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities; `esp32sx` is the project shared by S2 and S3, chosen by target and board), and the S2/S3 SWD engine and status light |
 | `firmware/common/net` | Wi-Fi and credential storage, 0x86 Wi-Fi command, OpenOCD TCP server, USB/IP virtual device, mDNS |
 | `firmware/common/serial`, `console` | Serial DAP link, C3 serial splitting, Wi-Fi command line |
 | `firmware/common/probe` | Parameters, probe identity, start-up steps, restart, status light inputs, the sampling task and its gptimer, shared by all three chips |
@@ -274,7 +278,7 @@ ctest --test-dir build-tests
 | `firmware/common/swd` | S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins |
 | `third_party/xrdap-core` | XR vendor extension, status light rule, probe identity and protocol document ([XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)) |
 
-Every push builds the four firmware images (S3, S3 Lite, C3, classic ESP32), runs the unit tests and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release. The `pages` workflow publishes the web flasher from the newest release images and the page in `web/` on main, after a tagged build finishes or when `web/` changes (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
+Every push builds the five firmware images (S3, S3 Lite, S2, C3, classic ESP32), runs the unit tests and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release. The `pages` workflow publishes the web flasher from the newest release images and the page in `web/` on main, after a tagged build finishes or when `web/` changes (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
 
 ### Vendor extension
 
