@@ -43,6 +43,7 @@
 
 #include "probe_config.hpp"
 #include "sdkconfig.h"
+#include "xrdap/probe/family.hpp"
 
 namespace XrDap::Config
 {
@@ -54,6 +55,8 @@ inline constexpr char kProductName[] = "XR-DAP-S2";
 inline constexpr char kUsbProductName[] = "XR-DAP-S2 CMSIS-DAP";
 /// mDNS TXT 里的芯片名 / Chip name in the mDNS TXT.
 inline constexpr char kChipName[] = "esp32s2";
+/// USB 设备版本号（XRDAP-Core family.hpp）/ USB device release (XRDAP-Core family.hpp).
+inline constexpr uint16_t kUsbBcdDevice = Family::kBcdEsp32S2;
 #else
 /// DAP_Info 产品名 / DAP_Info product name.
 inline constexpr char kProductName[] = "XR-DAP-S3";
@@ -62,6 +65,8 @@ inline constexpr char kProductName[] = "XR-DAP-S3";
 inline constexpr char kUsbProductName[] = "XR-DAP-S3 CMSIS-DAP";
 /// mDNS TXT 里的芯片名 / Chip name in the mDNS TXT.
 inline constexpr char kChipName[] = "esp32s3";
+/// USB 设备版本号（XRDAP-Core family.hpp）/ USB device release (XRDAP-Core family.hpp).
+inline constexpr uint16_t kUsbBcdDevice = Family::kBcdEsp32S3;
 #endif
 
 #if CONFIG_XRDAP_BOARD_S2
