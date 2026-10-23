@@ -1,0 +1,30 @@
+# ESP32-S2 板（单核，S2FH4：芯片内 4 MB Flash，没有 PSRAM，不开 PSRAM）。所有任务都在核 0；
+# 采样任务优先级高于 lwIP，靠 XRDAP-Core 每帧之后留给别的任务的时间不饿死它们。
+# The ESP32-S2 board (single core, S2FH4: 4 MB flash in the package, no PSRAM, PSRAM
+# stays off). Every task runs on core 0; the sampling task is above lwIP and relies on
+# the gap XRDAP-Core leaves after each frame so the others are not starved.
+CONFIG_XRDAP_BOARD_S2=y
+# 短周期采样时空闲任务很少能运行，不把它算作看门狗超时 / Short sampling periods leave the
+# idle task little time; do not count that as a watchdog timeout.
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+
+# 内部 RAM 只有 320 KB（IRAM 和 DRAM 共用）：lwIP、Wi-Fi 的代码留在 Flash，不占 IRAM /
+# Only 320 KB of internal RAM, shared by IRAM and DRAM: lwIP and Wi-Fi code stays in flash
+# instead of IRAM.
+CONFIG_LWIP_IRAM_OPTIMIZATION=n
+CONFIG_LWIP_EXTRA_IRAM_OPTIMIZATION=n
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+# FreeRTOS、堆、环形缓冲的函数也留在 Flash / FreeRTOS, heap and ring-buffer functions stay in
+# flash too.
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
+CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
+# Wi-Fi 缓冲取小：静态接收 6 个（启动时就从堆里分配），动态收发各 16 个，块确认窗口 4 /
+# Smaller Wi-Fi buffers: 6 static RX buffers (taken from the heap at start-up), 16 dynamic
+# RX and TX each, block-ack windows of 4.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_RX_BA_WIN=4
+CONFIG_ESP_WIFI_TX_BA_WIN=4

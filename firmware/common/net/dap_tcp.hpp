@@ -65,13 +65,12 @@ class DapTcpServer
   ///       itself if neither port can listen.
   bool Start(int core)
   {
-    return xTaskCreatePinnedToCore(&DapTcpServer::TaskEntry, "xrdap_tcp", kStackSize,
-                                   this, Config::kNetPriority, nullptr, core) == pdPASS;
+    return xTaskCreatePinnedToCore(&DapTcpServer::TaskEntry, "xrdap_tcp",
+                                   Config::kNetStack, this, Config::kNetPriority, nullptr,
+                                   core) == pdPASS;
   }
 
  private:
-  static constexpr uint32_t kStackSize = 12288;
-
   /// 会话类用的执行入口：请求以 Transport::TCP 经执行器执行 / Execution entry for the
   /// session classes: requests run through the executor as Transport::TCP.
   struct TcpExec

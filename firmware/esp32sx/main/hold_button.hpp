@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 板上按键（按下接地，用内部上拉），长按时调用一次回调。只用于 Lite 板的 GPIO21：默认
-// 开发板的 BOOT 键（GPIO0）接着 USB 转串口芯片的自动下载电路，串口线的 DTR/RTS 会把它
-// 拉低，不能当运行时按键。
+// 板上按键（按下接地，用内部上拉），长按时调用一次回调。用于 Lite 板和 S2 板的
+// GPIO21：默认 开发板的 BOOT 键（GPIO0）接着 USB 转串口芯片的自动下载电路，串口线的
+// DTR/RTS 会把它 拉低，不能当运行时按键。
 //
 // On-board button (shorts to ground, internal pull-up) that calls a callback once on a
-// long press. Used only for GPIO21 on the Lite board: the default dev board's BOOT key
+// long press. Used for GPIO21 on the Lite and S2 boards: the default dev board's BOOT key
 // (GPIO0) sits on the USB-UART auto-download circuit, where the serial DTR/RTS lines can
 // pull it low, so it cannot serve as a runtime button.
 

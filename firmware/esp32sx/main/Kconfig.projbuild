@@ -1,0 +1,31 @@
+menu "XR-DAP"
+
+    choice XRDAP_BOARD
+        prompt "Board"
+        default XRDAP_BOARD_S2 if IDF_TARGET_ESP32S2
+        default XRDAP_BOARD_DEFAULT
+        help
+            Pin assignment of the build. See firmware/esp32sx/main/config.hpp.
+
+        config XRDAP_BOARD_DEFAULT
+            bool "ESP32-S3 dev board: SWCLK GPIO5, SWDIO GPIO4, serial link on UART0"
+            depends on IDF_TARGET_ESP32S3
+
+        config XRDAP_BOARD_LITE
+            bool "Wireless DAP Lite: SWCLK GPIO37, SWDIO GPIO47 through an SGM3157, no USB-UART"
+            depends on IDF_TARGET_ESP32S3
+
+        config XRDAP_BOARD_S2
+            bool "ESP32-S2 board: SWCLK GPIO37, SWDIO GPIO35, nRESET GPIO40, no USB-UART"
+            depends on IDF_TARGET_ESP32S2
+    endchoice
+
+    config XRDAP_VERSION_SUFFIX
+        string "Firmware version suffix"
+        default "-preview" if XRDAP_BOARD_S2
+        default ""
+        help
+            Appended to the firmware version in DAP_Info and mDNS. Boards not yet
+            tested on hardware use "-preview".
+
+endmenu

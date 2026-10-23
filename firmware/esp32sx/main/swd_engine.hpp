@@ -77,8 +77,8 @@ using SwdFastXferFn = LibXR::ErrorCode (*)(const SwdFastPins&,
                                            const LibXR::Debug::SwdProtocol::Request&,
                                            LibXR::Debug::SwdProtocol::Response&);
 /// 取某一档的传输函数，level 需小于 kSwdFastLevels；代码量大，放在 flash 里，见
-/// swd_fast_s3.cpp / Get the transfer function of a level; level must be below
-/// kSwdFastLevels. The code is large and lives in flash, see swd_fast_s3.cpp.
+/// swd_fast.cpp / Get the transfer function of a level; level must be below
+/// kSwdFastLevels. The code is large and lives in flash, see swd_fast.cpp.
 SwdFastXferFn SwdFastTransferFn(size_t level);
 /// 测量某一档的半周期，单位 1/16 CPU 周期；调用前 SWDIO 应已释放，结束时 SWCLK 低 /
 /// Measure the half period of a level in 1/16 CPU cycle; SWDIO must be released before
@@ -418,7 +418,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     return LibXR::ErrorCode::OK;
   }
 
-  // ------------------------------------------------- 汇编路径（见 swd_fast_s3.cpp）
+  // ------------------------------------------------- 汇编路径（见 swd_fast.cpp）
   using FastXfer = LibXR::ErrorCode (*)(const SwdFastPins&, const Request&, Response&);
   static constexpr size_t kFastCount = kSwdFastLevels;
 
