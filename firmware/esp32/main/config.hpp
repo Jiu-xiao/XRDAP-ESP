@@ -44,9 +44,15 @@ constexpr int kSwdioGpio = 19;
 /// faster than the request on any path.
 inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{100, 289, 350};
 
-/// SWD、DAP 命令、采样和网络服务所在的核；Wi-Fi 和 lwIP 在核 0 / Core for SWD, DAP
-/// commands, sampling and the network server; Wi-Fi and lwIP live on core 0.
+/// 采样任务所在的核，核上只有它 / Core of the sampling task, which runs alone there.
 constexpr int kSwdCore = 1;
+/// 串口 DAP 和 TCP/USB-IP 服务所在的核，与 Wi-Fi、lwIP 同核。传统 ESP32 经 GPIO 寄存器
+/// 驱动 SWD，两个核都能访问，SWD 由执行器的轮次和 MemAp 锁串行；串口和网络命令因此不必
+/// 等采样两帧之间的空隙 / Core of the serial DAP and TCP/USB-IP services, shared with
+/// Wi-Fi and lwIP. The classic ESP32 drives SWD through the GPIO registers, which both
+/// cores reach, and SWD is serialised by the executor turn and MemAp::Lock; serial and
+/// network commands therefore do not wait for the gaps between sample frames.
+constexpr int kTransportCore = 0;
 /// 采样任务优先级，为 SWD 核上最高 / Sampling task priority, the highest on the SWD core.
 constexpr unsigned kSamplingPriority = 14;
 /// libxr 定时器任务优先级 / libxr timer task priority.
