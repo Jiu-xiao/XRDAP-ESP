@@ -22,6 +22,7 @@
 #include "debug/swd_general_gpio.hpp"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
+#include "heap_report.hpp"
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "reg_gpio_pin.hpp"
@@ -85,7 +86,10 @@ extern "C" void app_main(void)
                                  1},
       /*enable_dma=*/false);
   static Link link(probe.exec, uart);
-  static SerialMux<Link, LibXR::ESP32UART> mux(link, uart, WifiStaSettings());
+  // 命令行的 heap 命令 / The console's heap command.
+  static EspHeapReport heap_report;
+  static SerialMux<Link, LibXR::ESP32UART> mux(link, uart, WifiStaSettings(),
+                                               &heap_report);
   mux.Start(Config::kSwdCore, Config::kSerialPriority);
 
   (void)StartNetwork(

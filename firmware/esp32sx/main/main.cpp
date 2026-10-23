@@ -31,6 +31,7 @@
 #include "esp_usb_dev.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "heap_report.hpp"
 #include "hold_button.hpp"
 #include "libxr.hpp"
 #include "probe_app.hpp"
@@ -227,7 +228,9 @@ extern "C" void app_main(void)
   }
 
   // Wi-Fi 命令行在 USB 虚拟串口上，没有热点参数时也能用它来设置。
-  static UartConsole<LibXR::USB::CDCUart> console(cdc, WifiStaSettings());
+  // 命令行的 heap 命令 / The console's heap command.
+  static EspHeapReport heap_report;
+  static UartConsole<LibXR::USB::CDCUart> console(cdc, WifiStaSettings(), &heap_report);
   console.Start(0);
 
   // Wi-Fi 清除按键（只有 Lite 板有）：按满即清除并重启 / Wi-Fi clear button (Lite board

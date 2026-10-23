@@ -29,6 +29,7 @@
 #include "esp_cdc_jtag.hpp"
 #include "esp_timebase.hpp"
 #include "esp_uart.hpp"
+#include "heap_report.hpp"
 #include "libxr.hpp"
 #include "probe_app.hpp"
 #include "restart.hpp"
@@ -91,7 +92,10 @@ extern "C" void app_main(void)
       LibXR::UART::Configuration{Config::kSerialBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1});
   static Link link(probe.exec, usj);
-  static SerialMux<Link, LibXR::ESP32CDCJtag> mux(link, usj, WifiStaSettings());
+  // 命令行的 heap 命令 / The console's heap command.
+  static EspHeapReport heap_report;
+  static SerialMux<Link, LibXR::ESP32CDCJtag> mux(link, usj, WifiStaSettings(),
+                                                  &heap_report);
   mux.Start(Config::kCore, Config::kSerialPriority);
 
   // UART0 上也有一个命令行，给引出了 UART0 的开发板用。
@@ -103,7 +107,8 @@ extern "C" void app_main(void)
       LibXR::UART::Configuration{Config::kConsoleBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1},
       /*enable_dma=*/false);
-  static UartConsole<LibXR::ESP32UART> console(console_uart, WifiStaSettings());
+  static UartConsole<LibXR::ESP32UART> console(console_uart, WifiStaSettings(),
+                                               &heap_report);
   console.Start(Config::kCore);
 
   (void)StartNetwork(

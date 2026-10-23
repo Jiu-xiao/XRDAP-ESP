@@ -10,11 +10,25 @@ namespace
 {
 using Test::FakeWifiSettings;
 
+// 假运行状态：写一行固定文字，记下被调用的次数 / Fake runtime report: writes one fixed
+// line and counts the calls.
+struct FakeHeapReport final : XrDap::HeapReport
+{
+  int calls = 0;
+
+  void Write(XrDap::ConsoleWriteFn write, void* ctx) override
+  {
+    ++calls;
+    write(ctx, "heap 1234\r\n", 11);
+  }
+};
+
 struct Console
 {
   FakeWifiSettings wifi;
+  FakeHeapReport heap;
   std::string out;
-  XrDap::ConsoleCore core{wifi, &Console::Write, this};
+  XrDap::ConsoleCore core{wifi, &heap, &Console::Write, this};
 
   static void Write(void* ctx, const char* text, size_t len)
   {
@@ -167,4 +181,36 @@ TEST(console_drops_line_with_control_byte)
   c.Type(line);
   CHECK(c.wifi.clears == 0);
   CHECK(!c.Printed("> "));
+}
+
+// heap 命令给出堆和任务栈的状态，S2 板测试时据此判断内存余量 / The heap command shows
+// the heap and task-stack status, which the S2 board test uses to judge the memory
+// margin.
+TEST(console_heap_prints_runtime_report)
+{
+  Console c;
+  c.Type("heap\r");
+  CHECK(c.heap.calls == 1);
+  CHECK(c.Printed("heap 1234"));
+  CHECK(c.wifi.restarts == 0);
+}
+
+TEST(console_help_lists_heap)
+{
+  Console c;
+  c.Type("help\r");
+  CHECK(c.Printed("heap"));
+}
+
+TEST(console_heap_without_report_is_unknown)
+{
+  FakeWifiSettings wifi;
+  std::string out;
+  XrDap::ConsoleCore core{wifi, nullptr, [](void* ctx, const char* text, size_t len)
+                          { static_cast<std::string*>(ctx)->append(text, len); }, &out};
+  for (char ch : std::string("heap\r"))
+  {
+    core.OnByte(static_cast<uint8_t>(ch));
+  }
+  CHECK(out.find("未知命令") != std::string::npos);
 }

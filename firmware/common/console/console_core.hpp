@@ -10,6 +10,7 @@
 //                                不填密码表示开放网络
 //   wifi status                  查看热点、是否连接、IP、信号强度
 //   wifi clear                   清除热点参数后重启
+//   heap                         查看空闲堆、最低空闲堆和各任务栈的剩余量
 // 串口终端：波特率任意，换行用 CR 或 LF 均可。输入会回显，密码也会显示在你自己的终端上。
 //
 // Text console for configuring Wi-Fi. ConsoleCore processes input byte by byte (line
@@ -22,6 +23,8 @@
 //                                spaces; omit the password for an open network
 //   wifi status                  show SSID, connection state, IP, RSSI
 //   wifi clear                   clear credentials and restart
+//   heap                         show the free heap, the minimum free heap and each
+//                                task's remaining stack
 // Serial terminal: any baud rate, CR or LF line ending. Input is echoed, including the
 // password, on your own terminal.
 
@@ -32,6 +35,24 @@
 
 namespace XrDap
 {
+
+/// 输出回调，由命令行所在任务同步调用 / Output callback, invoked synchronously from the
+/// task that feeds the console.
+using ConsoleWriteFn = void (*)(void* ctx, const char* text, size_t len);
+
+/// heap 命令的内容：堆和任务栈的运行状态 / Content of the heap command: the runtime
+/// status of the heap and the task stacks.
+class HeapReport
+{
+ public:
+  /// @brief 把状态写成几行文字，每行以 CR LF 结尾 / Write the status as text lines, each
+  ///        ending in CR LF.
+  /// @note 在命令行任务里调用 / Called in the console task.
+  virtual void Write(ConsoleWriteFn write, void* ctx) = 0;
+
+ protected:
+  ~HeapReport() = default;
+};
 
 /// 命令行核心，一次喂一个字节 / Console core fed one byte at a time.
 /// 只在收到一行合法命令并回车后才输出，与二进制协议共用一个口时不会往里插字：行内出现
@@ -44,16 +65,17 @@ namespace XrDap
 class ConsoleCore
 {
  public:
-  /// 输出回调，由命令行所在任务同步调用 / Output callback, invoked synchronously from the
-  /// task that feeds the console.
-  using WriteFn = void (*)(void* ctx, const char* text, size_t len);
+  /// 输出回调 / Output callback.
+  using WriteFn = ConsoleWriteFn;
 
   /// @param settings Wi-Fi 设置，生命周期需长于本对象 / Wi-Fi settings; must outlive this
   ///        object.
+  /// @param heap heap 命令的内容，为空时没有这个命令 / Content of the heap command; null
+  ///        means there is no such command.
   /// @param write 输出回调 / Output callback.
   /// @param ctx 传给 write 的参数 / Argument passed to write.
-  ConsoleCore(WifiSettings& settings, WriteFn write, void* ctx)
-      : settings_(settings), write_(write), ctx_(ctx)
+  ConsoleCore(WifiSettings& settings, HeapReport* heap, WriteFn write, void* ctx)
+      : settings_(settings), heap_(heap), write_(write), ctx_(ctx)
   {
   }
 
@@ -74,6 +96,7 @@ class ConsoleCore
   void PrintStatus();
 
   WifiSettings& settings_;
+  HeapReport* heap_;
   WriteFn write_;
   void* ctx_;
   char line_[kLineMax + 1] = {};
