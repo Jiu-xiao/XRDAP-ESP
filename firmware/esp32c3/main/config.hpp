@@ -29,13 +29,15 @@ constexpr int kSwclkGpio = 5;
 constexpr int kSwdioGpio = 4;
 
 /// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N，不带延时
-/// c。暂定值：a、c 由此前标定的每半周期写沿开销（13 个周期，每周期两次）换算，b 按延时
-/// 循环每次约 3 个周期估计；要在硬件上用 ccount 扫一遍 N 后改成实测值 / Timing of libxr's
+/// c。160 MHz 下用 CPU 周期计数器实测：请求字节、读数据相、写数据相和 SWJ 序列按 N >= 2
+/// 拟合，b = 8.0（一次延时循环 4 个周期），a 取各路径的平均 24.7；c 取不带延时时最短的一条
+/// 路径 9.6，所以选无延时路径时任何路径都不会比请求的时钟快 / Timing of libxr's
 /// SwdGeneralGPIO (CPU cycles x10): a + b*N per SWCLK period with delay, c without.
-/// Provisional: a and c are converted from the previous calibration of the edge-write
-/// cost per half period (13 cycles, twice per period); b assumes about 3 cycles per
-/// delay-loop iteration. Replace with values from a ccount sweep of N on hardware.
-inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{60, 260, 260};
+/// Measured with the CPU cycle counter at 160 MHz: the request byte, read and write data
+/// phases and SWJ sequence fit b = 8.0 (4 cycles per delay-loop iteration) for N >= 2, and
+/// a is their mean, 24.7; c is the shortest path without delay, 9.6, so the no-delay path
+/// is never faster than the request on any path.
+inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{80, 247, 96};
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
 constexpr int kCore = 0;
