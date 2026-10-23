@@ -166,7 +166,7 @@ python -m serial.tools.miniterm COMx 115200 --dtr 0 --rts 0
 
 `xrdap` picks the baud rate from the serial chip: CH343 and similar try 4 Mbaud first, while CP2102 and CH340 use 921600, so `--baud` need not be given.
 
-All connections share one DAP, and one connection owns the probe at a time: the first connection that sends a command other than DAP_Info becomes the owner, and commands from the others are answered busy (DAP_Info is still answered) until the owner sends DAP_Disconnect, its TCP connection closes, the USB bus resets (unplug or host reset), or the serial link has been silent for 5 seconds. The Wi-Fi ports 3240 and 3241 accept one client at a time: while one is connected, the other waits. If a client does not disconnect cleanly, the probe releases it after about 11 seconds.
+All connections share one DAP, and one connection owns the probe at a time: the first connection that sends a DAP or sampling command becomes the owner, and commands from the others are answered busy. DAP_Info, DAP_HostStatus, the vendor INFO command (0x80), the Wi-Fi status query (0x86 query) and 0x9F 0x13 work from any connection; they never take the probe or make another connection busy until the owner sends DAP_Disconnect, its TCP connection closes, the USB bus resets (unplug or host reset), or the serial link has been silent for 5 seconds. The Wi-Fi ports 3240 and 3241 accept one client at a time: while one is connected, the other waits. If a client does not disconnect cleanly, the probe releases it after about 11 seconds.
 
 ### Finding the probe
 

@@ -77,6 +77,22 @@ TEST(wifi_cmd_query_connected)
                                               0xD8, 0x03, 'l', 'a', 'b', 0x00, 0x00}));
 }
 
+// 查询不需要会话所有权，任何链路都能发（XRDAP-Core B2 扩展），所以它只读：不保存、不清除、
+// 不重启 / A query needs no session ownership and may come from any link (XRDAP-Core B2
+// extension), so it is read-only: no save, no clear, no restart.
+TEST(wifi_cmd_query_changes_nothing)
+{
+  FakeWifiSettings wifi;
+  std::memcpy(wifi.status.ssid, "lab", 4);
+  for (int i = 0; i < 3; ++i)
+  {
+    (void)Run(wifi, {0x86, 0x00});
+  }
+  CHECK(wifi.saves == 0);
+  CHECK(wifi.clears == 0);
+  CHECK(wifi.restarts == 0);
+}
+
 TEST(wifi_cmd_query_rejects_extra_bytes)
 {
   FakeWifiSettings wifi;
