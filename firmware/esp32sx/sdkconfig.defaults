@@ -41,3 +41,6 @@ CONFIG_FREERTOS_ENABLE_TASK_SNAPSHOT=n
 CONFIG_ESP_CONSOLE_NONE=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+# 命令行 heap 命令要列出各任务栈的最高水位（uxTaskGetSystemState）/ The console's heap
+# command lists each task's stack high-water mark (uxTaskGetSystemState).
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

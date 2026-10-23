@@ -46,3 +46,6 @@ CONFIG_LWIP_TCP_WND_DEFAULT=16384
 
 # 传统 ESP32 的 IRAM 比 S3 小：SWD、采样的热路径要放进 IRAM，Wi-Fi 接收路径改回 Flash 执行
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+# 命令行 heap 命令要列出各任务栈的最高水位（uxTaskGetSystemState）/ The console's heap
+# command lists each task's stack high-water mark (uxTaskGetSystemState).
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

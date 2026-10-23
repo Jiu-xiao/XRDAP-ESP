@@ -38,3 +38,6 @@ CONFIG_LWIP_MAX_LISTENING_TCP=4
 # DAP 一问一答，包不超过 1 KB，TCP 缓冲用 16 KB 足够；Wi-Fi 收发缓冲用 IDF 默认值。
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
 CONFIG_LWIP_TCP_WND_DEFAULT=16384
+# 命令行 heap 命令要列出各任务栈的最高水位（uxTaskGetSystemState）/ The console's heap
+# command lists each task's stack high-water mark (uxTaskGetSystemState).
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

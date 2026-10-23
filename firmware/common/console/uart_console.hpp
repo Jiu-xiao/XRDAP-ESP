@@ -37,9 +37,10 @@ class UartConsole
  public:
   /// @param uart 串口 / Serial port.
   /// @param settings 命令行读写的 Wi-Fi 设置 / Wi-Fi settings the console works on.
-  /// @note 两者生命周期都需长于本对象 / Both must outlive this object.
-  UartConsole(UartT& uart, WifiSettings& settings)
-      : uart_(uart), core_(settings, &UartConsole::Write, this)
+  /// @param heap heap 命令的内容，可为空 / Content of the heap command; may be null.
+  /// @note 生命周期都需长于本对象 / All must outlive this object.
+  UartConsole(UartT& uart, WifiSettings& settings, HeapReport* heap)
+      : uart_(uart), core_(settings, heap, &UartConsole::Write, this)
   {
   }
 

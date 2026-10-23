@@ -169,7 +169,13 @@ void ConsoleCore::Handle(char* line)
         "wifi set <热点> [<密码>]   "
         "保存热点参数并重启（有空格的用双引号括起来，不填密码为开放网络）\r\n"
         "wifi status               查看连接状态\r\n"
-        "wifi clear                清除热点参数并重启\r\n");
+        "wifi clear                清除热点参数并重启\r\n"
+        "heap                      查看空闲堆和各任务栈的剩余量\r\n");
+    return;
+  }
+  if (strcmp(cmd, "heap") == 0 && heap_ != nullptr)
+  {
+    heap_->Write(write_, ctx_);
     return;
   }
   char* sub = nullptr;

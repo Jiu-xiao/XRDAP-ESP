@@ -18,6 +18,7 @@ set(XRDAP_COMMON_SRCS
     "${XRDAP_COMMON_DIR}/net/mdns_service.cpp"
     "${XRDAP_COMMON_DIR}/net/wifi_command.cpp"
     "${XRDAP_COMMON_DIR}/net/wifi_sta.cpp"
+    "${XRDAP_COMMON_DIR}/probe/heap_report.cpp"
     "${XRDAP_COMMON_DIR}/probe/probe_info.cpp"
     "${XRDAP_COMMON_DIR}/probe/restart.cpp"
     "${XRDAP_COMMON_DIR}/probe/sampler_task.cpp"

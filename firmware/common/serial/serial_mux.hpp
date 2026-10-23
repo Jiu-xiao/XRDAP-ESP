@@ -39,9 +39,10 @@ class SerialMux
   /// @param link DAP 串口链路 / DAP serial link.
   /// @param uart 共用的串口 / Shared serial port.
   /// @param settings 命令行读写的 Wi-Fi 设置 / Wi-Fi settings the console works on.
-  /// @note 三者生命周期都需长于本对象 / All three must outlive this object.
-  SerialMux(LinkT& link, UartT& uart, WifiSettings& settings)
-      : link_(link), uart_(uart), console_(settings, &SerialMux::Write, this)
+  /// @param heap heap 命令的内容，可为空 / Content of the heap command; may be null.
+  /// @note 生命周期都需长于本对象 / All must outlive this object.
+  SerialMux(LinkT& link, UartT& uart, WifiSettings& settings, HeapReport* heap)
+      : link_(link), uart_(uart), console_(settings, heap, &SerialMux::Write, this)
   {
   }
 
