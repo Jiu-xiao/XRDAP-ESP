@@ -90,8 +90,8 @@ extern "C" void app_main(void)
   static EspHeapReport heap_report;
   static SerialMux<Link, LibXR::ESP32UART> mux(link, uart, WifiStaSettings(),
                                                &heap_report);
-  mux.Start(Config::kSwdCore, Config::kSerialPriority);
+  mux.Start(Config::kTransportCore, Config::kSerialPriority);
 
-  (void)StartNetwork(
-      probe, {Config::kChipName, Config::kUsbProductName, Config::kSwdCore, nullptr});
+  (void)StartNetwork(probe, {Config::kChipName, Config::kUsbProductName,
+                             Config::kTransportCore, nullptr});
 }
