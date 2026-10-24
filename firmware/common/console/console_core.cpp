@@ -243,6 +243,19 @@ void ConsoleCore::PrintStatus()
   snprintf(buf, sizeof(buf), "上次清除：%s\r\n上次复位：%s\r\n",
            EraseSourceText(st.last_erase), ResetReasonText(st.reset_reason));
   Print(buf);
+  if (st.watchdog_task[0][0] != 0)
+  {
+    if (st.watchdog_task[1][0] != 0)
+    {
+      snprintf(buf, sizeof(buf), "看门狗超时时在运行：核 0 %.15s，核 1 %.15s\r\n",
+               st.watchdog_task[0], st.watchdog_task[1]);
+    }
+    else
+    {
+      snprintf(buf, sizeof(buf), "看门狗超时时在运行：%.15s\r\n", st.watchdog_task[0]);
+    }
+    Print(buf);
+  }
   if (st.ssid[0] == 0)
   {
     Print("没有保存热点参数，用 wifi set 设置\r\n");

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 命令行：判据是 console_core.hpp 写明的规则和 README 的命令表 / Console: the oracle is
 // the rules stated in console_core.hpp and the command table in the README.
+#include <cstring>
 #include <string>
 
 #include "console_core.hpp"
@@ -105,6 +106,26 @@ TEST(console_status_shows_erase_source_and_reset_reason)
   c.Type("wifi status\r");
   CHECK(c.Printed("上次清除：按键"));
   CHECK(c.Printed("上次复位：软件重启"));
+}
+
+// 看门狗重启后给出超时时各核在运行的任务 / After a watchdog reboot, show the task each
+// core was running at the timeout.
+TEST(console_status_shows_watchdog_tasks)
+{
+  Console c;
+  c.wifi.status.reset_reason = XrDap::ResetReason::WATCHDOG;
+  std::memcpy(c.wifi.status.watchdog_task[0], "dap_serial", 11);
+  std::memcpy(c.wifi.status.watchdog_task[1], "dap_sampler", 12);
+  c.Type("wifi status\r");
+  CHECK(c.Printed("上次复位：看门狗"));
+  CHECK(c.Printed("看门狗超时时在运行：核 0 dap_serial，核 1 dap_sampler"));
+}
+
+TEST(console_status_without_watchdog_record)
+{
+  Console c;
+  c.Type("wifi status\r");
+  CHECK(!c.Printed("看门狗超时时在运行"));
 }
 
 TEST(console_status_reports_storage_repair)

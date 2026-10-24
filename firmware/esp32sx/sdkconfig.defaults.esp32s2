@@ -4,9 +4,10 @@
 # stays off). Every task runs on core 0; the sampling task is above lwIP and relies on
 # the gap XRDAP-Core leaves after each frame so the others are not starved.
 CONFIG_XRDAP_BOARD_S2=y
-# 短周期采样时空闲任务很少能运行，不把它算作看门狗超时 / Short sampling periods leave the
-# idle task little time; do not count that as a watchdog timeout.
-CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+# 任务看门狗检查空闲任务（panic 见 sdkconfig.defaults）：采样每个周期都让出时间 / The
+# task watchdog checks the idle task (panic: see sdkconfig.defaults); sampling yields every
+# period.
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 
 # 内部 RAM 只有 320 KB（IRAM 和 DRAM 共用）：lwIP、Wi-Fi 的代码留在 Flash，不占 IRAM /
 # Only 320 KB of internal RAM, shared by IRAM and DRAM: lwIP and Wi-Fi code stays in flash

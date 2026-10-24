@@ -89,6 +89,10 @@ struct WifiStatus
   EraseSource last_erase;
   /// 上次复位的原因 / Cause of the last reset.
   ResetReason reset_reason;
+  /// 上次任务看门狗超时时各核正在运行的任务名，没有记录时为空串（单核芯片只有第一个）/
+  /// Task running on each core when the task watchdog last timed out; empty strings
+  /// without a record (single-core chips only fill the first).
+  char watchdog_task[2][16];
 };
 
 /// Wi-Fi 设置 / Wi-Fi settings.
