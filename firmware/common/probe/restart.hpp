@@ -36,4 +36,15 @@ bool RestartPending();
 /// @note 可在任意任务调用 / Callable from any task.
 ResetReason LastResetReason();
 
+/// @brief 上次任务看门狗超时时各核正在运行的任务名。记录在超时中断里写进不随复位清零的
+///        RTC 内存，RestartInit 在启动时取出并清掉，所以只反映导致这次启动的那次超时 /
+///        Task running on each core when the task watchdog last timed out. The timeout
+///        interrupt writes the record into RTC memory that survives the reset;
+///        RestartInit takes and clears it at start-up, so it only reflects the timeout
+///        that caused this boot.
+/// @param out 两个核的任务名，没有记录时为空串 / Task name per core; empty strings
+///        without a record.
+/// @note 可在任意任务调用 / Callable from any task.
+void LastWatchdogTasks(char (&out)[2][16]);
+
 }  // namespace XrDap

@@ -132,6 +132,7 @@ WifiStatus ReadStatus()
   st.storage_repaired = s_storage_repaired;
   st.last_erase = LoadEraseSource();
   st.reset_reason = LastResetReason();
+  LastWatchdogTasks(st.watchdog_task);
   st.started = s_started;
   if (st.started)
   {
