@@ -42,6 +42,7 @@
 #include "esp_attr.h"
 #include "esp_cpu.h"
 #include "hal/dedic_gpio_cpu_ll.h"
+#include "freertos/FreeRTOS.h"
 
 namespace XrDap
 {
@@ -250,11 +251,27 @@ class SwdEngine final : public LibXR::Debug::Swd
   /// execution itself.
   LibXR::ErrorCode Transfer(const Request& req, Response& resp) override
   {
+#if CONFIG_IDF_TARGET_ESP32S2
+    // S2 shares one core with Wi-Fi/lwIP. An ISR in the middle of a paced SWD
+    // request can stretch a half-cycle far enough for the target to lose the
+    // request framing; after that every read reports ACK=PROTOCOL until a line
+    // reset happens. Keep one request electrically contiguous. The section is
+    // bounded to a single SWD transfer and never waits on a task or socket.
+    portENTER_CRITICAL(&transfer_mux_);
+#endif
+    LibXR::ErrorCode ec;
     if (fast_ != nullptr)
     {
-      return fast_(Pins(), req, resp);
+      ec = fast_(Pins(), req, resp);
     }
-    return PacedTransfer(req, resp);
+    else
+    {
+      ec = PacedTransfer(req, resp);
+    }
+#if CONFIG_IDF_TARGET_ESP32S2
+    portEXIT_CRITICAL(&transfer_mux_);
+#endif
+    return ec;
   }
 
  private:
@@ -488,6 +505,9 @@ class SwdEngine final : public LibXR::Debug::Swd
   uint32_t half_ = 0U;
   uint32_t idle_ap_write_ = 0U;
   uint32_t min_half_ = 2U;
+#if CONFIG_IDF_TARGET_ESP32S2
+  portMUX_TYPE transfer_mux_ = portMUX_INITIALIZER_UNLOCKED;
+#endif
 };
 
 }  // namespace XrDap
