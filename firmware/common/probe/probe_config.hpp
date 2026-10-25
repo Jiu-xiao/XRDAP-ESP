@@ -40,7 +40,8 @@ constexpr uint32_t kNetStack = 6144;
 /// 采样任务的栈 / Stack of the sampling task.
 constexpr uint32_t kSamplerStack = 4096;
 /// 命令行任务的栈 / Stack of the console task.
-constexpr uint32_t kConsoleStack = 3072;
+// The supplied long run reached 656 bytes free before the extra diagnostic report.
+constexpr uint32_t kConsoleStack = 4096;
 #else
 /// TCP 和 USB/IP 服务任务的栈 / Stack of the TCP and USB/IP server task.
 constexpr uint32_t kNetStack = 12288;
