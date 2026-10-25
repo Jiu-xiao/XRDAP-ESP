@@ -45,10 +45,12 @@ class UartConsole
   }
 
   /// @brief 在指定的核上启动命令行任务 / Start the console task on a core.
-  void Start(int core)
+  /// @return 是否成功创建任务 / Whether task creation succeeded.
+  bool Start(int core)
   {
-    xTaskCreatePinnedToCore(&UartConsole::TaskEntry, "console", Config::kConsoleStack,
-                            this, Config::kConsolePriority, nullptr, core);
+    return xTaskCreatePinnedToCore(&UartConsole::TaskEntry, "console",
+                                   Config::kConsoleStack, this, Config::kConsolePriority,
+                                   nullptr, core) == pdPASS;
   }
 
  private:

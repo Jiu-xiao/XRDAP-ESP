@@ -1,4 +1,16 @@
 cmake_minimum_required(VERSION 3.16)
+# libxr 自带的 Eigen 默认会连自己的 BLAS/LAPACK/测试一起编（本工程用不到），而较新的
+# xtensa GCC（14.2.0_20251107）对这批 f2c 代码报 maybe-uninitialized，撞上 IDF 默认的
+# -Werror 会直接编译失败，所以显式关掉。 / libxr's bundled Eigen builds its own
+# BLAS/LAPACK/tests by default, which this project does not use, and the newer xtensa GCC
+# (14.2.0_20251107) reports maybe-uninitialized in that f2c code, which fails the build
+# under IDF's default -Werror, so turn those parts off explicitly.
+set(EIGEN_BUILD_BLAS OFF)
+set(EIGEN_BUILD_LAPACK OFF)
+set(EIGEN_BUILD_TESTING OFF)
+set(EIGEN_BUILD_DEMOS OFF)
+set(EIGEN_BUILD_PKGCONFIG OFF)
+set(EIGEN_BUILD_CMAKE_PACKAGE OFF)
 # libxr 组件各芯片共用（firmware/components/libxr）。
 set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/../components)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
