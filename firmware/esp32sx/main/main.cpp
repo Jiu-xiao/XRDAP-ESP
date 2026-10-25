@@ -417,6 +417,7 @@ extern "C" void app_main(void)
   // Wi-Fi 命令行在 USB 虚拟串口上，没有热点参数时也能用它来设置。
   // 命令行的 heap 命令 / The console's heap command.
   static EspHeapReport heap_report;
+  heap_report.SetExtraReport(&WriteProbeDiagnostics<DapLink>, &probe);
   static UartConsole<CdcUart> console(cdc, WifiStaSettings(), &heap_report);
   const bool console_started = console.Start(0);
 #if CONFIG_IDF_TARGET_ESP32S2
