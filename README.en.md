@@ -13,7 +13,7 @@ The host tool is in [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host): a sing
 | USB cable, for Keil, pyOCD, probe-rs, OpenOCD | Works directly (native USB probe) | Run `xrdap share usbip` on the computer first | Same as C3 (through the board's USB-to-serial chip) |
 | Wi-Fi, for Keil, pyOCD, probe-rs, OpenOCD | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP |
 | Wi-Fi, for OpenOCD | OpenOCD TCP backend, direct | Same as S3 | Same as S3 |
-| SWD clock | up to about 23.7 MHz | up to about 20 MHz | up to about 5 MHz (GPIO register bit-banding, limited by the peripheral bus) |
+| SWD clock | up to about 23.7 MHz | up to about 5.2 MHz | up to about 5 MHz (GPIO register bit-banding, limited by the peripheral bus) |
 | Shortest probe-side sampling period (USB cable) | 4 variables 118 µs | 4 variables 300 µs | 8 variables 1 ms, 1 variable 200 µs |
 | OpenOCD reading 128 KiB (USB cable) | 0.62 s | 1.8 s | 3.4 s |
 

@@ -13,7 +13,7 @@
 | 插 USB 线给 Keil、pyOCD、probe-rs、OpenOCD 用 | 直接用（原生 USB 探针） | 电脑上运行 `xrdap share usbip` 后用 | 同 C3（经板上 USB 转串口芯片） |
 | 走 Wi-Fi 给 Keil、pyOCD、probe-rs、OpenOCD 用 | 用 USB/IP 挂载 | 用 USB/IP 挂载 | 用 USB/IP 挂载 |
 | 走 Wi-Fi 给 OpenOCD 用 | OpenOCD 的 TCP 后端直连 | 同左 | 同左 |
-| SWD 时钟 | 最高约 23.7 MHz | 最高约 20 MHz | 最高约 5 MHz（GPIO 寄存器位带，受外设总线限制） |
+| SWD 时钟 | 最高约 23.7 MHz | 最高约 5.2 MHz | 最高约 5 MHz（GPIO 寄存器位带，受外设总线限制） |
 | 探针端采样的最短周期（插线） | 4 个变量 118 µs | 4 个变量 300 µs | 8 个变量 1 ms，1 个变量 200 µs |
 | OpenOCD 读 128 KiB（插线） | 0.62 s | 1.8 s | 3.4 s |
 
