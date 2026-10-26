@@ -102,7 +102,10 @@ class DedicGpioPin final : public LibXR::GPIO
   /// 打开或关闭输出驱动；写 GPIO_ENABLE 后约十几个 CPU 周期才生效 / Enable or disable the
   /// output driver; takes about a dozen CPU cycles to take effect after the
   /// GPIO_ENABLE write.
-  void SetOutputEnable(bool on) { OutputEnable(on); }
+  inline __attribute__((always_inline)) void SetOutputEnable(bool on)
+  {
+    OutputEnable(on);
+  }
 
   /// 不支持中断 / Interrupts are not supported.
   LibXR::ErrorCode EnableInterrupt() override { return LibXR::ErrorCode::NOT_SUPPORT; }
@@ -118,7 +121,7 @@ class DedicGpioPin final : public LibXR::GPIO
   }
 
  private:
-  void OutputEnable(bool on)
+  inline __attribute__((always_inline)) void OutputEnable(bool on)
   {
     if (on == output_enabled_)
     {
