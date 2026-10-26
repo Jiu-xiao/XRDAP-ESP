@@ -160,6 +160,11 @@ class UsbipDevice
   static constexpr size_t kMsDataLen = 2 * (sizeof(kMsGuid) + 1);
   static constexpr size_t kMsOs20SetLen = 10 + 20 + 10 + kMsNameLen + kMsDataLen;
   static_assert(kMsOs20SetLen == 162, "MS OS 2.0 descriptor set length");
+  // 控制传输的回复写在 Payload()，控制请求时它前面只有一个头，后面能放 kHeaderLen +
+  // kMaxPacket 字节；最长的回复是 255 字节的字符串描述符 / Control replies are written at
+  // Payload(), which on a control request has only one header before it and room for
+  // kHeaderLen + kMaxPacket bytes; the longest reply is a 255-byte string descriptor.
+  static_assert(kHeaderLen + kMaxPacket >= 255, "control replies must fit in tx_");
   // 客户端最多先发 DAP_Info 报的包数个 OUT，再取响应 / A client sends at most the
   // DAP_Info packet count of OUTs before it collects the responses.
   static constexpr size_t kQueueDepth = Config::kDapPacketCount;
