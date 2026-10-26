@@ -9,9 +9,9 @@ CONFIG_XRDAP_BOARD_S2=y
 # period.
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 
-# 内部 RAM 只有 320 KB（IRAM 和 DRAM 共用）：lwIP、Wi-Fi 的代码留在 Flash，不占 IRAM /
-# Only 320 KB of internal RAM, shared by IRAM and DRAM: lwIP and Wi-Fi code stays in flash
-# instead of IRAM.
+# 内部 RAM 320 KB 由 IRAM 和 DRAM 共用：lwIP、Wi-Fi 的代码留在 Flash，IRAM 留给采样热路径
+# （linker.lf）/ The 320 KB of internal RAM is shared by IRAM and DRAM: lwIP and Wi-Fi code
+# stays in flash, and IRAM goes to the sampling hot paths (linker.lf).
 CONFIG_LWIP_IRAM_OPTIMIZATION=n
 CONFIG_LWIP_EXTRA_IRAM_OPTIMIZATION=n
 CONFIG_ESP_WIFI_IRAM_OPT=n
@@ -21,10 +21,13 @@ CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
 CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
 CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
-# Wi-Fi 缓冲取小：静态接收 4 个（启动时就从堆里分配，按估算 6 个时开机后的堆不到 20 KB），
-# 动态收发各 16 个，块确认窗口 4 / Smaller Wi-Fi buffers: 4 static RX buffers (taken from
-# the heap at start-up; with 6 the estimated heap after start-up is below 20 KB), 16
-# dynamic RX and TX each, block-ack windows of 4.
+# Wi-Fi 缓冲取小：静态接收 4 个（启动时就从堆里分配），动态收发各 16 个，块确认窗口 4。
+# 这组数值已在 S2 实物上连上 Wi-Fi。开机后的堆约 177 KB（map 里 _heap_start 到
+# _dram0_rtos_reserved_start），Wi-Fi 和各任务从里面分配 / Smaller Wi-Fi buffers: 4
+# static RX buffers (taken from the heap at start-up), 16 dynamic RX and TX each,
+# block-ack windows of 4. These values joined Wi-Fi on S2 hardware. The heap after boot is
+# about 177 KB (_heap_start to _dram0_rtos_reserved_start in the map); Wi-Fi and the tasks
+# allocate from it.
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
 CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=16
