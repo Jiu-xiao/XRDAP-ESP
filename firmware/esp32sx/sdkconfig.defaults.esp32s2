@@ -4,6 +4,10 @@
 # stays off). Every task runs on core 0; the sampling task is above lwIP and relies on
 # the gap XRDAP-Core leaves after each frame so the others are not starved.
 CONFIG_XRDAP_BOARD_S2=y
+# 展开的 SWD 高速档位最大约 9.3 KB；16 KB 指令缓存减少 Flash 取指抖动，少 8 KB 堆。
+# Unrolled SWD levels reach about 9.3 KB. A 16 KB instruction cache reduces flash
+# fetch stalls at the cost of 8 KB of heap.
+CONFIG_ESP32S2_INSTRUCTION_CACHE_16KB=y
 # 任务看门狗检查空闲任务（panic 见 sdkconfig.defaults）：采样每个周期都让出时间 / The
 # task watchdog checks the idle task (panic: see sdkconfig.defaults); sampling yields every
 # period.

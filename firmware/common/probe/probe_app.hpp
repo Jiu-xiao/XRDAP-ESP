@@ -83,12 +83,10 @@ void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
                 static_cast<unsigned long>(memory.last_ack),
                 static_cast<unsigned long>(memory.last_error),
                 static_cast<unsigned long>(memory.resyncs)));
-  emit(snprintf(line, sizeof(line),
-                "sample ticks=%lu frames=%lu skipped=%lu batch_hits=%lu\r\n",
+  emit(snprintf(line, sizeof(line), "sample ticks=%lu frames=%lu skipped=%lu\r\n",
                 static_cast<unsigned long>(sampling.ticks),
                 static_cast<unsigned long>(sampling.frames),
-                static_cast<unsigned long>(sampling.skipped),
-                static_cast<unsigned long>(sampling.batch_hits)));
+                static_cast<unsigned long>(sampling.skipped)));
   emit(snprintf(line, sizeof(line),
                 "sample max_frame_us=%lu max_wake_us=%lu merged_callbacks=%lu "
                 "merged_ticks=%lu\r\n",
