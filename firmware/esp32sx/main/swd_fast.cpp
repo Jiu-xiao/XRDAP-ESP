@@ -1,23 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
-// SwdEngine 的高速路径：汇编写死每个半周期的指令，高低半周期指令数相同。
-// 每一档展开后 3 到 10 KB，12 档共约 90 KB，大多放在 flash 里（linker.lf 不把本文件放进
-// IRAM）。指令缓存未命中只会拉长某一个半周期，SWD 是同步协议，不影响正确性；但缓存与
-// Wi-Fi、lwIP 共用（S3 上它们在核 0），被挤掉后重新取指约 60 µs，会推迟一帧采样。所以
-// 在 S3 上 kIramLevelN 这一档放进 IRAM（S2 的内部 RAM 不够）：它是 10 MHz（测试工具
-// 采样用的时钟）对应的档位，约 7 KB；全部放进去要占掉大部分堆。
+// SWD 高速路径：每档展开约 3–10 KB，12 档共约 90 KB。多数档位留在 Flash；
+// S3 将 N=10 放进 IRAM，S2 将 N=16 放进 IRAM，限制常驻代码对内部 RAM 的占用。
+// 缓存未命中会拉长同步 SWD 时钟的半周期，增加采样延迟。
 //
-// SwdEngine fast path: the instructions of every half period are fixed in assembly, with
-// the same count in the high and low halves. Each unrolled level is 3 to 10 KB, about
-// 90 KB for all 12, so most of them live in flash (linker.lf leaves this file out of
-// IRAM). An instruction cache miss only stretches one half period, which SWD, being
-// synchronous, tolerates; but the cache is shared with Wi-Fi and lwIP (on core 0 on the
-// S3), and a refill after eviction takes about 60 us and delays a sample frame. On the S3
-// the level kIramLevelN therefore lives in IRAM (the S2 lacks the internal RAM): it is
-// the level for 10 MHz (the clock the test tool samples at), about 7 KB; all levels would
-// take most of the heap.
+// Fast SWD path: each unrolled level takes about 3–10 KB, about 90 KB in total.
+// Most levels stay in flash. S3 keeps N=10 in IRAM and S2 keeps N=16 in IRAM to
+// bound the internal RAM cost. Cache misses stretch synchronous SWD half periods
+// and increase sampling latency.
 
 #include "sdkconfig.h"
 #include "swd_engine.hpp"
+
+#if CONFIG_IDF_TARGET_ESP32S2
+#include <atomic>
+#endif
 
 // 读专用 GPIO 输入的 CPU 指令：S3 在 EE 扩展里，S2 是 get_gpio_in（与 IDF 的
 // dedic_gpio_cpu_ll.h 一致）/ The CPU instruction that reads the dedicated-GPIO inputs:
@@ -28,9 +24,8 @@
 #define XRDAP_GET_GPIO_IN "get_gpio_in"
 #endif
 
-// kIramLevelN 这一档只在 S3 上放进 IRAM；S2 的内部 RAM 不够，见 linker.lf / The level
-// kIramLevelN goes into IRAM on the S3 only; the S2 lacks the internal RAM, see
-// linker.lf.
+// kIramLevelN 这一档只在 S3 上放进 IRAM；S2 用下方的 N=16 特化。
+// kIramLevelN is resident on S3 only; S2 uses the N=16 specialization below.
 #if CONFIG_IDF_TARGET_ESP32S3
 #define XRDAP_IRAM_LEVEL_ATTR IRAM_ATTR
 #else
@@ -41,6 +36,9 @@ namespace XrDap
 {
 namespace
 {
+#if CONFIG_IDF_TARGET_ESP32S2
+std::atomic<uint32_t> last_fast_level{UINT32_MAX};
+#endif
 using Request = LibXR::Debug::SwdProtocol::Request;
 using Response = LibXR::Debug::SwdProtocol::Response;
 using Ack = LibXR::Debug::SwdProtocol::Ack;
@@ -220,6 +218,17 @@ LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& res
   return XferBody<N>(pins, req, resp);
 }
 
+#if CONFIG_IDF_TARGET_ESP32S2
+// N=16 is the slowest unrolled level. Keep this large body resident while
+// sampling shares the core with live memory queries.
+template <>
+IRAM_ATTR LibXR::ErrorCode Xfer<16>(const SwdFastPins& pins, const Request& req,
+                                    Response& resp)
+{
+  return XferBody<16>(pins, req, resp);
+}
+#endif
+
 /// 放进 IRAM 的档位：每个半周期 N + 2 条指令，240 MHz 下约 10 MHz / The level in IRAM:
 /// N + 2 instructions per half period, about 10 MHz at 240 MHz.
 constexpr int kIramLevelN = 10;
@@ -266,7 +275,17 @@ constexpr Level kLevels[kSwdFastLevels] = {
 };
 }  // namespace
 
-SwdFastXferFn SwdFastTransferFn(size_t level) { return kLevels[level].xfer; }
+SwdFastXferFn SwdFastTransferFn(size_t level)
+{
+#if CONFIG_IDF_TARGET_ESP32S2
+  last_fast_level.store(static_cast<uint32_t>(level), std::memory_order_relaxed);
+#endif
+  return kLevels[level].xfer;
+}
+
+#if CONFIG_IDF_TARGET_ESP32S2
+uint32_t SwdFastLastLevel() { return last_fast_level.load(std::memory_order_relaxed); }
+#endif
 
 uint32_t SwdFastMeasureHalfX16(size_t level, const SwdFastPins& pins)
 {

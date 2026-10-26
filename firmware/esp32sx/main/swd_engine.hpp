@@ -83,14 +83,21 @@ constexpr size_t kSwdFastLevels = 12;
 using SwdFastXferFn = LibXR::ErrorCode (*)(const SwdFastPins&,
                                            const LibXR::Debug::SwdProtocol::Request&,
                                            LibXR::Debug::SwdProtocol::Response&);
-/// 取某一档的传输函数，level 需小于 kSwdFastLevels；代码量大，放在 flash 里，见
-/// swd_fast.cpp / Get the transfer function of a level; level must be below
-/// kSwdFastLevels. The code is large and lives in flash, see swd_fast.cpp.
+/// 取某一档的传输函数，level 需小于 kSwdFastLevels；多数档位在 Flash，平台的常驻档位见
+/// swd_fast.cpp / Get a transfer function; level must be below kSwdFastLevels.
+/// Most levels live in flash; see swd_fast.cpp for the platform's resident level.
 SwdFastXferFn SwdFastTransferFn(size_t level);
 /// 测量某一档的半周期，单位 1/16 CPU 周期；调用前 SWDIO 应已释放，结束时 SWCLK 低 /
 /// Measure the half period of a level in 1/16 CPU cycle; SWDIO must be released before
 /// the call and SWCLK is left low.
 uint32_t SwdFastMeasureHalfX16(size_t level, const SwdFastPins& pins);
+
+#if CONFIG_IDF_TARGET_ESP32S2
+/// 最近一次选用的高速档位索引；尚未选用时 UINT32_MAX。低速模式不会更新此诊断值。
+/// Last selected fast-level index, or UINT32_MAX before selection. Paced mode
+/// does not update this diagnostic value.
+uint32_t SwdFastLastLevel();
+#endif
 
 /// 专用 GPIO 上的 SWD 位带引擎 / SWD bit-bang engine on dedicated GPIO.
 /// @note 非线程安全；所有方法只能由同一个任务在创建 swclk、swdio 的核上调用 / Not
