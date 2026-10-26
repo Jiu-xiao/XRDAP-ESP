@@ -10,22 +10,27 @@
 # S3's swd_fast.cpp is too large when unrolled and stays in flash except for one level
 # (see the top of that file).
 #
-# ESP32-S2 不放：它只有 320 KB 内部 RAM，IRAM 和 DRAM 共用，这些代码放进 IRAM 后堆不够 Wi-Fi
-# 和各任务用 / Not on the ESP32-S2: it has only 320 KB of internal RAM shared by IRAM and
-# DRAM, and with this code in IRAM the heap is too small for Wi-Fi and the tasks.
+# ESP32-S2 是单核，采样与 Wi-Fi、lwIP 共用一个核和指令缓存，热路径留在 Flash 时采样会跳拍
+# （在 S3 上模拟 S2 实测）。S2 上除 main.cpp（约 32 KB，主要是 USB 协议栈和 DAP 类）外都放进
+# IRAM，约 17 KB，开机后的堆从约 198 KB 减到约 174 KB（连同 16 KB 指令缓存）/ The ESP32-S2
+# is single-core: sampling shares the core and the instruction cache with Wi-Fi and lwIP,
+# and with the hot paths in flash sampling skips ticks (measured on an S3 simulating the
+# S2). On the S2 everything except main.cpp (about 32 KB, mostly the USB stack and the
+# DAP class) goes into IRAM, about 17 KB; the heap after boot drops from about 198 KB to
+# about 174 KB (together with the 16 KB instruction cache).
 [mapping:xrdap_hot]
 archive: libmain.a
 entries:
     if IDF_TARGET_ESP32S2 = n:
         main (noflash)
-        dap_vendor (noflash)
-        mem_ap (noflash)
-        sampler (noflash)
-        frame_ring (noflash)
-        reply_space (noflash)
-        session_owner (noflash)
-        tick_account (noflash)
-        turn_queue (noflash)
+    dap_vendor (noflash)
+    mem_ap (noflash)
+    sampler (noflash)
+    frame_ring (noflash)
+    reply_space (noflash)
+    session_owner (noflash)
+    tick_account (noflash)
+    turn_queue (noflash)
 
 # libxr 的 FreeRTOS 信号量、互斥量和时基：节拍唤醒采样任务、MemAp::Lock、帧时间戳每拍都走
 # 这里 / libxr's FreeRTOS semaphore, mutex and time base: every tick goes through them (the
@@ -33,7 +38,6 @@ entries:
 [mapping:xrdap_hot_libxr]
 archive: libxr.a
 entries:
-    if IDF_TARGET_ESP32S2 = n:
-        semaphore (noflash)
-        mutex (noflash)
-        esp_timebase (noflash)
+    semaphore (noflash)
+    mutex (noflash)
+    esp_timebase (noflash)
