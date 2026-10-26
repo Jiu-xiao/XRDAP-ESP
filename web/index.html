@@ -237,6 +237,7 @@
       noteKeep: "升级不清除 Wi-Fi 设置。",
       noteBoot: "连不上时：按住 BOOT，按一下 EN，松开 BOOT，再烧录。",
       noteCli: "命令行烧录和接线见 <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a>，电脑端工具见 <a href=\"https://github.com/Jiu-xiao/XRDAP-Host\">XRDAP-Host</a>。",
+      loadFailed: "板子列表加载失败，请刷新页面重试。",
     },
     en: {
       pathPage: "ESP32 family",
@@ -253,10 +254,12 @@
       noteKeep: "An upgrade keeps the Wi-Fi settings.",
       noteBoot: "If the port does not connect: hold BOOT, press EN once, release BOOT, then flash again.",
       noteCli: "Command-line flashing and wiring: <a href=\"https://github.com/Jiu-xiao/XRDAP-ESP\">XRDAP-ESP</a>. PC tool: <a href=\"https://github.com/Jiu-xiao/XRDAP-Host\">XRDAP-Host</a>.",
+      loadFailed: "The board list did not load. Reload the page to try again.",
     },
   };
 
   let boards = [];
+  let boardsFailed = false;
   let lang = navigator.language.startsWith("zh") ? "zh" : "en";
   try {
     lang = localStorage.getItem("xrdap-flash-lang") || lang;
@@ -298,7 +301,12 @@
 
     const current = selected();
     const set = document.getElementById("boards");
-    set.querySelectorAll("label").forEach((l) => l.remove());
+    set.querySelectorAll("label, p").forEach((l) => l.remove());
+    if (boardsFailed) {
+      const failed = document.createElement("p");
+      failed.textContent = TEXT[lang].loadFailed;
+      set.append(failed);
+    }
     boards.forEach((board, i) => {
       const card = document.createElement("label");
       card.className = "card";
@@ -339,9 +347,17 @@
   );
 
   fetch("boards.json")
-    .then((r) => r.json())
+    .then((r) => {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    })
     .then((list) => {
       boards = list;
+      render();
+    })
+    .catch(() => {
+      // 板子列表没加载到时给出提示，而不是一个空页面
+      boardsFailed = true;
       render();
     });
   render();
