@@ -134,3 +134,16 @@ a+b / 1 ms / Wi-Fi已连接，固定host/ELF，目标持续运行。每轮CSV都
 现场CDC补充（GUI仍在运行）：117806ticks、117695frames、112skipped，max_frame_us822、max_wake_us1038，merged_ticks0，SWD failures/resync0。最低堆94816字节。GUI进程PID38588，路径Downloads/xrdap-esp32s2-usbfix/xrdap.exe。此诊断与CLI明显不同，下一步重点检查GUI命令与等待路径；不能用CLI零轮次代表GUI。
 
 Core清理已提交为be2c067；父仓库将记录该子模块指针。
+
+GUI新截图进一步确认USB ...2162、SWD4M、Cortex-M4r0p1运行中。实际GUI源代码app.rs在采样期间每500ms排队PollCore，worker.rs调用cortex::status，通过vendorREAD读DHCSR；CLI纯watch没有该操作。当前用单USB客户端、相同20ms取帧频率，比较有/无该500ms查询，隔离这个输入差异；尚不据静态源代码直接宣称最终根因。
+
+## 下一单因素候选：S2 MEM-AP 放入 IRAM
+
+500msDHCSR查询的单客户端对照首轮为8缺口，纯采样两轮1/0缺口，均没有每轮SWD/值/缓冲错误。剩余查询确实增加漏拍。候选基于fe2833a/be2c067，只把common/linker.lf中的mem_ap对象在S2也标为noflash；S3原本已经如此，不改变其策略。采样器、定时器、公平间隙、主机查询频率保持。该路径由采样和在线READ共用，减少与9.3KB高速SWD展开代码争用Flash缓存。先构建检查IRAM增量、外部Flash调用与最小堆预算，再用相同查询负载/GUI验收；未经板测不认为已解决。
+
+
+500ms轮询对照已完成：纯采样1/0缺口，有DHCSR查询8/13缺口（每轮30s/59次查询），每轮SWD/缓冲/值错误0。旧预检脚本因缺少完整ADIv5初始化造成的累计SWD错误2次不属于采样轮次，各轮诊断单独为0。21个查询负载缺口中18个在查询后约22–24ms的下一次取帧中观测到，其余3个更晚；不把全部缺口都归为状态查询。
+
+MEM-AP IRAM候选S2 Release构建通过：版本0.5.5-preview-s2-memap-iram-r1；868608字节，SHA256259c607912850e7d5bff71d4c2e7017c65f4ffab39c8f4367ef2fa519d90bf68。IRAM text从53268增至59664（+6396）；DRAM data额外12字节。ReadCsw/ReadWords实际地址0x400315a8/0x40031e0c，已进入IRAM。实际HTTP字节/版本和浏览器页面已校验，等待刷写后与同样的轮询输入比较。常驻堆余量需要实测，不以静态链接代替。
+
+本候选S2/S3 Release/Debug四配置均构建通过（memap-build-matrix.json）。这是链接位置变更，没有新增C++运行逻辑；先前Core4/4和固件主机2/2覆盖原逻辑，不以主机测试代替IRAM/硬件时序验证。按用户及时提交要求先提交可回退的单因素候选，硬件验收仍待完成。

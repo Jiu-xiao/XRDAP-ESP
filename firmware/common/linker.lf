@@ -10,16 +10,17 @@
 # S3's swd_fast.cpp is too large when unrolled and stays in flash except for one level
 # (see the top of that file).
 #
-# ESP32-S2 不放：它只有 320 KB 内部 RAM，IRAM 和 DRAM 共用，这些代码放进 IRAM 后堆不够 Wi-Fi
-# 和各任务用 / Not on the ESP32-S2: it has only 320 KB of internal RAM shared by IRAM and
-# DRAM, and with this code in IRAM the heap is too small for Wi-Fi and the tasks.
+# ESP32-S2 只放 MEM-AP：采样和在线内存读取共用这一小段热路径。其余代码留在 Flash，
+# 为 Wi-Fi 和任务保留内部 RAM / On the ESP32-S2 only MEM-AP is placed here: sampling
+# and live memory reads share this small hot path. The rest stays in flash to preserve
+# internal RAM for Wi-Fi and the tasks.
 [mapping:xrdap_hot]
 archive: libmain.a
 entries:
+    mem_ap (noflash)
     if IDF_TARGET_ESP32S2 = n:
         main (noflash)
         dap_vendor (noflash)
-        mem_ap (noflash)
         sampler (noflash)
         frame_ring (noflash)
         reply_space (noflash)
