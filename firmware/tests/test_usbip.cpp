@@ -177,7 +177,8 @@ void CheckUsbDevice(const Bytes& b, size_t at)
   CHECK(GetBe16(b, at + 300) == 0x1D50);
   CHECK(GetBe16(b, at + 302) == 0x6199);
   CHECK(GetBe16(b, at + 304) == 0x0200);
-  CHECK(b[at + 309] == 1);  // bNumConfigurations
+  CHECK(b[at + 309] == 1);  // bConfigurationValue
+  CHECK(b[at + 310] == 1);  // bNumConfigurations
   CHECK(b[at + 311] == 1);  // bNumInterfaces
 }
 }  // namespace
