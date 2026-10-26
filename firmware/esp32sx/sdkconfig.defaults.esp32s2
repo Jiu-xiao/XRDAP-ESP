@@ -35,3 +35,14 @@ CONFIG_ESP_WIFI_TX_BA_WIN=4
 # more internal RAM): sampling shares the cache with Wi-Fi and lwIP; on an S3 simulating
 # the S2, one cache step up clearly reduced skipped ticks.
 CONFIG_ESP32S2_INSTRUCTION_CACHE_16KB=y
+# S2 没有日志输出口（控制台关闭），日志、错误码名字和 panic 打印没人能看到；去掉后堆多约
+# 2.9 KB、镜像小约 65 KB（map 实测）。复位原因仍由 esp_reset_reason 给出（wifi status）/
+# The S2 has no log output (console off), so logs, error names and panic text are never
+# seen; dropping them frees about 2.9 KB of heap and about 65 KB of flash (measured from the
+# map). The reset reason still comes from esp_reset_reason (wifi status).
+CONFIG_LOG_DEFAULT_LEVEL_NONE=y
+CONFIG_LOG_MAXIMUM_EQUALS_DEFAULT=y
+CONFIG_ESP_ERR_TO_NAME_LOOKUP=n
+CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT=y
+CONFIG_ESP_EVENT_POST_FROM_IRAM_ISR=n
+CONFIG_ESP_NETIF_REPORT_DATA_TRAFFIC=n
