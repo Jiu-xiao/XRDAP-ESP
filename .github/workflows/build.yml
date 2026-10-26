@@ -88,7 +88,8 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: firmware
+    # 格式检查和单元测试也要通过才发布 / Format check and unit tests must pass too.
+    needs: [format, host-tests, firmware]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
