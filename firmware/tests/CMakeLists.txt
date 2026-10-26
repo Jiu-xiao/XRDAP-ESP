@@ -18,6 +18,7 @@ add_executable(xrdap_esp_tests
     test_dap_tcp.cpp
     test_usbip.cpp
     test_link_state.cpp
+    test_timer_deadline.cpp
     ${COMMON}/console/console_core.cpp
     ${COMMON}/net/wifi_command.cpp)
 target_include_directories(xrdap_esp_tests PRIVATE

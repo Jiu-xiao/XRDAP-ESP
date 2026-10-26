@@ -42,6 +42,7 @@
 
 #include <cstdint>
 
+#include "freertos/FreeRTOS.h"
 #include "probe_config.hpp"
 #include "sdkconfig.h"
 #include "xrdap/probe/family.hpp"
@@ -188,17 +189,14 @@ constexpr unsigned kStepPriority = 10;
 #if CONFIG_IDF_TARGET_ESP32S2
 /// 所有任务所在的核（S2 为单核）/ Core running every task (the S2 is single-core).
 constexpr int kSwdCore = 0;
-// 优先级从低到高：状态灯、按键 2 < libxr 定时器 3 < 命令行 4 < USB DAP、网络服务 10 <
-// lwIP 18 < 采样 19 < esp_timer 22 < Wi-Fi 23。采样在节拍之间阻塞，XRDAP-Core 每帧之后
-// 至少留 max(15 µs, 周期/8, 本帧耗时/4) 给别的任务，所以可以排在 lwIP 之上；它低于
-// esp_timer 和 Wi-Fi 驱动，不拖住无线协议栈。与 C3 相同。
-// Priorities low to high: status light and button 2 < libxr timer 3 < console 4 < USB
-// DAP and network server 10 < lwIP 18 < sampling 19 < esp_timer 22 < Wi-Fi 23. Sampling
-// blocks between ticks and XRDAP-Core leaves at least max(15 us, period/8, frame
-// time/4) to the others after every frame, so it can sit above lwIP; it stays below
-// esp_timer and the Wi-Fi driver so the radio stack is not starved. As on the C3.
+// 单核 S2：采样高于 Wi-Fi(23) / lwIP(18)，中断仍可抢占。采样在节拍之间阻塞，
+// 每帧之后仍留 max(15 us, 周期/8, 帧耗时/4) 给其他任务。
+// Single-core S2: sampling preempts Wi-Fi (23) / lwIP (18), but not interrupts.
+// It blocks between ticks and retains the Core's bounded inter-frame gap.
 /// 采样任务优先级 / Sampling task priority.
-constexpr unsigned kSamplingPriority = 19;
+constexpr unsigned kSamplingPriority = 24;
+static_assert(kSamplingPriority < configMAX_PRIORITIES,
+              "sampling priority must fit the FreeRTOS priority range");
 /// USB DAP 线程的栈；暂定值，见 probe_config.hpp / Stack of the USB DAP thread;
 /// provisional, see probe_config.hpp.
 constexpr uint32_t kStepStack = 6144;
