@@ -77,7 +77,7 @@ class GptimerTick final : public Vendor::TickTimer
     // Rearm before waking: PostFromCallback may yield from this ISR. GPTimer
     // retriggers an alarm that becomes overdue while it is being programmed.
     gptimer_set_alarm_action(timer, &alarm);
-    self.vendor_.OnTickIsr(deadline.elapsed_ticks, deadline.late_us);
+    self.vendor_.OnTickIsr(deadline.elapsed_ticks);
     return false;  // 唤醒时已在中断里切换任务 / the wake already yields from the ISR
   }
 
