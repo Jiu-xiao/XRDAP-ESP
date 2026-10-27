@@ -22,6 +22,7 @@
 #include <cstdint>
 
 #include "wifi_settings.hpp"
+#include "xrdap/session/command_class.hpp"
 
 namespace XrDap
 {
@@ -49,6 +50,19 @@ class WifiCommand
   ///       schedules the restart through settings.
   static bool Handle(void* settings, const uint8_t* req, uint16_t len, uint8_t* resp,
                      uint16_t cap, uint16_t& out);
+
+  /// @brief 一条 0x86 请求的字节数，DAP_ExecuteCommands / DAP_QueueCommands 里要用；签名
+  ///        与 XRDAP-Core DapVendor::ExtraLength 相同 / Request bytes of one 0x86 command,
+  ///        needed inside DAP_ExecuteCommands / DAP_QueueCommands; the signature matches
+  ///        XRDAP-Core DapVendor::ExtraLength.
+  /// @return 内容不完整或操作未知时 false / False when the content is incomplete or the
+  ///         operation unknown.
+  /// @note 纯解析，任何上下文 / Pure parsing, any context.
+  static bool Length(const uint8_t* req, uint16_t avail, uint16_t& len);
+
+  /// 只读查询（0x86 0x00）不需要拥有探针，保存和清除要 / The read-only query (0x86 0x00)
+  /// needs no ownership; save and clear do.
+  static constexpr FreeCommand kFreeQuery{2, {kCmd, 0x00U}};
 
  private:
   static bool Status(WifiSettings& settings, uint8_t* resp, uint16_t cap, uint16_t& out);

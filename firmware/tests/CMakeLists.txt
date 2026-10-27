@@ -10,6 +10,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(COMMON ${CMAKE_CURRENT_LIST_DIR}/../common)
 set(CORE ${CMAKE_CURRENT_LIST_DIR}/../../third_party/xrdap-core)
+set(LIBXR_DIR ${CMAKE_CURRENT_LIST_DIR}/../../third_party/libxr)
+
+# Core 的命令号取自 libxr 的 CMSIS-DAP 定义，所以测试也要 libxr 的头文件 / Core takes its
+# command ids from libxr's CMSIS-DAP definitions, so the tests need libxr's headers too.
+set(LIBXR_SYSTEM linux)
+set(LIBXR_DRIVER linux)
+add_subdirectory("${LIBXR_DIR}" libxr EXCLUDE_FROM_ALL)
+file(GLOB_RECURSE LIBXR_DAP_HEADERS "${LIBXR_DIR}/src/driver/usb/device/dap/*.hpp")
+foreach(header ${LIBXR_DAP_HEADERS})
+  get_filename_component(dir "${header}" DIRECTORY)
+  list(APPEND LIBXR_DAP_DIRS "${dir}")
+endforeach()
+list(REMOVE_DUPLICATES LIBXR_DAP_DIRS)
 
 add_executable(xrdap_esp_tests
     main.cpp
@@ -20,13 +33,16 @@ add_executable(xrdap_esp_tests
     test_link_state.cpp
     test_timer_deadline.cpp
     ${COMMON}/console/console_core.cpp
-    ${COMMON}/net/wifi_command.cpp)
+    ${COMMON}/net/wifi_command.cpp
+    ${CORE}/xrdap/session/command_class.cpp)
 target_include_directories(xrdap_esp_tests PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${COMMON}/console
     ${COMMON}/net
     ${COMMON}/probe
-    ${CORE})
+    ${CORE}
+    ${LIBXR_DAP_DIRS})
+target_link_libraries(xrdap_esp_tests PRIVATE xr)
 # USB/IP 描述符对照 XRDAP-Core 协议文档第 6 节 / USB/IP descriptors are checked against
 # section 6 of the XRDAP-Core protocol document.
 target_compile_definitions(xrdap_esp_tests PRIVATE

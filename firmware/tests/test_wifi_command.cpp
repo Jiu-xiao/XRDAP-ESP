@@ -201,3 +201,51 @@ TEST(wifi_cmd_clear_rejects_unexpected_bytes)
   CHECK(wifi.clears == 0);
   CHECK(wifi.restarts == 0);
 }
+
+namespace
+{
+uint16_t Length(const Bytes& req)
+{
+  uint16_t len = 0xFFFF;
+  return XrDap::WifiCommand::Length(req.data(), static_cast<uint16_t>(req.size()), len)
+             ? len
+             : 0U;
+}
+}  // namespace
+
+// DAP_ExecuteCommands / DAP_QueueCommands 里一条 0x86 的字节数：查询 2，清除 3，保存
+// 3 + ssid + 1 + 密码（协议 3.7 的例子共 15 字节）/ Bytes of one 0x86 inside
+// DAP_ExecuteCommands / DAP_QueueCommands: query 2, clear 3, save 3 + ssid + 1 + password
+// (the example of protocol 3.7 is 15 bytes).
+TEST(wifi_cmd_length_of_each_operation)
+{
+  CHECK(Length({0x86, 0x00}) == 2U);
+  CHECK(Length({0x86, 0x02, 0xA5}) == 3U);
+  CHECK(Length({0x86, 0x01, 0x03, 0x6C, 0x61, 0x62, 0x08, 0x31, 0x32, 0x33, 0x34, 0x35,
+                0x36, 0x37, 0x38}) == 15U);
+}
+
+TEST(wifi_cmd_length_rejects_incomplete_or_unknown)
+{
+  CHECK(Length({0x86}) == 0U);
+  CHECK(Length({0x86, 0x02}) == 0U);
+  CHECK(Length({0x86, 0x07}) == 0U);
+  CHECK(Length({0x86, 0x01, 0x03, 0x6C, 0x61}) == 0U);
+  CHECK(Length({0x85, 0x00}) == 0U);
+}
+
+// 只读查询不需要拥有探针，保存和清除要 / The read-only query needs no ownership; save and
+// clear do.
+TEST(wifi_cmd_only_the_query_is_free)
+{
+  const XrDap::FreeCommand* free_query = &XrDap::WifiCommand::kFreeQuery;
+  const Bytes query = {0x86, 0x00};
+  const Bytes save = {0x86, 0x01, 0x00, 0x00};
+  const Bytes clear = {0x86, 0x02, 0xA5};
+  CHECK(XrDap::ClassifyCommand(query.data(), 2U, free_query, 1U) ==
+        XrDap::CommandClass::FREE);
+  CHECK(XrDap::ClassifyCommand(save.data(), 4U, free_query, 1U) ==
+        XrDap::CommandClass::OWNER);
+  CHECK(XrDap::ClassifyCommand(clear.data(), 3U, free_query, 1U) ==
+        XrDap::CommandClass::OWNER);
+}

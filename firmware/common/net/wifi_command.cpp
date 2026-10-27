@@ -14,6 +14,9 @@ namespace
 constexpr uint8_t kOpStatus = 0x00U;
 constexpr uint8_t kOpSet = 0x01U;
 constexpr uint8_t kOpClear = 0x02U;
+// 清除必须带的确认字节：请求为 86 02 A5 / Confirm byte a clear must carry: the request is
+// 86 02 A5.
+constexpr uint8_t kClearConfirm = 0xA5U;
 constexpr uint8_t kFlagStarted = 0x01U;
 constexpr uint8_t kFlagConnected = 0x02U;
 constexpr uint8_t kFlagStorageRepaired = 0x04U;
@@ -23,6 +26,44 @@ constexpr uint8_t kFlagStorageRepaired = 0x04U;
 constexpr size_t kStatusHead = 9U;
 constexpr size_t kStatusTail = 2U;
 }  // namespace
+
+bool WifiCommand::Length(const uint8_t* req, uint16_t avail, uint16_t& len)
+{
+  if (avail < 2U || req[0] != kCmd)
+  {
+    return false;
+  }
+  uint32_t need = 0U;
+  switch (req[1])
+  {
+    case kOpStatus:
+      need = 2U;
+      break;
+    case kOpClear:
+      need = 3U;
+      break;
+    case kOpSet:
+      if (avail < 3U)
+      {
+        return false;
+      }
+      need = 3U + req[2];
+      if (need >= avail)
+      {
+        return false;
+      }
+      need += 1U + req[need];
+      break;
+    default:
+      return false;
+  }
+  if (need > avail)
+  {
+    return false;
+  }
+  len = static_cast<uint16_t>(need);
+  return true;
+}
 
 bool WifiCommand::Handle(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
                          uint16_t cap, uint16_t& out)
@@ -118,7 +159,7 @@ bool WifiCommand::Clear(WifiSettings& settings, const uint8_t* req, uint16_t len
   // 86 02 A5：确认字节不对就不清除，不兼容不带确认的旧请求（A4 用户决定 ③）/ 86 02 A5:
   // nothing is cleared without the right confirm byte; the old request without it is not
   // accepted (A4 user decision 3).
-  if (len != 3U || req[2] != kWifiClearConfirm)
+  if (len != 3U || req[2] != kClearConfirm)
   {
     return Reply(resp, kStatusArg, out);
   }
