@@ -19,20 +19,41 @@ jobs:
           pip install clang-format==21.1.8
           git ls-files 'firmware/*.hpp' 'firmware/*.cpp' 'firmware/*.c' | xargs clang-format --dry-run --Werror
 
+  # 纯逻辑（命令行、0x86、TCP 帧、USB/IP、状态灯输入）在电脑上的单元测试
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 单元测试
+        run: |
+          git submodule update --init third_party/xrdap-core
+          cmake -S firmware/tests -B build-tests
+          cmake --build build-tests
+          ctest --test-dir build-tests --output-on-failure
+
   firmware:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: esp32s3
+          # firmware/esp32sx 是带原生 USB OTG 的 S2、S3 共用的工程
+          - dir: esp32sx
+            target: esp32s3
             asset: xrdap-esp32-s3.bin
           # “高速无线 DAP 调试器 Lite”板：S3 工程加上 sdkconfig.defaults.lite
-          - target: esp32s3
+          - dir: esp32sx
+            target: esp32s3
             asset: xrdap-esp32-s3-lite.bin
             board: lite
-          - target: esp32c3
+          # ESP32-S2 板：sdkconfig.defaults.esp32s2 按目标自动叠加
+          - dir: esp32sx
+            target: esp32s2
+            asset: xrdap-esp32-s2.bin
+          - dir: esp32c3
+            target: esp32c3
             asset: xrdap-esp32-c3.bin
-          - target: esp32
+          - dir: esp32
+            target: esp32
             asset: xrdap-esp32.bin
     runs-on: ubuntu-latest
     container: espressif/idf:v5.5.2
@@ -46,19 +67,18 @@ jobs:
         run: |
           . $IDF_PATH/export.sh
           git config --global --add safe.directory '*'
-          cd firmware/${{ matrix.target }}
+          cd firmware/${{ matrix.dir }}
+          defaults="sdkconfig.defaults"
           if [ -n "${{ matrix.board }}" ]; then
-            idf.py -B build -D SDKCONFIG=build/sdkconfig \
-              -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.${{ matrix.board }}" \
-              build merge-bin
-          else
-            idf.py build merge-bin
+            defaults="$defaults;sdkconfig.defaults.${{ matrix.board }}"
           fi
+          idf.py -D IDF_TARGET=${{ matrix.target }} -B build -D SDKCONFIG=build/sdkconfig \
+            -D "SDKCONFIG_DEFAULTS=$defaults" build merge-bin
 
       - name: 整理固件文件
         run: |
           mkdir out
-          cp firmware/${{ matrix.target }}/build/merged-binary.bin out/${{ matrix.asset }}
+          cp firmware/${{ matrix.dir }}/build/merged-binary.bin out/${{ matrix.asset }}
 
       - uses: actions/upload-artifact@v4
         with:

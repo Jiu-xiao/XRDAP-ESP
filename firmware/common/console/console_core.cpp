@@ -4,16 +4,10 @@
 #include <cstdio>
 #include <cstring>
 
-#include "restart.hpp"
-#include "wifi_sta.hpp"
-
 namespace XrDap
 {
 namespace
 {
-// 让提示先发出去 / Time for the message to go out.
-constexpr uint32_t kRestartDelayMs = 500U;
-
 // 取下一个词：以空格分隔，可以用双引号括起带空格的词。返回 false 表示没有更多的词。
 bool NextToken(char*& p, char*& token)
 {
@@ -46,6 +40,44 @@ bool NextToken(char*& p, char*& token)
     *p++ = 0;
   }
   return true;
+}
+
+const char* EraseSourceText(EraseSource source)
+{
+  switch (source)
+  {
+    case EraseSource::BUTTON:
+      return "按键";
+    case EraseSource::CONSOLE:
+      return "命令行 wifi clear";
+    case EraseSource::VENDOR_COMMAND:
+      return "DAP 命令 0x86";
+    case EraseSource::STORAGE_REPAIR:
+      return "NVS 损坏后擦除";
+    default:
+      return "无";
+  }
+}
+
+const char* ResetReasonText(ResetReason reason)
+{
+  switch (reason)
+  {
+    case ResetReason::POWER_ON:
+      return "上电";
+    case ResetReason::SOFTWARE:
+      return "软件重启";
+    case ResetReason::WATCHDOG:
+      return "看门狗";
+    case ResetReason::PANIC:
+      return "异常";
+    case ResetReason::BROWNOUT:
+      return "欠压";
+    case ResetReason::OTHER:
+      return "其他";
+    default:
+      return "未知";
+  }
 }
 }  // namespace
 
@@ -137,7 +169,13 @@ void ConsoleCore::Handle(char* line)
         "wifi set <热点> [<密码>]   "
         "保存热点参数并重启（有空格的用双引号括起来，不填密码为开放网络）\r\n"
         "wifi status               查看连接状态\r\n"
-        "wifi clear                清除热点参数并重启\r\n");
+        "wifi clear                清除热点参数并重启\r\n"
+        "heap                      查看空闲堆和各任务栈的剩余量\r\n");
+    return;
+  }
+  if (strcmp(cmd, "heap") == 0 && heap_ != nullptr)
+  {
+    heap_->Write(write_, ctx_);
     return;
   }
   char* sub = nullptr;
@@ -164,29 +202,29 @@ void ConsoleCore::Handle(char* line)
     {
       password = const_cast<char*>("");
     }
-    const esp_err_t err = WifiStaSave(ssid, password);
-    if (err == ESP_ERR_INVALID_ARG)
+    const WifiSettings::SaveResult result = settings_.Save(ssid, password);
+    if (result == WifiSettings::SaveResult::INVALID)
     {
       Print("热点名要 1 到 32 个字节，密码要 8 到 63 个字节（或不填）\r\n");
       return;
     }
-    if (err != ESP_OK)
+    if (result != WifiSettings::SaveResult::OK)
     {
       Print("保存失败\r\n");
       return;
     }
     Print("已保存，设备重启后连接\r\n");
-    RestartLater(kRestartDelayMs);
+    settings_.RestartLater();
   }
   else if (strcmp(sub, "clear") == 0)
   {
-    if (WifiStaClear() != ESP_OK)
+    if (!settings_.Clear(EraseSource::CONSOLE))
     {
       Print("清除失败\r\n");
       return;
     }
     Print("已清除，设备重启后不再连接 Wi-Fi\r\n");
-    RestartLater(kRestartDelayMs);
+    settings_.RestartLater();
   }
   else
   {
@@ -196,8 +234,28 @@ void ConsoleCore::Handle(char* line)
 
 void ConsoleCore::PrintStatus()
 {
-  const WifiStatus st = WifiStaGetStatus();
+  const WifiStatus st = settings_.Status();
   char buf[160];
+  if (st.storage_repaired)
+  {
+    Print("NVS 损坏，本次启动时已擦除重建\r\n");
+  }
+  snprintf(buf, sizeof(buf), "上次清除：%s\r\n上次复位：%s\r\n",
+           EraseSourceText(st.last_erase), ResetReasonText(st.reset_reason));
+  Print(buf);
+  if (st.watchdog_task[0][0] != 0)
+  {
+    if (st.watchdog_task[1][0] != 0)
+    {
+      snprintf(buf, sizeof(buf), "看门狗超时时在运行：核 0 %.15s，核 1 %.15s\r\n",
+               st.watchdog_task[0], st.watchdog_task[1]);
+    }
+    else
+    {
+      snprintf(buf, sizeof(buf), "看门狗超时时在运行：%.15s\r\n", st.watchdog_task[0]);
+    }
+    Print(buf);
+  }
   if (st.ssid[0] == 0)
   {
     Print("没有保存热点参数，用 wifi set 设置\r\n");

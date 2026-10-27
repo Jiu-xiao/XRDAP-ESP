@@ -1,33 +1,58 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 配置 Wi-Fi 的文本命令行。ConsoleCore 按字节处理输入（行编辑、执行命令），输出交给回调；
-// WifiConsole 让它独占一个串口（S3 的 USB 虚拟串口、C3 的 UART0）；SerialMux
-// （serial_mux.hpp）让它与串口 DAP 链路共用一个口。
+// 配置 Wi-Fi 的文本命令行。ConsoleCore 按字节处理输入（行编辑、执行命令），输出交给回调，
+// 设置经 WifiSettings 读写，不依赖
+// ESP-IDF；UartConsole（uart_console.hpp）让它独占一个串口（S3 的 USB 虚拟串口、C3 的
+// UART0）；SerialMux （serial_mux.hpp）让它与串口 DAP 链路共用一个口。
 //   help                         列出命令
 //   wifi set <热点> [<密码>]     保存热点参数后重启。热点或密码含空格时用双引号括起来；
 //                                不填密码表示开放网络
 //   wifi status                  查看热点、是否连接、IP、信号强度
 //   wifi clear                   清除热点参数后重启
+//   heap                         查看空闲堆、最低空闲堆和各任务栈的剩余量
 // 串口终端：波特率任意，换行用 CR 或 LF 均可。输入会回显，密码也会显示在你自己的终端上。
 //
 // Text console for configuring Wi-Fi. ConsoleCore processes input byte by byte (line
-// editing, command execution) and sends output through a callback; WifiConsole gives it
-// a whole serial port (S3 USB CDC, C3 UART0); SerialMux (serial_mux.hpp) shares one port
+// editing, command execution), sends output through a callback and reaches the settings
+// through WifiSettings, without ESP-IDF; UartConsole (uart_console.hpp) gives it a whole
+// serial port (S3 USB CDC, C3 UART0); SerialMux (serial_mux.hpp) shares one port
 // with the serial DAP link.
 //   help                         list commands
 //   wifi set <ssid> [<password>] save credentials and restart. Quote values containing
 //                                spaces; omit the password for an open network
 //   wifi status                  show SSID, connection state, IP, RSSI
 //   wifi clear                   clear credentials and restart
+//   heap                         show the free heap, the minimum free heap and each
+//                                task's remaining stack
 // Serial terminal: any baud rate, CR or LF line ending. Input is echoed, including the
 // password, on your own terminal.
 
 #include <cstddef>
 #include <cstdint>
 
+#include "wifi_settings.hpp"
+
 namespace XrDap
 {
+
+/// 输出回调，由命令行所在任务同步调用 / Output callback, invoked synchronously from the
+/// task that feeds the console.
+using ConsoleWriteFn = void (*)(void* ctx, const char* text, size_t len);
+
+/// heap 命令的内容：堆和任务栈的运行状态 / Content of the heap command: the runtime
+/// status of the heap and the task stacks.
+class HeapReport
+{
+ public:
+  /// @brief 把状态写成几行文字，每行以 CR LF 结尾 / Write the status as text lines, each
+  ///        ending in CR LF.
+  /// @note 在命令行任务里调用 / Called in the console task.
+  virtual void Write(ConsoleWriteFn write, void* ctx) = 0;
+
+ protected:
+  ~HeapReport() = default;
+};
 
 /// 命令行核心，一次喂一个字节 / Console core fed one byte at a time.
 /// 只在收到一行合法命令并回车后才输出，与二进制协议共用一个口时不会往里插字：行内出现
@@ -40,11 +65,19 @@ namespace XrDap
 class ConsoleCore
 {
  public:
-  /// 输出回调，由命令行所在任务同步调用 / Output callback, invoked synchronously from the
-  /// task that feeds the console.
-  using WriteFn = void (*)(void* ctx, const char* text, size_t len);
+  /// 输出回调 / Output callback.
+  using WriteFn = ConsoleWriteFn;
 
-  ConsoleCore(WriteFn write, void* ctx) : write_(write), ctx_(ctx) {}
+  /// @param settings Wi-Fi 设置，生命周期需长于本对象 / Wi-Fi settings; must outlive this
+  ///        object.
+  /// @param heap heap 命令的内容，为空时没有这个命令 / Content of the heap command; null
+  ///        means there is no such command.
+  /// @param write 输出回调 / Output callback.
+  /// @param ctx 传给 write 的参数 / Argument passed to write.
+  ConsoleCore(WifiSettings& settings, HeapReport* heap, WriteFn write, void* ctx)
+      : settings_(settings), heap_(heap), write_(write), ctx_(ctx)
+  {
+  }
 
   /// 丢弃正在输入的一行，不产生输出 / Discard the line being typed without any output.
   void Reset();
@@ -62,6 +95,8 @@ class ConsoleCore
   void Handle(char* line);
   void PrintStatus();
 
+  WifiSettings& settings_;
+  HeapReport* heap_;
   WriteFn write_;
   void* ctx_;
   char line_[kLineMax + 1] = {};

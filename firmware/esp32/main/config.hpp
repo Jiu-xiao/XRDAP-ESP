@@ -8,6 +8,7 @@
 
 #include <cstdint>
 
+#include "debug/swd_general_gpio.hpp"
 #include "probe_config.hpp"
 
 namespace XrDap::Config
@@ -29,19 +30,29 @@ constexpr int kSwclkGpio = 18;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 19;
 
-/// 写一次 SWCLK 沿在每个时钟周期多出的 CPU 周期数，用来校正 SWCLK 频率；偏低就加大，
-/// 偏高就减小。传统 ESP32 的 GPIO 读写走外设总线（写约 12、读约 17 个 CPU 周期），比 S3
-/// 的专用 GPIO 慢得多；28 是按不同时钟下 MemAp 标定一轮的耗时推算的，没有用逻辑分析仪校准
-/// / Extra CPU cycles one SWCLK edge write adds to each clock period, used to calibrate
-/// the SWCLK frequency; raise it if the frequency is low, lower it if high. GPIO access
-/// on the classic ESP32 goes over the peripheral bus (about 12 CPU cycles per write, 17
-/// per read), much slower than the S3's dedicated GPIO; 28 was derived from MemAp
-/// calibration round times at several clocks, not measured with a logic analyzer.
-constexpr uint32_t kEdgeWriteCycles = 28U;
+/// 传统 ESP32 的 GPIO 读写走外设总线（写约 12、读约 17 个 CPU 周期），比 S3 的专用 GPIO
+/// 慢得多 / GPIO access on the classic ESP32 goes over the peripheral bus (about 12 CPU
+/// cycles per write, 17 per read), much slower than the S3's dedicated GPIO.
+/// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N，不带延时
+/// c。240 MHz 下用 ccount 实测：请求字节、读数据相、写数据相和 SWJ 序列按 N >= 2 拟合，
+/// b = 10.0（一次延时循环 5 个周期），a 取各路径的平均 28.9；c 取不带延时时最短的一条路径
+/// 35.0，所以选无延时路径时任何路径都不会比请求的时钟快 / Timing of libxr's
+/// SwdGeneralGPIO (CPU cycles x10): a + b*N per SWCLK period with delay, c without.
+/// Measured with ccount at 240 MHz: the request byte, read and write data phases and SWJ
+/// sequence fit b = 10.0 (5 cycles per delay-loop iteration) for N >= 2, and a is their
+/// mean, 28.9; c is the shortest path without delay, 35.0, so the no-delay path is never
+/// faster than the request on any path.
+inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{100, 289, 350};
 
-/// SWD、DAP 命令、采样和网络服务所在的核；Wi-Fi 和 lwIP 在核 0 / Core for SWD, DAP
-/// commands, sampling and the network server; Wi-Fi and lwIP live on core 0.
+/// 采样任务所在的核，核上只有它 / Core of the sampling task, which runs alone there.
 constexpr int kSwdCore = 1;
+/// 串口 DAP 和 TCP/USB-IP 服务所在的核，与 Wi-Fi、lwIP 同核。传统 ESP32 经 GPIO 寄存器
+/// 驱动 SWD，两个核都能访问，SWD 由执行器的轮次和 MemAp 锁串行；串口和网络命令因此不必
+/// 等采样两帧之间的空隙 / Core of the serial DAP and TCP/USB-IP services, shared with
+/// Wi-Fi and lwIP. The classic ESP32 drives SWD through the GPIO registers, which both
+/// cores reach, and SWD is serialised by the executor turn and MemAp::Lock; serial and
+/// network commands therefore do not wait for the gaps between sample frames.
+constexpr int kTransportCore = 0;
 /// 采样任务优先级，为 SWD 核上最高 / Sampling task priority, the highest on the SWD core.
 constexpr unsigned kSamplingPriority = 14;
 /// libxr 定时器任务优先级 / libxr timer task priority.

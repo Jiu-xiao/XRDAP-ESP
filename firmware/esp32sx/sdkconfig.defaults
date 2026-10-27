@@ -1,0 +1,53 @@
+CONFIG_IDF_TARGET="esp32s3"
+# S2 板用 idf.py -D IDF_TARGET=esp32s2 编译，sdkconfig.defaults.esp32s2 随目标自动叠加；
+# S3 的专有设置在 sdkconfig.defaults.esp32s3。
+# The S2 board is built with idf.py -D IDF_TARGET=esp32s2, and
+# sdkconfig.defaults.esp32s2 is layered automatically for that target; S3-only settings
+# are in sdkconfig.defaults.esp32s3.
+# 镜像头写 4MB：检测到的 Flash 比镜像头小时 IDF 拒绝启动，比它大时只警告，所以 4MB 头在
+# N4、N8、N16 上都能启动。分区表到 0x217000 为止，4MB 放得下。
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+CONFIG_FREERTOS_HZ=1000
+# QIO Flash、断言静默、lwIP 放 IRAM
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y
+CONFIG_FREERTOS_CHECK_MUTEX_GIVEN_BY_OWNER=n
+CONFIG_FREERTOS_INTERRUPT_BACKTRACE=n
+CONFIG_LWIP_IRAM_OPTIMIZATION=y
+CONFIG_LWIP_EXTRA_IRAM_OPTIMIZATION=y
+
+# 关掉用不到的功能：只用 Wi-Fi STA、IPv4、TCP 客户端连入，不用 SoftAP、企业认证、IPv6、DHCP 服务器
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
+CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA=n
+CONFIG_ESP_WIFI_ENABLE_SAE_PK=n
+CONFIG_ESP_WIFI_GMAC_SUPPORT=n
+CONFIG_ESP_WIFI_NVS_ENABLED=n
+CONFIG_LWIP_IPV6=n
+CONFIG_LWIP_DHCPS=n
+CONFIG_LWIP_NETIF_LOOPBACK=n
+CONFIG_LWIP_DNS_SUPPORT_MDNS_QUERIES=n
+CONFIG_LWIP_MAX_SOCKETS=4
+CONFIG_LWIP_MAX_ACTIVE_TCP=8
+CONFIG_LWIP_MAX_LISTENING_TCP=4
+CONFIG_FREERTOS_ENABLE_TASK_SNAPSHOT=n
+# 系统日志控制台关闭：默认 S3 板的 UART0 给串口 DAP 链路用（日志会混进 DAP 帧），别的板子没有接日志的口
+CONFIG_ESP_CONSOLE_NONE=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+# 命令行 heap 命令要列出各任务栈的最高水位（uxTaskGetSystemState）/ The console's heap
+# command lists each task's stack high-water mark (uxTaskGetSystemState).
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+
+# 任务看门狗超时时 panic 并重启，复位原因为看门狗；没有日志输出口，只报警不重启的话看不到。
+# 超时时在运行的任务记进 RTC 内存，wifi status 给出 / On a task watchdog timeout, panic
+# and restart with a watchdog reset reason; there is no log output, so a warning alone
+# would go unseen. The task running at the timeout is kept in RTC memory and shown by
+# wifi status.
+CONFIG_ESP_TASK_WDT_PANIC=y

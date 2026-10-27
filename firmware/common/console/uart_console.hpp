@@ -35,14 +35,22 @@ template <typename UartT>
 class UartConsole
 {
  public:
-  /// @param uart 串口，生命周期需长于本对象 / Serial port; must outlive this object.
-  explicit UartConsole(UartT& uart) : uart_(uart), core_(&UartConsole::Write, this) {}
+  /// @param uart 串口 / Serial port.
+  /// @param settings 命令行读写的 Wi-Fi 设置 / Wi-Fi settings the console works on.
+  /// @param heap heap 命令的内容，可为空 / Content of the heap command; may be null.
+  /// @note 生命周期都需长于本对象 / All must outlive this object.
+  UartConsole(UartT& uart, WifiSettings& settings, HeapReport* heap)
+      : uart_(uart), core_(settings, heap, &UartConsole::Write, this)
+  {
+  }
 
   /// @brief 在指定的核上启动命令行任务 / Start the console task on a core.
-  void Start(int core)
+  /// @return 是否成功创建任务 / Whether task creation succeeded.
+  bool Start(int core)
   {
-    xTaskCreatePinnedToCore(&UartConsole::TaskEntry, "console", 4096, this,
-                            Config::kConsolePriority, nullptr, core);
+    return xTaskCreatePinnedToCore(&UartConsole::TaskEntry, "console",
+                                   Config::kConsoleStack, this, Config::kConsolePriority,
+                                   nullptr, core) == pdPASS;
   }
 
  private:

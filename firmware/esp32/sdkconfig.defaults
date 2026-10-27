@@ -18,10 +18,13 @@ CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_ESP_CONSOLE_NONE=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
-# 短周期采样时空闲任务很少能运行，不把它算作看门狗超时。看门狗本身保留（中断看门狗照常工作）。
-CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+# 核 1 只跑采样任务，短周期采样时它的空闲任务很少能运行，不检查。核 0 不跑采样，空闲任务
+# 总能运行；它 5 秒没运行说明核 0 被占死（Wi-Fi、串口都停），看门狗触发 panic 并重启，
+# 复位原因为看门狗，而不是静默卡死（没有日志控制台，只报警不重启的话看不到）。
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
 CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
-# Wi-Fi 和 lwIP 固定在核 0，SWD、DAP 命令、采样和网络服务在核 1
+CONFIG_ESP_TASK_WDT_PANIC=y
+# Wi-Fi、lwIP、串口 DAP 和网络服务在核 0，采样任务独占核 1
 CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_0=y
 CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU0=y
 
@@ -46,3 +49,6 @@ CONFIG_LWIP_TCP_WND_DEFAULT=16384
 
 # 传统 ESP32 的 IRAM 比 S3 小：SWD、采样的热路径要放进 IRAM，Wi-Fi 接收路径改回 Flash 执行
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+# 命令行 heap 命令要列出各任务栈的最高水位（uxTaskGetSystemState）/ The console's heap
+# command lists each task's stack high-water mark (uxTaskGetSystemState).
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

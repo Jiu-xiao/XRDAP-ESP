@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 两种芯片共用的固定参数。各芯片自己的 config.hpp 包含本文件，再加上引脚、核和优先级。
+// 各芯片共用的固定参数。各芯片自己的 config.hpp 包含本文件，再加上引脚、核和优先级。
 //
-// Fixed parameters shared by both chips. Each chip's config.hpp includes this file and
+// Fixed parameters shared by every chip. Each chip's config.hpp includes this file and
 // adds its pins, cores and priorities.
 
 #include <cstdint>
+
+#include "sdkconfig.h"
 
 namespace XrDap::Config
 {
@@ -29,16 +31,29 @@ constexpr uint32_t kWifiWaitMs = 20000;
 /// Wi-Fi 命令行任务的优先级 / Priority of the Wi-Fi console task.
 constexpr unsigned kConsolePriority = 4;
 
-/// USB 厂商号，XRUSB 登记的 VID:PID 之 VID。同一 VID:PID 靠序列号区分设备，序列号规则见
-/// probe_info.hpp / USB vendor ID from the XRUSB-registered VID:PID. Devices sharing a
-/// VID:PID are told apart by serial number; see probe_info.hpp.
-constexpr uint16_t kUsbVid = 0x1D50;
-/// USB 产品号 / USB product ID.
-constexpr uint16_t kUsbPid = 0x6199;
+#if CONFIG_IDF_TARGET_ESP32S2
+// ESP32-S2 的内部 RAM 只有 320 KB，任务栈取小一档；暂定值，要在硬件上看各任务栈的最高
+// 水位后再定 / The ESP32-S2 has only 320 KB of internal RAM, so task stacks are one step
+// smaller; provisional until each task's stack high-water mark is checked on hardware.
+/// TCP 和 USB/IP 服务任务的栈 / Stack of the TCP and USB/IP server task.
+constexpr uint32_t kNetStack = 6144;
+/// 采样任务的栈 / Stack of the sampling task.
+constexpr uint32_t kSamplerStack = 4096;
+/// 命令行任务的栈 / Stack of the console task.
+// The supplied long run reached 656 bytes free before the extra diagnostic report.
+constexpr uint32_t kConsoleStack = 4096;
+#else
+/// TCP 和 USB/IP 服务任务的栈 / Stack of the TCP and USB/IP server task.
+constexpr uint32_t kNetStack = 12288;
+/// 采样任务的栈 / Stack of the sampling task.
+constexpr uint32_t kSamplerStack = 8192;
+/// 命令行任务的栈 / Stack of the console task.
+constexpr uint32_t kConsoleStack = 4096;
+#endif
 
-/// SWD 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档以减小边沿过冲和振铃；0 档在
-/// 10 MHz 以上错得更多 / SWD pad drive strength, 0 weakest to 3 strongest (IDF default
-/// 2). One step lower reduces edge overshoot and ringing; level 0 fails more above
-/// 10 MHz.
+/// SWD 引脚驱动强度，0 最弱，3 最强（IDF 默认 2）。降一档以减小边沿过冲和振铃；0 档的
+/// 边沿太慢，高时钟下出错 / SWD pad drive strength, 0 weakest to 3 strongest (IDF
+/// default 2). One step lower reduces edge overshoot and ringing; level 0 has edges too
+/// slow for high clocks.
 constexpr int kPadDriveStrength = 1;
 }  // namespace XrDap::Config

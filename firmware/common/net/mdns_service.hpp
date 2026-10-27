@@ -15,13 +15,14 @@
 namespace XrDap
 {
 
-/// @brief 启动 mDNS 广播，失败只记日志 / Start mDNS advertising; failures are only
-///        logged.
+/// @brief 启动 mDNS 广播 / Start mDNS advertising.
 /// @param chip 写入 TXT 的芯片名，例如 "esp32c3"，需长期有效 / Chip name for the TXT
 ///        record, e.g. "esp32c3"; must stay valid.
 /// @param port TCP DAP 端口 / TCP DAP port.
 /// @note 在 Wi-Fi 协议栈启动后调用一次，拿到 IP 后才开始应答 / Call once after the Wi-Fi
 ///       stack is up; answers begin once an IP is obtained.
-void MdnsStart(const char* chip, uint16_t port);
+/// @return 失败时返回 false；探针仍可按 IP 使用 / False on failure; the probe can still
+///         be reached by IP.
+bool MdnsStart(const char* chip, uint16_t port);
 
 }  // namespace XrDap

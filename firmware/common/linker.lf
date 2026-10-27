@@ -1,16 +1,40 @@
 # 热路径放进 IRAM 运行，避免从 Flash 取指令时的缓存未命中：main.cpp 里实例化的 SWD 位带、
-# DAP 命令处理和网络收发，以及厂商扩展的 MEM-AP 访问、采样和帧缓冲。S3 的 swd_fast_s3.cpp
-# 展开后太大，留在 Flash。
+# DAP 命令处理和网络收发，以及 XRDAP-Core 每条命令或每拍都走的部分：MEM-AP 访问、采样、
+# 节拍计数、帧缓冲、回复空间检查、会话主人和执行轮次。S3 的 swd_fast.cpp 展开后太大，
+# 除一档外留在 Flash（见该文件开头）。
 #
 # Hot paths run from IRAM to avoid cache misses on flash fetches: the SWD bit-banging,
-# DAP command handling and network I/O instantiated in main.cpp, plus the vendor
-# extension's MEM-AP access, sampling and frame buffer. The S3's swd_fast_s3.cpp is too
-# large when unrolled and stays in flash.
+# DAP command handling and network I/O instantiated in main.cpp, plus the parts of
+# XRDAP-Core every command or tick goes through: MEM-AP access, sampling, tick
+# accounting, frame buffer, reply-space checks, the session owner and executor turns. The
+# S3's swd_fast.cpp is too large when unrolled and stays in flash except for one level
+# (see the top of that file).
+#
+# ESP32-S2 只放 MEM-AP：采样和在线内存读取共用这一小段热路径。其余代码留在 Flash，
+# 为 Wi-Fi 和任务保留内部 RAM / On the ESP32-S2 only MEM-AP is placed here: sampling
+# and live memory reads share this small hot path. The rest stays in flash to preserve
+# internal RAM for Wi-Fi and the tasks.
 [mapping:xrdap_hot]
 archive: libmain.a
 entries:
-    main (noflash)
-    dap_vendor (noflash)
     mem_ap (noflash)
-    sampler (noflash)
-    frame_ring (noflash)
+    if IDF_TARGET_ESP32S2 = n:
+        main (noflash)
+        dap_vendor (noflash)
+        sampler (noflash)
+        frame_ring (noflash)
+        reply_space (noflash)
+        session_owner (noflash)
+        tick_account (noflash)
+        turn_queue (noflash)
+
+# libxr 的 FreeRTOS 信号量、互斥量和时基：节拍唤醒采样任务、MemAp::Lock、帧时间戳每拍都走
+# 这里 / libxr's FreeRTOS semaphore, mutex and time base: every tick goes through them (the
+# sampling task wake-up, MemAp::Lock, the frame timestamp).
+[mapping:xrdap_hot_libxr]
+archive: libxr.a
+entries:
+    if IDF_TARGET_ESP32S2 = n:
+        semaphore (noflash)
+        mutex (noflash)
+        esp_timebase (noflash)

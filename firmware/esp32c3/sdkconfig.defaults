@@ -18,8 +18,11 @@ CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_ESP_CONSOLE_NONE=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
-# 短周期采样时空闲任务很少能运行，不把它算作看门狗超时。看门狗本身保留（中断看门狗照常工作）。
-CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+# 任务看门狗检查空闲任务：采样每个周期都让出时间，空闲任务 5 秒都没运行说明核被占死（Wi-Fi、
+# 串口都停），这时 panic 并重启，复位原因为看门狗；没有日志输出口，只报警不重启的话看不到。
+# 超时时在运行的任务记进 RTC 内存，wifi status 给出。
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
+CONFIG_ESP_TASK_WDT_PANIC=y
 
 # 关掉用不到的功能：只用 Wi-Fi STA、IPv4、TCP 客户端连入
 CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
@@ -38,3 +41,6 @@ CONFIG_LWIP_MAX_LISTENING_TCP=4
 # DAP 一问一答，包不超过 1 KB，TCP 缓冲用 16 KB 足够；Wi-Fi 收发缓冲用 IDF 默认值。
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
 CONFIG_LWIP_TCP_WND_DEFAULT=16384
+# 命令行 heap 命令要列出各任务栈的最高水位（uxTaskGetSystemState）/ The console's heap
+# command lists each task's stack high-water mark (uxTaskGetSystemState).
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

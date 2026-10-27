@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// ESP32-C3 版 XR-DAP 的固定参数；两种芯片共用的在 probe_config.hpp。
+// ESP32-C3 版 XR-DAP 的固定参数；各芯片共用的在 probe_config.hpp。
 //
 // Fixed parameters of the ESP32-C3 XR-DAP firmware; shared ones are in probe_config.hpp.
 
 #include <cstdint>
 
+#include "debug/swd_general_gpio.hpp"
 #include "probe_config.hpp"
 
 namespace XrDap::Config
@@ -27,12 +28,21 @@ constexpr int kSwclkGpio = 5;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 4;
 
-/// 写一次 SWCLK 沿在每个时钟周期多出的 CPU 周期数，用来校正 SWCLK 频率；偏低就加大，
-/// 偏高就减小。这个值还没有用逻辑分析仪在 C3 上校准过 / Extra CPU cycles one SWCLK edge
-/// write adds to each clock period, used to calibrate the SWCLK frequency; raise it if
-/// the frequency is low, lower it if high. Not yet calibrated on the C3 with a logic
-/// analyzer.
-constexpr uint32_t kEdgeWriteCycles = 13U;
+/// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N。160 MHz
+/// 下用 CPU 周期计数器实测：请求字节、读数据相、写数据相和 SWJ 序列按 N >= 2 拟合，
+/// b = 8.0（一次延时循环 4 个周期），a 取各路径的平均 24.7。c 设为 0，不用无延时路径：
+/// 无延时时读一位在 SWCLK 拉低后紧接着采 SWDIO，离上一个上升沿只有十几 ns，目标还没送出
+/// 新的一位（实测读到上一位，Cortex-M4 和 M7 目标都会出错）；N = 1 在采样前多等约 25 ns，
+/// 没有错误。最快一档是 N = 1，约 5.2 MHz / Timing of libxr's SwdGeneralGPIO (CPU
+/// cycles x10): a + b*N per SWCLK period with delay. Measured with the CPU cycle counter
+/// at 160 MHz: the request byte, read and write data phases and SWJ sequence fit b = 8.0
+/// (4 cycles per delay-loop iteration) for N >= 2, and a is their mean, 24.7. c is 0, so
+/// the path without delay is never used: there a read samples SWDIO right after pulling
+/// SWCLK low, a dozen ns after the previous rising edge, before the target drives the new
+/// bit (measured: the previous bit is read, on Cortex-M4 and M7 targets). N = 1 waits
+/// about 25 ns more before sampling and reads correctly. The fastest step is N = 1,
+/// about 5.2 MHz.
+inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{80, 247, 0};
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
 constexpr int kCore = 0;

@@ -22,10 +22,9 @@
 #include <cstdint>
 #include <cstring>
 
-#include "lwip/sockets.h"
 #include "probe_config.hpp"
-#include "probe_info.hpp"
-#include "socket_io.hpp"
+#include "xrdap/probe/family.hpp"
+#include "xrdap/probe/probe_identity.hpp"
 
 namespace XrDap
 {
@@ -41,20 +40,29 @@ class UsbipDevice
   /// @param dap 执行请求的 DAP 实例 / DAP instance that runs the requests.
   explicit UsbipDevice(DapT& dap) : dap_(dap) {}
 
-  /// @brief 设置 USB 产品名 / Set the USB product name.
+  /// @brief 设置 USB 产品名和序列号 / Set the USB product name and serial number.
   /// @param product 例如 "XR-DAP-C3 CMSIS-DAP"，需一直有效 / Such as
   ///        "XR-DAP-C3 CMSIS-DAP"; must stay valid.
-  void SetProduct(const char* product) { product_ = product; }
+  /// @param serial 序列号，与 DAP_Info 相同，需一直有效 / Serial number, the same as in
+  ///        DAP_Info; must stay valid.
+  void SetStrings(const char* product, const char* serial)
+  {
+    product_ = product;
+    serial_ = serial;
+  }
 
   /// @brief 处理连接上的第一个操作 / Handle the first operation on a connection.
-  /// @param fd 已连接的套接字 / Connected socket.
+  /// @param io 已连接的字节流，见 DapTcpSession 对 StreamT 的要求 / Connected byte
+  /// stream;
+  ///        see DapTcpSession for the StreamT requirements.
   /// @return 客户端挂载了设备时返回 true，之后调用 ServeUrbs()；设备列表查询或出错时返回
   ///         false，调用方关闭连接 / True when the client attached the device (call
   ///         ServeUrbs() next); false for a device-list query or an error (close it).
-  bool Handshake(int fd)
+  template <typename StreamT>
+  bool Handshake(StreamT& io)
   {
     uint8_t op[8];
-    if (!Net::ReadAll(fd, op, sizeof(op)))
+    if (!io.ReadAll(op, sizeof(op)))
     {
       return false;
     }
@@ -68,7 +76,7 @@ class UsbipDevice
       n += PutUsbDevice(reply + n);
       const uint8_t interface[4] = {0xFF, 0, 0, 0};
       memcpy(reply + n, interface, sizeof(interface));
-      (void)Net::WriteAll(fd, reply, n + sizeof(interface));
+      (void)io.WriteAll(reply, n + sizeof(interface));
       return false;
     }
     if (code != kOpReqImport)
@@ -76,7 +84,7 @@ class UsbipDevice
       return false;
     }
     char busid[32];
-    if (!Net::ReadAll(fd, reinterpret_cast<uint8_t*>(busid), sizeof(busid)))
+    if (!io.ReadAll(reinterpret_cast<uint8_t*>(busid), sizeof(busid)))
     {
       return false;
     }
@@ -84,37 +92,38 @@ class UsbipDevice
     if (strcmp(busid, kBusId) != 0)
     {
       n = PutOpHeader(reply, kOpRepImport, 1);
-      (void)Net::WriteAll(fd, reply, n);
+      (void)io.WriteAll(reply, n);
       return false;
     }
     n = PutOpHeader(reply, kOpRepImport, 0);
     n += PutUsbDevice(reply + n);
-    return Net::WriteAll(fd, reply, n);
+    return io.WriteAll(reply, n);
   }
 
   /// @brief 处理 URB，直到连接断开 / Serve URBs until the connection closes.
-  /// @param fd Handshake() 返回 true 的套接字 / Socket for which Handshake() returned
-  /// true.
-  void ServeUrbs(int fd)
+  /// @param io Handshake() 返回 true 的字节流 / Stream for which Handshake() returned
+  ///        true.
+  template <typename StreamT>
+  void ServeUrbs(StreamT& io)
   {
     pending_count_ = 0;
     tx_len_ = 0;
     resp_head_ = 0;
     resp_count_ = 0;
     uint8_t hdr[kHeaderLen];
-    while (Net::ReadAll(fd, hdr, sizeof(hdr)))
+    while (io.ReadAll(hdr, sizeof(hdr)))
     {
       const uint32_t cmd = GetU32(hdr);
       bool ok = false;
       if (cmd == kCmdSubmit)
       {
-        ok = Submit(fd, hdr);
+        ok = Submit(io, hdr);
       }
       else if (cmd == kCmdUnlink)
       {
         ok = Unlink(hdr);
       }
-      if (!ok || !Flush(fd))
+      if (!ok || !Flush(io))
       {
         return;
       }
@@ -137,10 +146,10 @@ class UsbipDevice
   static constexpr int32_t kEconnreset = -104;
   static constexpr size_t kHeaderLen = 48;
   static constexpr size_t kUsbDeviceLen = 312;
-  static constexpr const char* kBusId = "1-1";
-  static constexpr uint16_t kVid = Config::kUsbVid;
-  static constexpr uint16_t kPid = Config::kUsbPid;
-  static constexpr uint16_t kBcdDevice = 0x0200;
+  static constexpr char kBusId[] = "1-1";
+  static constexpr uint16_t kVid = Family::kUsbVid;
+  static constexpr uint16_t kPid = Family::kUsbPid;
+  static constexpr uint16_t kBcdDevice = Family::kBcdUsbip;
   static constexpr uint8_t kMsVendorCode = 0x20;
   static constexpr size_t kMaxPacket = Config::kDapPacketSize;
   static constexpr char kMsName[] = "DeviceInterfaceGUIDs";
@@ -203,8 +212,9 @@ class UsbipDevice
   static size_t PutUsbDevice(uint8_t* p)
   {
     memset(p, 0, kUsbDeviceLen);
-    strcpy(reinterpret_cast<char*>(p), "/sys/devices/xrdap/usb1/1-1");
-    strcpy(reinterpret_cast<char*>(p + 256), kBusId);
+    static constexpr char kPath[] = "/sys/devices/xrdap/usb1/1-1";
+    memcpy(p, kPath, sizeof(kPath));
+    memcpy(p + 256, kBusId, sizeof(kBusId));
     size_t n = 288;
     n += PutU32(p + n, 1);  // busnum
     n += PutU32(p + n, 1);  // devnum
@@ -240,11 +250,12 @@ class UsbipDevice
   /// 要等对方的延迟 ACK，每个来回多出约 40 ms / Send all replies caused by one command
   /// (the OUT reply and the paired IN response) in one send(). Sent separately, the
   /// second segment waits for the peer's delayed ACK, adding about 40 ms per round trip.
-  bool Flush(int fd)
+  template <typename StreamT>
+  bool Flush(StreamT& io)
   {
     const size_t n = tx_len_;
     tx_len_ = 0;
-    return n == 0 || Net::WriteAll(fd, tx_, n);
+    return n == 0 || io.WriteAll(tx_, n);
   }
 
   // ---------------------------------------------------------------- 描述符
@@ -406,11 +417,11 @@ class UsbipDevice
               return sizeof(d);
             }
             case 1:
-              return static_cast<int>(PutString(out, "XRobot"));
+              return static_cast<int>(PutString(out, kVendorName));
             case 2:
               return static_cast<int>(PutString(out, product_));
             case 3:
-              return static_cast<int>(PutString(out, ProbeSerial()));
+              return static_cast<int>(PutString(out, serial_));
             case 4:
               return static_cast<int>(PutString(out, "CMSIS-DAP v2"));
             default:
@@ -464,11 +475,12 @@ class UsbipDevice
       --resp_count_;
       const size_t len = r.length < in.length ? r.length : in.length;
       memcpy(Payload(), r.data, len);
-      AddRet(kRetSubmit, in.seqnum, 0, len, len);
+      AddRet(kRetSubmit, in.seqnum, 0, static_cast<uint32_t>(len), len);
     }
   }
 
-  bool Submit(int fd, const uint8_t* hdr)
+  template <typename StreamT>
+  bool Submit(StreamT& io, const uint8_t* hdr)
   {
     const uint32_t seqnum = GetU32(hdr + 4);
     const uint32_t dir = GetU32(hdr + 12);
@@ -480,7 +492,7 @@ class UsbipDevice
     {
       return false;
     }
-    if (!Net::ReadAll(fd, rx_, out_len))
+    if (!io.ReadAll(rx_, out_len))
     {
       return false;
     }
@@ -495,7 +507,7 @@ class UsbipDevice
       }
       size_t len = dir == kDirIn ? static_cast<size_t>(n) : 0;
       len = len < length ? len : length;
-      AddRet(kRetSubmit, seqnum, 0, len, len);
+      AddRet(kRetSubmit, seqnum, 0, static_cast<uint32_t>(len), len);
       return true;
     }
     if (ep != kDapEp)
@@ -558,6 +570,7 @@ class UsbipDevice
 
   DapT& dap_;
   const char* product_ = "XR-DAP CMSIS-DAP";
+  const char* serial_ = "";
   PendingIn pending_[kQueueDepth] = {};
   size_t pending_count_ = 0;
   Response responses_[kQueueDepth] = {};

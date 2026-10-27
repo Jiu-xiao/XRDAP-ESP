@@ -9,30 +9,36 @@
 #include <cstring>
 
 #include "esp_event.h"
-#include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "nvs_flash.h"
+#include "restart.hpp"
 
+namespace XrDap
+{
 namespace
 {
-constexpr const char* TAG = "xrdap_wifi";
 constexpr EventBits_t kGotIp = BIT0;
 EventGroupHandle_t s_events = nullptr;
 std::atomic<bool> s_started{false};
+// WifiStaInitStorage 在别的任务启动前写一次 / Written once by WifiStaInitStorage before
+// other tasks start.
+bool s_storage_repaired = false;
 
 struct Credentials
 {
   uint8_t version;
-  char ssid[33];
-  char password[64];
+  char ssid[kSsidMax + 1U];
+  char password[kPasswordMax + 1U];
 };
 
-// 命名空间沿用早期固件的名字，已经配过网的板子升级后不用重配
+// 命名空间沿用早期固件的名字，已经配过网的板子升级后不用重配 / The namespace keeps the
+// early firmware's name so configured boards keep their credentials after an upgrade.
 constexpr const char* kNvsNamespace = "rmlink";
 constexpr const char* kNvsKey = "wifi";
+constexpr const char* kNvsEraseKey = "wifi_erase";
 
 esp_err_t LoadCredentials(Credentials& cred)
 {
@@ -40,7 +46,6 @@ esp_err_t LoadCredentials(Credentials& cred)
   esp_err_t err = nvs_open(kNvsNamespace, NVS_READONLY, &nvs);
   if (err != ESP_OK)
   {
-    ESP_LOGW(TAG, "没有保存的热点参数（nvs_open: %s）", esp_err_to_name(err));
     return err;
   }
   size_t size = sizeof(cred);
@@ -48,7 +53,6 @@ esp_err_t LoadCredentials(Credentials& cred)
   nvs_close(nvs);
   if (err != ESP_OK || size != sizeof(cred) || cred.version != 1 || cred.ssid[0] == 0)
   {
-    ESP_LOGW(TAG, "保存的热点参数缺失或无效");
     return ESP_ERR_NOT_FOUND;
   }
   cred.ssid[sizeof(cred.ssid) - 1] = 0;
@@ -56,7 +60,121 @@ esp_err_t LoadCredentials(Credentials& cred)
   return ESP_OK;
 }
 
-void OnEvent(void*, esp_event_base_t base, int32_t id, void* data)
+esp_err_t SaveCredentials(const char* ssid, const char* password)
+{
+  Credentials cred = {};
+  cred.version = 1;
+  memcpy(cred.ssid, ssid, strlen(ssid));
+  memcpy(cred.password, password, strlen(password));
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
+  if (err == ESP_OK)
+  {
+    err = nvs_set_blob(nvs, kNvsKey, &cred, sizeof(cred));
+    if (err == ESP_OK)
+    {
+      err = nvs_commit(nvs);
+    }
+    nvs_close(nvs);
+  }
+  memset(&cred, 0, sizeof(cred));
+  return err;
+}
+
+// 删除热点参数并在同一次提交里记下来源 / Erase the credentials and record the source in
+// the same commit.
+esp_err_t ClearCredentials(EraseSource source)
+{
+  nvs_handle_t nvs;
+  esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
+  if (err != ESP_OK)
+  {
+    return err;
+  }
+  err = nvs_erase_key(nvs, kNvsKey);
+  if (err == ESP_ERR_NVS_NOT_FOUND)
+  {
+    err = ESP_OK;
+  }
+  if (err == ESP_OK)
+  {
+    err = nvs_set_u8(nvs, kNvsEraseKey, static_cast<uint8_t>(source));
+  }
+  if (err == ESP_OK)
+  {
+    err = nvs_commit(nvs);
+  }
+  nvs_close(nvs);
+  return err;
+}
+
+EraseSource LoadEraseSource()
+{
+  nvs_handle_t nvs;
+  uint8_t value = 0U;
+  if (nvs_open(kNvsNamespace, NVS_READONLY, &nvs) == ESP_OK)
+  {
+    (void)nvs_get_u8(nvs, kNvsEraseKey, &value);
+    nvs_close(nvs);
+  }
+  return static_cast<EraseSource>(value);
+}
+
+WifiStatus ReadStatus()
+{
+  WifiStatus st = {};
+  Credentials cred = {};
+  if (LoadCredentials(cred) == ESP_OK)
+  {
+    memcpy(st.ssid, cred.ssid, sizeof(st.ssid));
+  }
+  memset(&cred, 0, sizeof(cred));
+  st.storage_repaired = s_storage_repaired;
+  st.last_erase = LoadEraseSource();
+  st.reset_reason = LastResetReason();
+  LastWatchdogTasks(st.watchdog_task);
+  st.started = s_started;
+  if (st.started)
+  {
+    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t ip = {};
+    if (netif != nullptr && esp_netif_get_ip_info(netif, &ip) == ESP_OK &&
+        ip.ip.addr != 0)
+    {
+      st.connected = true;
+      memcpy(st.ip, &ip.ip.addr, 4);
+    }
+    wifi_ap_record_t ap = {};
+    if (st.connected && esp_wifi_sta_get_ap_info(&ap) == ESP_OK)
+    {
+      st.rssi = ap.rssi;
+    }
+  }
+  return st;
+}
+
+/// NVS 里的热点参数 / Credentials kept in NVS.
+class NvsWifiSettings final : public WifiSettings
+{
+ public:
+  WifiStatus Status() override { return ReadStatus(); }
+
+  SaveResult Save(const char* ssid, const char* password) override
+  {
+    if (!CredentialsValid(ssid, password))
+    {
+      return SaveResult::INVALID;
+    }
+    return SaveCredentials(ssid, password) == ESP_OK ? SaveResult::OK
+                                                     : SaveResult::STORAGE;
+  }
+
+  bool Clear(EraseSource source) override { return ClearCredentials(source) == ESP_OK; }
+
+  void RestartLater() override { XrDap::RestartLater(); }
+};
+
+void OnEvent(void*, esp_event_base_t base, int32_t id, void*)
 {
   if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START)
   {
@@ -69,30 +187,38 @@ void OnEvent(void*, esp_event_base_t base, int32_t id, void* data)
   }
   else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP)
   {
-    auto* ev = static_cast<ip_event_got_ip_t*>(data);
-    ESP_LOGI(TAG, "已获得 IP " IPSTR, IP2STR(&ev->ip_info.ip));
     xEventGroupSetBits(s_events, kGotIp);
   }
 }
 }  // namespace
 
-namespace XrDap
-{
-esp_err_t WifiStaStart(uint32_t timeout_ms)
+esp_err_t WifiStaInitStorage()
 {
   esp_err_t err = nvs_flash_init();
-  if (err != ESP_OK)
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
   {
-    return err;  // 不要擦除 NVS，里面存着热点参数
+    err = nvs_flash_erase();
+    if (err == ESP_OK)
+    {
+      err = nvs_flash_init();
+    }
+    if (err == ESP_OK)
+    {
+      s_storage_repaired = true;
+      err = ClearCredentials(EraseSource::STORAGE_REPAIR);
+    }
   }
+  return err;
+}
 
+esp_err_t WifiStaStart(uint32_t timeout_ms)
+{
   Credentials cred = {};
-  err = LoadCredentials(cred);
+  esp_err_t err = LoadCredentials(cred);
   if (err != ESP_OK)
   {
     return err;
   }
-  ESP_LOGI(TAG, "使用已保存的热点，SSID 长度 %u", (unsigned)strlen(cred.ssid));
 
   s_events = xEventGroupCreate();
   ESP_ERROR_CHECK(esp_netif_init());
@@ -124,81 +250,10 @@ esp_err_t WifiStaStart(uint32_t timeout_ms)
   return (bits & kGotIp) ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
-esp_err_t WifiStaSave(const char* ssid, const char* password)
+WifiSettings& WifiStaSettings()
 {
-  const size_t ssid_len = strlen(ssid);
-  const size_t pwd_len = strlen(password);
-  if (ssid_len < 1 || ssid_len > 32 || (pwd_len != 0 && (pwd_len < 8 || pwd_len > 63)))
-  {
-    return ESP_ERR_INVALID_ARG;
-  }
-  Credentials cred = {};
-  cred.version = 1;
-  memcpy(cred.ssid, ssid, ssid_len);
-  memcpy(cred.password, password, pwd_len);
-  nvs_handle_t nvs;
-  esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
-  if (err == ESP_OK)
-  {
-    err = nvs_set_blob(nvs, kNvsKey, &cred, sizeof(cred));
-    if (err == ESP_OK)
-    {
-      err = nvs_commit(nvs);
-    }
-    nvs_close(nvs);
-  }
-  memset(&cred, 0, sizeof(cred));
-  return err;
-}
-
-esp_err_t WifiStaClear()
-{
-  nvs_handle_t nvs;
-  esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &nvs);
-  if (err != ESP_OK)
-  {
-    return err;
-  }
-  err = nvs_erase_key(nvs, kNvsKey);
-  if (err == ESP_ERR_NVS_NOT_FOUND)
-  {
-    err = ESP_OK;
-  }
-  if (err == ESP_OK)
-  {
-    err = nvs_commit(nvs);
-  }
-  nvs_close(nvs);
-  return err;
-}
-
-WifiStatus WifiStaGetStatus()
-{
-  WifiStatus st = {};
-  Credentials cred = {};
-  if (LoadCredentials(cred) == ESP_OK)
-  {
-    memcpy(st.ssid, cred.ssid, sizeof(st.ssid));
-  }
-  memset(&cred, 0, sizeof(cred));
-  st.started = s_started;
-  if (st.started)
-  {
-    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
-    esp_netif_ip_info_t ip = {};
-    if (netif != nullptr && esp_netif_get_ip_info(netif, &ip) == ESP_OK &&
-        ip.ip.addr != 0)
-    {
-      st.connected = true;
-      memcpy(st.ip, &ip.ip.addr, 4);
-    }
-    wifi_ap_record_t ap = {};
-    if (st.connected && esp_wifi_sta_get_ap_info(&ap) == ESP_OK)
-    {
-      st.rssi = ap.rssi;
-    }
-  }
-  return st;
+  static NvsWifiSettings settings;
+  return settings;
 }
 
 WifiLink WifiStaGetLink()
