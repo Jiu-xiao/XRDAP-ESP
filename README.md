@@ -33,7 +33,7 @@
 
 “高速无线 DAP 调试器 Lite”板（ESP32-S3 模组，2×5 排针）用单独的固件 `xrdap-esp32-s3-lite.bin`：SWCLK 是 GPIO37；SWDIO 经板上的 SGM3157 模拟开关接到排针，固件把开关的选择脚 GPIO36 固定为低，用 GPIO47 收发 SWDIO。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi。模组要用不带 Octal PSRAM 的（WROOM-1-N4、N8，MINI-1-N4、N8），带 Octal PSRAM 的型号占用 GPIO35 到 37。
 
-ESP32-S2 板（ESP32-S2FH4，芯片内 4 MB Flash，没有 PSRAM，2×5 排针）用固件 `xrdap-esp32-s2.bin`：SWCLK 是 GPIO37，SWDIO 是 GPIO35（经 0 Ω 电阻，板上的 SGM3157 不焊），目标 nRESET 是 GPIO40（开漏，上电时不复位目标）。排针上的 TDI、TDO 留给以后的 JTAG，目标串口 TXD、RXD 暂不使用。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi，用法同 S3（2.1、2.3、2.4）。S2 是单核，内部 RAM 只有 320 KB，Wi-Fi 缓冲和任务栈都比 S3 小，采样路径不放进 IRAM。这个固件还没有在实物上测过。
+ESP32-S2 板（ESP32-S2FH4，芯片内 4 MB Flash，没有 PSRAM，2×5 排针）用固件 `xrdap-esp32-s2.bin`：SWCLK 是 GPIO37，SWDIO 是 GPIO35（经 0 Ω 电阻，板上的 SGM3157 不焊），目标 nRESET 是 GPIO40（开漏，上电时不复位目标）。排针上的 TDI、TDO 留给以后的 JTAG，目标串口 TXD、RXD 暂不使用。板上没有 USB 转串口芯片，只用原生 USB 和 Wi-Fi，用法同 S3（2.1、2.3、2.4）。S2 是单核，内部 RAM 只有 320 KB，Wi-Fi 缓冲和任务栈都比 S3 小；采样路径上最常用的代码放在 IRAM，指令缓存为 16 KB。这个固件已在实物上用 USB 采样（同时连着 Wi-Fi）测过。
 
 S3、S2 的状态灯（S3 开发板：GPIO48 的 RGB 灯；Lite 板：板上的 WS2812；S2 板：GPIO17 的 WS2812）。Lite 板的 SW2 键、S2 板的 KEY 键按住 5 秒清除热点参数并重启。开发板的 BOOT 键只用于进下载模式：它接在 USB 转串口芯片的自动下载电路上，串口线的 DTR/RTS 能把它拉低，所以固件运行时不读它；开发板清除 Wi-Fi 用 `xrdap wifi clear` 或命令行 `wifi clear`（2.6）。
 
@@ -142,7 +142,7 @@ xrdap wifi set lab 密码
 xrdap wifi status
 ```
 
-`lab` 换成热点名。保存后探针约 0.5 秒后重启并连接热点。换热点再 `set` 一次；`xrdap wifi clear` 清除后不再连 Wi-Fi。热点断了探针会一直重连。
+`lab` 换成热点名。热点必须是 2.4 GHz：这几块芯片都不支持 5 GHz，只开 5 GHz 的热点连不上（路由器常把两个频段合并成同一个名字，连不上时先确认 2.4 GHz 已开）。认证方式用 WPA2-Personal，开放网络也可以；仅 WPA3 的热点没有测过。保存后探针约 0.5 秒后重启并连接热点。换热点再 `set` 一次；`xrdap wifi clear` 清除后不再连 Wi-Fi。热点断了探针会一直重连。
 
 热点参数存在 NVS 里，删除它的有 `wifi clear`、0x86 清除命令、Lite 板的 SW2 长按，以及 NVS 分区损坏（写满或格式版本不符）时探针在启动时做的擦除重建。每次删除都记下来源。命令行 `wifi status` 和 0x86 的状态回复给出上次清除的来源和上次复位的原因（上电、软件重启、看门狗、异常、欠压），热点参数不见了时据此判断原因。
 
