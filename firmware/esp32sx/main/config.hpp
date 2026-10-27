@@ -134,35 +134,28 @@ constexpr uint32_t kWifiClearHoldMs = 5000;
 
 /// libxr 定时器任务优先级 / libxr timer task priority.
 constexpr unsigned kLibxrTimerPriority = 3;
-/// DAP Step() 线程优先级 / DAP Step() thread priority.
-constexpr unsigned kStepPriority = 10;
 
 #if CONFIG_IDF_TARGET_ESP32S2
 /// 所有任务所在的核（S2 为单核）/ Core running every task (the S2 is single-core).
 constexpr int kSwdCore = 0;
-// 单核 S2：采样高于 Wi-Fi(23) / lwIP(18)，中断仍可抢占。采样在节拍之间阻塞，
+// 单核 S2：执行任务高于 Wi-Fi(23) / lwIP(18)，中断仍可抢占。它在没有事做时阻塞，
 // 每帧之后仍留 max(15 us, 周期/8, 帧耗时/4) 给其他任务。
-// Single-core S2: sampling preempts Wi-Fi (23) / lwIP (18), but not interrupts.
-// It blocks between ticks and retains the Core's bounded inter-frame gap.
-/// 采样任务优先级 / Sampling task priority.
-constexpr unsigned kSamplingPriority = 24;
-static_assert(kSamplingPriority < configMAX_PRIORITIES,
-              "sampling priority must fit the FreeRTOS priority range");
-/// USB DAP 线程的栈；暂定值，见 probe_config.hpp / Stack of the USB DAP thread;
-/// provisional, see probe_config.hpp.
-constexpr uint32_t kStepStack = 6144;
+// Single-core S2: the execution task preempts Wi-Fi (23) / lwIP (18), but not interrupts.
+// It blocks when it has nothing to do and retains the Core's bounded inter-frame gap.
+/// 执行任务优先级 / Execution task priority.
+constexpr unsigned kDapPriority = 24;
+static_assert(kDapPriority < configMAX_PRIORITIES,
+              "DAP task priority must fit the FreeRTOS priority range");
 /// libxr 定时器任务的栈 / Stack of the libxr timer task.
 constexpr uint32_t kLibxrTimerStack = 4096;
 #else
-/// SWD 位带、DAP 的 Step() 线程、采样和网络服务所在的核。专用 GPIO 只能在创建它的核上
-/// 访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the DAP
-/// Step() thread, sampling and the network server. Dedicated GPIO is only accessible
+/// SWD 位带、执行任务（DAP 命令和采样）和网络服务所在的核。专用 GPIO 只能在创建它的核上
+/// 访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the
+/// execution task (DAP commands and sampling) and the network server. Dedicated GPIO is only accessible
 /// from its creating core; USB interrupts, Wi-Fi and lwIP live on core 0, hence core 1.
 constexpr int kSwdCore = 1;
-/// 采样任务优先级，为 SWD 核上最高 / Sampling task priority, the highest on the SWD core.
-constexpr unsigned kSamplingPriority = 14;
-/// USB DAP 线程的栈 / Stack of the USB DAP thread.
-constexpr uint32_t kStepStack = 8192;
+/// 执行任务优先级，为 SWD 核上最高 / Execution task priority, the highest on the SWD core.
+constexpr unsigned kDapPriority = 14;
 /// libxr 定时器任务的栈 / Stack of the libxr timer task.
 constexpr uint32_t kLibxrTimerStack = 8192;
 #endif

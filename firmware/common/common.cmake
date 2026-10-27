@@ -21,7 +21,7 @@ set(XRDAP_COMMON_SRCS
     "${XRDAP_COMMON_DIR}/probe/heap_report.cpp"
     "${XRDAP_COMMON_DIR}/probe/probe_info.cpp"
     "${XRDAP_COMMON_DIR}/probe/restart.cpp"
-    "${XRDAP_COMMON_DIR}/probe/sampler_task.cpp"
+    "${XRDAP_COMMON_DIR}/probe/tick_timer.cpp"
     ${XRDAP_CORE_SOURCES})
 set(XRDAP_COMMON_INCLUDES
     "${XRDAP_COMMON_DIR}/console"

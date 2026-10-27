@@ -35,16 +35,18 @@ constexpr unsigned kConsolePriority = 4;
 // smaller; provisional until each task's stack high-water mark is checked on hardware.
 /// TCP 和 USB/IP 服务任务的栈 / Stack of the TCP and USB/IP server task.
 constexpr uint32_t kNetStack = 6144;
-/// 采样任务的栈 / Stack of the sampling task.
-constexpr uint32_t kSamplerStack = 4096;
+/// 执行任务的栈（USB 命令、别的链路投来的请求和采样）；暂定值 / Stack of the execution
+/// task (USB commands, requests posted by other links, and sampling); provisional.
+constexpr uint32_t kDapStack = 6144;
 /// 命令行任务的栈 / Stack of the console task.
 // The supplied long run reached 656 bytes free before the extra diagnostic report.
 constexpr uint32_t kConsoleStack = 4096;
 #else
 /// TCP 和 USB/IP 服务任务的栈 / Stack of the TCP and USB/IP server task.
 constexpr uint32_t kNetStack = 12288;
-/// 采样任务的栈 / Stack of the sampling task.
-constexpr uint32_t kSamplerStack = 8192;
+/// 执行任务的栈（USB 命令、别的链路投来的请求和采样）/ Stack of the execution task (USB
+/// commands, requests posted by other links, and sampling).
+constexpr uint32_t kDapStack = 8192;
 /// 命令行任务的栈 / Stack of the console task.
 constexpr uint32_t kConsoleStack = 4096;
 #endif

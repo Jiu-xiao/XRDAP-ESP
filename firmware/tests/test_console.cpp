@@ -115,10 +115,10 @@ TEST(console_status_shows_watchdog_tasks)
   Console c;
   c.wifi.status.reset_reason = XrDap::ResetReason::WATCHDOG;
   std::memcpy(c.wifi.status.watchdog_task[0], "dap_serial", 11);
-  std::memcpy(c.wifi.status.watchdog_task[1], "dap_sampler", 12);
+  std::memcpy(c.wifi.status.watchdog_task[1], "dap", 4);
   c.Type("wifi status\r");
   CHECK(c.Printed("上次复位：看门狗"));
-  CHECK(c.Printed("看门狗超时时在运行：核 0 dap_serial，核 1 dap_sampler"));
+  CHECK(c.Printed("看门狗超时时在运行：核 0 dap_serial，核 1 dap"));
 }
 
 TEST(console_status_without_watchdog_record)

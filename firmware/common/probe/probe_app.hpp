@@ -22,7 +22,7 @@
 #include "mdns_service.hpp"
 #include "probe_config.hpp"
 #include "probe_info.hpp"
-#include "sampler_task.hpp"
+#include "tick_timer.hpp"
 #include "wifi_command.hpp"
 #include "wifi_sta.hpp"
 #include "xrdap/session/executor.hpp"
@@ -76,25 +76,49 @@ void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
                 static_cast<unsigned long>(Net::last_socket_error.load())));
 }
 
-/// @brief 设置 DAP_Info 身份，挂上 0x86 Wi-Fi 命令，给串口设租期，启动采样任务 / Set the
-///        DAP_Info identity, attach the 0x86 Wi-Fi command, give the serial link its
-///        lease and start the sampling task.
+/// @brief 创建执行任务：固定在 SWD 所在的核上，USB 命令、别的链路投来的请求和采样都在这里
+///        一件一件做 / Create the execution task: pinned to the core that drives SWD, where
+///        USB commands, requests posted by other links and sampling are done one after the
+///        other.
+/// @param core 必须是 SWD 所在的核 / Must be the core that drives SWD.
+/// @param priority 应为该核上最高 / Should be the highest on that core.
+/// @return 任务创建失败（内存不足）时返回 false / False when the task could not be created
+///         (out of memory).
+template <typename DapT>
+bool StartExecutionTask(ProbeCore<DapT>& probe, int core, unsigned priority)
+{
+  static GptimerTick tick(probe.vendor);
+  return xTaskCreatePinnedToCore(
+             +[](void* arg)
+             {
+               auto& core = *static_cast<ProbeCore<DapT>*>(arg);
+               tick.Create();
+               for (;;)
+               {
+                 core.exec.Run(tick, UINT32_MAX);
+               }
+             },
+             "dap", Config::kDapStack, &probe, priority, nullptr, core) == pdPASS;
+}
+
+/// @brief 设置 DAP_Info 身份，挂上 0x86 Wi-Fi 命令，启动执行任务 / Set the DAP_Info
+///        identity, attach the 0x86 Wi-Fi command and start the execution task.
 /// @param wifi 0x86 读写的 Wi-Fi 设置，生命周期需长于 probe / Wi-Fi settings behind 0x86;
 ///        must outlive probe.
 /// @param product DAP_Info 产品名，例如 "XR-DAP-S3" / DAP_Info product, e.g. "XR-DAP-S3".
 /// @param core SWD 所在的核 / Core that owns the SWD pins.
-/// @param sampling_priority 采样任务优先级 / Sampling task priority.
-/// @note 在 app_main 里、DAP 命令开始处理之前调用一次；采样任务建不起来时采样不可用 /
-///       Call once from app_main before DAP commands are processed; if the sampling task
-///       cannot be created, sampling is unavailable.
+/// @param priority 执行任务优先级 / Execution task priority.
+/// @return 执行任务建不起来时返回 false / False when the execution task cannot be created.
+/// @note 在 app_main 里、DAP 命令开始处理之前调用一次 / Call once from app_main before DAP
+///       commands are processed.
 template <typename DapT>
-void InstallProbe(ProbeCore<DapT>& probe, DapT& dap, WifiSettings& wifi,
-                  const char* product, int core, unsigned sampling_priority)
+bool InstallProbe(ProbeCore<DapT>& probe, DapT& dap, WifiSettings& wifi,
+                  const char* product, int core, unsigned priority)
 {
   SetProbeInfo(dap, ProbeIdentity{product, product, ProbeSerial(), kFirmwareVersion});
   probe.vendor.SetExtraCommand(WifiCommand::kCmd, WifiCommand::kFeature,
                                &WifiCommand::Handle, &wifi, &WifiCommand::Length);
-  (void)StartSamplerTask(probe.vendor, core, sampling_priority);
+  return StartExecutionTask(probe, core, priority);
 }
 
 /// 网络服务的参数 / Network service options.

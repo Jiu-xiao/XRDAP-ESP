@@ -51,8 +51,8 @@ constexpr int kCore = 0;
 // < lwIP 18 < sampling 19 < esp_timer 22 < Wi-Fi 23. Sampling blocks between ticks and
 // leaves at least 1/8 of each period to others, so it can sit above lwIP; it stays below
 // esp_timer and the Wi-Fi driver so the radio stack is not starved.
-/// 采样任务优先级 / Sampling task priority.
-constexpr unsigned kSamplingPriority = 19;
+/// 执行任务优先级 / Execution task priority.
+constexpr unsigned kDapPriority = 19;
 /// libxr 定时器任务优先级 / libxr timer task priority.
 constexpr unsigned kLibxrTimerPriority = 3;
 /// 串口 DAP 任务优先级 / Serial DAP task priority.
