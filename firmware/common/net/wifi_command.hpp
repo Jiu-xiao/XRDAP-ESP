@@ -22,7 +22,6 @@
 #include <cstdint>
 
 #include "wifi_settings.hpp"
-#include "xrdap/session/command_class.hpp"
 
 namespace XrDap
 {
@@ -59,10 +58,6 @@ class WifiCommand
   ///         operation unknown.
   /// @note 纯解析，任何上下文 / Pure parsing, any context.
   static bool Length(const uint8_t* req, uint16_t avail, uint16_t& len);
-
-  /// 只读查询（0x86 0x00）不需要拥有探针，保存和清除要 / The read-only query (0x86 0x00)
-  /// needs no ownership; save and clear do.
-  static constexpr FreeCommand kFreeQuery{2, {kCmd, 0x00U}};
 
  private:
   static bool Status(WifiSettings& settings, uint8_t* resp, uint16_t cap, uint16_t& out);

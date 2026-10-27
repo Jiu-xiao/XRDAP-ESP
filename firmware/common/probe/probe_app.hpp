@@ -30,8 +30,8 @@
 namespace XrDap
 {
 
-/// XRDAP-Core 的探针对象：会话主人、厂商扩展、DAP 活动和命令执行器 / XRDAP-Core probe
-/// objects: session owner, vendor extension, DAP activity and command executor.
+/// XRDAP-Core 的探针对象：厂商扩展、DAP 活动和命令执行器 / XRDAP-Core probe objects:
+/// vendor extension, DAP activity and command executor.
 /// @tparam DapT libxr DAP 类 / libxr DAP class.
 template <typename DapT>
 struct ProbeCore
@@ -41,22 +41,20 @@ struct ProbeCore
   /// @note app_main 里构造一次；dap 和 swd 的生命周期需长于本对象 / Construct once in
   ///       app_main; dap and swd must outlive this object.
   ProbeCore(DapT& dap, LibXR::Debug::Swd& swd)
-      : vendor(swd, session), exec(dap, session, vendor, activity)
+      : vendor(swd), exec(dap, vendor, activity)
   {
   }
 
-  SessionOwner session;  ///< 哪条传输拥有探针 / Which transport owns the probe.
   DapVendor vendor;      ///< 0x80 到 0x85 和附加的 0x86 / 0x80 to 0x85 plus 0x86.
   DapActivity activity;  ///< 给状态灯的 DAP 活动 / DAP activity for the status light.
   Executor<DapT> exec;   ///< 唯一的命令执行器 / The single command executor.
 };
 
-/// Extra lines in CDC heap output; no DAP command, session acquisition or SWD access.
+/// Extra lines in CDC heap output; no DAP command or SWD access.
 template <typename DapT>
 void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
 {
   auto& probe = *static_cast<ProbeCore<DapT>*>(probe_ctx);
-  const auto commands = probe.exec.CommandStats();
   char line[144];
   auto emit = [&](int n)
   {
@@ -67,15 +65,9 @@ void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
                                                   : sizeof(line) - 1U);
     }
   };
-  emit(snprintf(line, sizeof(line),
-                "probe owner=%u session=%lu sampling=%u usb_cmd=0x%02lx tcp_cmd=0x%02lx "
-                "busy=%lu\r\n",
-                static_cast<unsigned>(probe.session.Owner()),
-                static_cast<unsigned long>(probe.session.Session()),
-                static_cast<unsigned>(probe.vendor.Sampling()),
-                static_cast<unsigned long>(commands.last_usb_owner_command),
-                static_cast<unsigned long>(commands.last_tcp_owner_command),
-                static_cast<unsigned long>(commands.busy_replies)));
+  emit(snprintf(line, sizeof(line), "probe link=%u sampling=%u\r\n",
+                static_cast<unsigned>(probe.vendor.ConnectedLink()),
+                static_cast<unsigned>(probe.vendor.Sampling())));
   emit(snprintf(line, sizeof(line),
                 "net accepted=%lu closed=%lu errors=%lu errno=%lu\r\n",
                 static_cast<unsigned long>(Net::connections.load()),
@@ -102,8 +94,6 @@ void InstallProbe(ProbeCore<DapT>& probe, DapT& dap, WifiSettings& wifi,
   SetProbeInfo(dap, ProbeIdentity{product, product, ProbeSerial(), kFirmwareVersion});
   probe.vendor.SetExtraCommand(WifiCommand::kCmd, WifiCommand::kFeature,
                                &WifiCommand::Handle, &wifi, &WifiCommand::Length);
-  probe.exec.SetFreeCommands(&WifiCommand::kFreeQuery, 1U);
-  probe.session.SetLease(Transport::SERIAL, kSerialLeaseMs);
   (void)StartSamplerTask(probe.vendor, core, sampling_priority);
 }
 

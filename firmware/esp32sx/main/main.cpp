@@ -248,11 +248,11 @@ extern "C" void app_main(void)
       LibXR::ConstRawData{ProbeMac(), 6});
   usb.Init(false);
   usb.Start(false);
-  // USB 总线复位（拔线、主机复位）结束 USB 的会话 / A USB bus reset (unplug, host reset)
-  // ends the USB session.
-  probe.session.SetUsbResetSource([](void* ctx) -> uint32_t
-                                  { return static_cast<DapLink*>(ctx)->ResetCount(); },
-                                  &dap);
+  // USB 总线复位（拔线、主机复位）使 USB 上的连接作废 / A USB bus reset (unplug, host
+  // reset) lapses a connection on USB.
+  probe.vendor.SetUsbResetSource([](void* ctx) -> uint32_t
+                                 { return static_cast<DapLink*>(ctx)->ResetCount(); },
+                                 &dap);
 
   // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里创建。
   if constexpr (Config::kSerialLink)
