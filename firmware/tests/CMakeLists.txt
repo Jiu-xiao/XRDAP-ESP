@@ -29,7 +29,6 @@ add_executable(xrdap_esp_tests
     test_console.cpp
     test_wifi_command.cpp
     test_dap_tcp.cpp
-    test_usbip.cpp
     test_link_state.cpp
     test_timer_deadline.cpp
     ${COMMON}/console/console_core.cpp
@@ -43,10 +42,6 @@ target_include_directories(xrdap_esp_tests PRIVATE
     ${CORE}
     ${LIBXR_DAP_DIRS})
 target_link_libraries(xrdap_esp_tests PRIVATE xr)
-# USB/IP 描述符对照 XRDAP-Core 协议文档第 6 节 / USB/IP descriptors are checked against
-# section 6 of the XRDAP-Core protocol document.
-target_compile_definitions(xrdap_esp_tests PRIVATE
-    XRDAP_PROTOCOL_DOC="${CORE}/docs/protocol.en.md")
 if(MSVC)
   target_compile_options(xrdap_esp_tests PRIVATE /utf-8 /W4 /WX)
 else()

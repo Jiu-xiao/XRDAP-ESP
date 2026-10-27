@@ -92,6 +92,5 @@ extern "C" void app_main(void)
                                                &heap_report);
   mux.Start(Config::kTransportCore, Config::kSerialPriority);
 
-  (void)StartNetwork(probe, {Config::kChipName, Config::kUsbProductName,
-                             Config::kTransportCore, nullptr});
+  (void)StartNetwork(probe, {Config::kChipName, Config::kTransportCore, nullptr});
 }

@@ -329,5 +329,5 @@ extern "C" void app_main(void)
   (void)panel.Start(0);
 
   (void)StartNetwork(
-      probe, {Config::kChipName, Config::kUsbProductName, Config::kSwdCore, &net_client});
+      probe, {Config::kChipName, Config::kSwdCore, &net_client});
 }

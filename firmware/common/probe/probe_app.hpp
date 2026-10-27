@@ -112,9 +112,6 @@ struct NetworkOptions
 {
   /// mDNS TXT 里的芯片名，例如 "esp32s3" / Chip name for the mDNS TXT, e.g. "esp32s3".
   const char* chip;
-  /// USB/IP 虚拟设备的产品名，例如 "XR-DAP-S3 CMSIS-DAP" / Product name of the USB/IP
-  /// virtual device, e.g. "XR-DAP-S3 CMSIS-DAP".
-  const char* usb_product;
   /// 服务任务所在的核，须能访问 SWD / Core for the server task; must reach the SWD pins.
   int core;
   /// 有网络客户端时置 true，可为空（给状态灯）/ Set to true while a network client is
@@ -122,8 +119,8 @@ struct NetworkOptions
   std::atomic<bool>* client;
 };
 
-/// @brief 连 Wi-Fi，启动 TCP（OpenOCD）和 USB/IP 服务及 mDNS / Join Wi-Fi and start the
-///        TCP (OpenOCD) and USB/IP services plus mDNS.
+/// @brief 连 Wi-Fi，启动 TCP（OpenOCD）服务及 mDNS / Join Wi-Fi and start the TCP
+///        (OpenOCD) service plus mDNS.
 /// @return Wi-Fi 没有启动（没有热点参数）或服务任务建不起来时返回 false / False when
 ///         Wi-Fi is not started (no credentials) or the server task cannot be created.
 /// @note app_main 里调用一次。最多阻塞 Config::kWifiWaitMs；没连上时 Wi-Fi 在后台重连，
@@ -139,7 +136,6 @@ bool StartNetwork(ProbeCore<DapT>& probe, const NetworkOptions& opt)
     return false;
   }
   static DapTcpServer<Executor<DapT>> server(probe.exec, Config::kTcpPort, opt.client);
-  server.EnableUsbip(Config::kUsbipPort, opt.usb_product, ProbeSerial());
   if (!server.Start(opt.core))
   {
     return false;
