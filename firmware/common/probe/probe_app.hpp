@@ -15,7 +15,9 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdio>
 
+#include "console_core.hpp"
 #include "dap_tcp.hpp"
 #include "mdns_service.hpp"
 #include "probe_config.hpp"
@@ -48,6 +50,60 @@ struct ProbeCore
   DapActivity activity;  ///< 给状态灯的 DAP 活动 / DAP activity for the status light.
   Executor<DapT> exec;   ///< 唯一的命令执行器 / The single command executor.
 };
+
+/// Extra lines in CDC heap output; no DAP command, session acquisition or SWD access.
+template <typename DapT>
+void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
+{
+  auto& probe = *static_cast<ProbeCore<DapT>*>(probe_ctx);
+  const auto memory = probe.vendor.MemoryStats();
+  const auto commands = probe.exec.CommandStats();
+  const auto sampling = probe.vendor.SamplingStats();
+  char line[144];
+  auto emit = [&](int n)
+  {
+    if (n > 0)
+    {
+      write(ctx, line,
+            static_cast<size_t>(n) < sizeof(line) ? static_cast<size_t>(n)
+                                                  : sizeof(line) - 1U);
+    }
+  };
+  emit(snprintf(line, sizeof(line),
+                "probe owner=%u session=%lu sampling=%u usb_cmd=0x%02lx tcp_cmd=0x%02lx "
+                "busy=%lu\r\n",
+                static_cast<unsigned>(probe.session.Owner()),
+                static_cast<unsigned long>(probe.session.Session()),
+                static_cast<unsigned>(probe.vendor.Sampling()),
+                static_cast<unsigned long>(commands.last_usb_owner_command),
+                static_cast<unsigned long>(commands.last_tcp_owner_command),
+                static_cast<unsigned long>(commands.busy_replies)));
+  emit(snprintf(line, sizeof(line), "swd failures=%lu ack=%lu ec=%lu resyncs=%lu\r\n",
+                static_cast<unsigned long>(memory.failed_transactions),
+                static_cast<unsigned long>(memory.last_ack),
+                static_cast<unsigned long>(memory.last_error),
+                static_cast<unsigned long>(memory.resyncs)));
+  emit(snprintf(line, sizeof(line), "sample ticks=%lu frames=%lu skipped=%lu\r\n",
+                static_cast<unsigned long>(sampling.ticks),
+                static_cast<unsigned long>(sampling.frames),
+                static_cast<unsigned long>(sampling.skipped)));
+  emit(snprintf(line, sizeof(line),
+                "sample max_frame_us=%lu max_wake_us=%lu merged_callbacks=%lu "
+                "merged_ticks=%lu\r\n",
+                static_cast<unsigned long>(sampling.max_frame_us),
+                static_cast<unsigned long>(sampling.max_wake_us),
+                static_cast<unsigned long>(sampling.merged_callbacks),
+                static_cast<unsigned long>(sampling.merged_ticks)));
+  emit(snprintf(line, sizeof(line), "sample swd_failures=%lu swd_resyncs=%lu\r\n",
+                static_cast<unsigned long>(sampling.swd_failures),
+                static_cast<unsigned long>(sampling.swd_resyncs)));
+  emit(snprintf(line, sizeof(line),
+                "net accepted=%lu closed=%lu errors=%lu errno=%lu\r\n",
+                static_cast<unsigned long>(Net::connections.load()),
+                static_cast<unsigned long>(Net::disconnections.load()),
+                static_cast<unsigned long>(Net::socket_errors.load()),
+                static_cast<unsigned long>(Net::last_socket_error.load())));
+}
 
 /// @brief 设置 DAP_Info 身份，挂上 0x86 Wi-Fi 命令，给串口设租期，启动采样任务 / Set the
 ///        DAP_Info identity, attach the 0x86 Wi-Fi command, give the serial link its
