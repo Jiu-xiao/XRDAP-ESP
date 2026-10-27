@@ -41,7 +41,14 @@
 #include "dedic_gpio_pin.hpp"
 #include "esp_attr.h"
 #include "esp_cpu.h"
+#include "freertos/FreeRTOS.h"
 #include "hal/dedic_gpio_cpu_ll.h"
+
+#if CONFIG_IDF_TARGET_ESP32S2
+#define XRDAP_S2_SWD_IRAM IRAM_ATTR
+#else
+#define XRDAP_S2_SWD_IRAM
+#endif
 
 namespace XrDap
 {
@@ -76,14 +83,21 @@ constexpr size_t kSwdFastLevels = 12;
 using SwdFastXferFn = LibXR::ErrorCode (*)(const SwdFastPins&,
                                            const LibXR::Debug::SwdProtocol::Request&,
                                            LibXR::Debug::SwdProtocol::Response&);
-/// 取某一档的传输函数，level 需小于 kSwdFastLevels；代码量大，放在 flash 里，见
-/// swd_fast.cpp / Get the transfer function of a level; level must be below
-/// kSwdFastLevels. The code is large and lives in flash, see swd_fast.cpp.
+/// 取某一档的传输函数，level 需小于 kSwdFastLevels；多数档位在 Flash，平台的常驻档位见
+/// swd_fast.cpp / Get a transfer function; level must be below kSwdFastLevels.
+/// Most levels live in flash; see swd_fast.cpp for the platform's resident level.
 SwdFastXferFn SwdFastTransferFn(size_t level);
 /// 测量某一档的半周期，单位 1/16 CPU 周期；调用前 SWDIO 应已释放，结束时 SWCLK 低 /
 /// Measure the half period of a level in 1/16 CPU cycle; SWDIO must be released before
 /// the call and SWCLK is left low.
 uint32_t SwdFastMeasureHalfX16(size_t level, const SwdFastPins& pins);
+
+#if CONFIG_IDF_TARGET_ESP32S2
+/// 最近一次选用的高速档位索引；尚未选用时 UINT32_MAX。低速模式不会更新此诊断值。
+/// Last selected fast-level index, or UINT32_MAX before selection. Paced mode
+/// does not update this diagnostic value.
+uint32_t SwdFastLastLevel();
+#endif
 
 /// 专用 GPIO 上的 SWD 位带引擎 / SWD bit-bang engine on dedicated GPIO.
 /// @note 非线程安全；所有方法只能由同一个任务在创建 swclk、swdio 的核上调用 / Not
@@ -248,13 +262,29 @@ class SwdEngine final : public LibXR::Debug::Swd
   /// 执行一次 SWD 传输；协议层的 ACK/校验结果写入 resp，返回值只表示执行本身 / Run one
   /// SWD transfer; ACK and parity results go into resp, the return value only reports the
   /// execution itself.
-  LibXR::ErrorCode Transfer(const Request& req, Response& resp) override
+  LibXR::ErrorCode XRDAP_S2_SWD_IRAM Transfer(const Request& req, Response& resp) override
   {
+#if CONFIG_IDF_TARGET_ESP32S2
+    // S2 shares one core with Wi-Fi/lwIP. An ISR in the middle of a paced SWD
+    // request can stretch a half-cycle far enough for the target to lose the
+    // request framing; after that every read reports ACK=PROTOCOL until a line
+    // reset happens. Keep one request electrically contiguous. The section is
+    // bounded to a single SWD transfer and never waits on a task or socket.
+    portENTER_CRITICAL(&transfer_mux_);
+#endif
+    LibXR::ErrorCode ec;
     if (fast_ != nullptr)
     {
-      return fast_(Pins(), req, resp);
+      ec = fast_(Pins(), req, resp);
     }
-    return PacedTransfer(req, resp);
+    else
+    {
+      ec = PacedTransfer(req, resp);
+    }
+#if CONFIG_IDF_TARGET_ESP32S2
+    portEXIT_CRITICAL(&transfer_mux_);
+#endif
+    return ec;
   }
 
  private:
@@ -278,7 +308,10 @@ class SwdEngine final : public LibXR::Debug::Swd
     uint32_t half;  // 半周期
   };
 
-  static inline uint32_t Now() { return esp_cpu_get_cycle_count(); }
+  static inline __attribute__((always_inline)) uint32_t Now()
+  {
+    return esp_cpu_get_cycle_count();
+  }
 
   // 写整个专用 GPIO 输出寄存器：本工程只用到 SWCLK、SWDIO 两个通道，一条指令同时改
   // 两个引脚。
@@ -287,10 +320,13 @@ class SwdEngine final : public LibXR::Debug::Swd
     dedic_gpio_cpu_ll_write_all(value);
   }
 
-  inline void Drive() { swdio_.SetOutputEnable(true); }
-  inline void Release() { swdio_.SetOutputEnable(false); }
+  inline __attribute__((always_inline)) void Drive() { swdio_.SetOutputEnable(true); }
+  inline __attribute__((always_inline)) void Release() { swdio_.SetOutputEnable(false); }
 
-  inline Pacer Begin() const { return Pacer{Now(), half_}; }
+  inline __attribute__((always_inline)) Pacer Begin() const
+  {
+    return Pacer{Now(), half_};
+  }
 
   static inline __attribute__((always_inline)) uint32_t WaitEdge(const Pacer& p)
   {
@@ -346,9 +382,39 @@ class SwdEngine final : public LibXR::Debug::Swd
   }
 
   // 最后半个周期走完后回到空闲电平：SWCLK 低，SWDIO 高。
-  inline void End(Pacer& p) const { Edge(p, dm_); }
+  inline __attribute__((always_inline)) void End(Pacer& p) const { Edge(p, dm_); }
 
-  LibXR::ErrorCode PacedTransfer(const Request& req, Response& resp)
+  // Keep parity local even in Debug builds: a compiler runtime helper in flash
+  // would defeat the bounded IRAM path.
+  static inline __attribute__((always_inline)) uint32_t Parity(uint32_t v)
+  {
+    v ^= v >> 16;
+    v ^= v >> 8;
+    v ^= v >> 4;
+    v ^= v >> 2;
+    v ^= v >> 1;
+    return v & 1U;
+  }
+
+  // Force these tiny protocol operations inline even at -Og. An out-of-line
+  // constexpr helper would need a flash call/literal from the S2 IRAM section.
+  static inline __attribute__((always_inline)) uint8_t RequestByte(const Request& req)
+  {
+    const uint8_t ap = req.port == LibXR::Debug::SwdProtocol::Port::AP ? 1U : 0U;
+    const uint8_t read = req.rnw ? 1U : 0U;
+    const uint8_t a2 = req.addr2b & 1U;
+    const uint8_t a3 = (req.addr2b >> 1U) & 1U;
+    return 0x81U | (ap << 1U) | (read << 2U) | (a2 << 3U) | (a3 << 4U) |
+           ((ap ^ read ^ a2 ^ a3) << 5U);
+  }
+
+  static inline __attribute__((always_inline)) Ack DecodeAck(uint32_t bits)
+  {
+    return (bits == 0U || bits == 1U || bits == 2U || bits == 4U) ? static_cast<Ack>(bits)
+                                                                  : Ack::PROTOCOL;
+  }
+
+  LibXR::ErrorCode XRDAP_S2_SWD_IRAM PacedTransfer(const Request& req, Response& resp)
   {
     resp.ack = Ack::PROTOCOL;
     resp.rdata = 0U;
@@ -356,7 +422,7 @@ class SwdEngine final : public LibXR::Debug::Swd
 
     Drive();
     Pacer p = Begin();
-    ClockOutBits(p, LibXR::Debug::SwdProtocol::MakeRequest(req), 8U);
+    ClockOutBits(p, RequestByte(req), 8U);
 
     // 释放 SWDIO，换向时钟，然后读 3 位 ACK
     Release();
@@ -366,7 +432,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     {
       ack |= (ClockIn(p) ? 1U : 0U) << i;
     }
-    resp.ack = LibXR::Debug::SwdProtocol::DecodeAck(static_cast<uint8_t>(ack));
+    resp.ack = DecodeAck(ack);
 
     if (resp.ack != Ack::OK)
     {
@@ -397,7 +463,7 @@ class SwdEngine final : public LibXR::Debug::Swd
       End(p);
       Drive();
       resp.rdata = data;
-      resp.parity_ok = (parity == static_cast<uint32_t>(__builtin_parity(data)));
+      resp.parity_ok = (parity == Parity(data));
     }
     else
     {
@@ -405,7 +471,7 @@ class SwdEngine final : public LibXR::Debug::Swd
       Drive();
       p.t += kOutputEnableSettle;
       ClockOutBits(p, req.wdata, 32U);
-      ClockOut(p, static_cast<uint32_t>(__builtin_parity(req.wdata)));
+      ClockOut(p, Parity(req.wdata));
       if (req.port == LibXR::Debug::SwdProtocol::Port::AP)
       {
         for (uint32_t i = 0; i < idle_ap_write_; ++i)
@@ -430,7 +496,10 @@ class SwdEngine final : public LibXR::Debug::Swd
     }
   }
 
-  SwdFastPins Pins() const { return SwdFastPins{cm_, dm_, im_, &swdio_, idle_ap_write_}; }
+  inline __attribute__((always_inline)) SwdFastPins Pins() const
+  {
+    return SwdFastPins{cm_, dm_, im_, &swdio_, idle_ap_write_};
+  }
 
   uint32_t fast_half_x16_[kFastCount] = {};
   FastXfer fast_ = nullptr;
@@ -488,6 +557,11 @@ class SwdEngine final : public LibXR::Debug::Swd
   uint32_t half_ = 0U;
   uint32_t idle_ap_write_ = 0U;
   uint32_t min_half_ = 2U;
+#if CONFIG_IDF_TARGET_ESP32S2
+  portMUX_TYPE transfer_mux_ = portMUX_INITIALIZER_UNLOCKED;
+#endif
 };
 
 }  // namespace XrDap
+
+#undef XRDAP_S2_SWD_IRAM

@@ -19,6 +19,10 @@
 #include "sdkconfig.h"
 #include "swd_engine.hpp"
 
+#if CONFIG_IDF_TARGET_ESP32S2
+#include <atomic>
+#endif
+
 // 读专用 GPIO 输入的 CPU 指令：S3 在 EE 扩展里，S2 是 get_gpio_in（与 IDF 的
 // dedic_gpio_cpu_ll.h 一致）/ The CPU instruction that reads the dedicated-GPIO inputs:
 // in the EE extension on the S3, get_gpio_in on the S2 (as in IDF's dedic_gpio_cpu_ll.h).
@@ -40,6 +44,9 @@ namespace XrDap
 {
 namespace
 {
+#if CONFIG_IDF_TARGET_ESP32S2
+std::atomic<uint32_t> last_fast_level{UINT32_MAX};
+#endif
 using Request = LibXR::Debug::SwdProtocol::Request;
 using Response = LibXR::Debug::SwdProtocol::Response;
 using Ack = LibXR::Debug::SwdProtocol::Ack;
@@ -265,7 +272,17 @@ constexpr Level kLevels[kSwdFastLevels] = {
 };
 }  // namespace
 
-SwdFastXferFn SwdFastTransferFn(size_t level) { return kLevels[level].xfer; }
+SwdFastXferFn SwdFastTransferFn(size_t level)
+{
+#if CONFIG_IDF_TARGET_ESP32S2
+  last_fast_level.store(static_cast<uint32_t>(level), std::memory_order_relaxed);
+#endif
+  return kLevels[level].xfer;
+}
+
+#if CONFIG_IDF_TARGET_ESP32S2
+uint32_t SwdFastLastLevel() { return last_fast_level.load(std::memory_order_relaxed); }
+#endif
 
 uint32_t SwdFastMeasureHalfX16(size_t level, const SwdFastPins& pins)
 {

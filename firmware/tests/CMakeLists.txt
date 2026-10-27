@@ -18,6 +18,7 @@ add_executable(xrdap_esp_tests
     test_dap_tcp.cpp
     test_usbip.cpp
     test_link_state.cpp
+    test_timer_deadline.cpp
     ${COMMON}/console/console_core.cpp
     ${COMMON}/net/wifi_command.cpp)
 target_include_directories(xrdap_esp_tests PRIVATE
@@ -38,3 +39,12 @@ endif()
 
 enable_testing()
 add_test(NAME xrdap_esp_tests COMMAND xrdap_esp_tests)
+
+if(UNIX)
+  add_executable(xrdap_socket_tests test_socket_io.cpp)
+  target_include_directories(xrdap_socket_tests PRIVATE
+      "${CMAKE_CURRENT_LIST_DIR}/posix" "${COMMON}/net")
+  target_compile_options(xrdap_socket_tests PRIVATE -Wall -Wextra -Werror)
+  add_test(NAME xrdap_socket_tests COMMAND xrdap_socket_tests)
+  set_tests_properties(xrdap_socket_tests PROPERTIES TIMEOUT 15)
+endif()

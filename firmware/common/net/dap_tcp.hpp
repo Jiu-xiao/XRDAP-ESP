@@ -109,7 +109,7 @@ class DapTcpServer
     return fd;
   }
 
-  static void Configure(int fd)
+  static bool Configure(int fd)
   {
     int one = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
@@ -123,10 +123,14 @@ class DapTcpServer
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &keep_interval, sizeof(keep_interval));
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &keep_count, sizeof(keep_count));
+    // Keepalive cannot detect a live peer whose application stopped reading. Bound
+    // a blocked response write as well; idle debugging connections remain valid.
+    return Net::ConfigureSendTimeout(fd);
   }
 
   void Connected()
   {
+    Net::connections.fetch_add(1U);
     if (client_ != nullptr)
     {
       client_->store(true);
@@ -138,6 +142,7 @@ class DapTcpServer
   void Disconnected()
   {
     exec_.exec.EndSession(Transport::TCP);
+    Net::disconnections.fetch_add(1U);
     if (client_ != nullptr)
     {
       client_->store(false);
@@ -176,7 +181,11 @@ class DapTcpServer
       {
         continue;
       }
-      Configure(fd);
+      if (!Configure(fd))
+      {
+        close(fd);
+        continue;
+      }
       Net::SocketStream io{fd};
       if (!is_usbip)
       {

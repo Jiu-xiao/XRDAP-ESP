@@ -33,6 +33,10 @@ void EspHeapReport::Write(ConsoleWriteFn write, void* ctx)
                  static_cast<unsigned>(tasks[i].usStackHighWaterMark));
     write(ctx, line, static_cast<size_t>(n));
   }
+  if (extra_ != nullptr)
+  {
+    extra_(write, ctx, extra_ctx_);
+  }
 }
 
 }  // namespace XrDap

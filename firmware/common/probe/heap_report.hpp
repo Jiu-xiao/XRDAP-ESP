@@ -19,9 +19,19 @@ namespace XrDap
 class EspHeapReport final : public HeapReport
 {
  public:
+  using ExtraReport = void (*)(ConsoleWriteFn, void*, void*);
+  void SetExtraReport(ExtraReport report, void* ctx)
+  {
+    extra_ = report;
+    extra_ctx_ = ctx;
+  }
   /// @note 在命令行任务里调用；栈上用约 1 KB 放任务列表 / Called in the console task;
   ///       uses about 1 KB of stack for the task list.
   void Write(ConsoleWriteFn write, void* ctx) override;
+
+ private:
+  ExtraReport extra_ = nullptr;
+  void* extra_ctx_ = nullptr;
 };
 
 }  // namespace XrDap

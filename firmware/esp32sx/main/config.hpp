@@ -12,10 +12,10 @@
 //         没有 USB 转串口芯片，不开串口链路；GPIO48 的 WS2812 显示状态，GPIO21 的按键
 //         长按 5 s 清除 Wi-Fi（hold_button.hpp）。
 //   S2：ESP32-S2FH4 板（芯片内 4 MB Flash，没有 PSRAM），SWCLK GPIO37，SWDIO GPIO35
-//         （经 0 Ω 电阻，模拟开关不焊），nRESET GPIO40；没有 USB 转串口芯片，不开串口
-//         链路；GPIO17 的 WS2812 显示状态，GPIO21 的按键长按 5 s 清除 Wi-Fi，BOOT 键
-//         只用于下载。排针上的 TDI（GPIO38）、TDO（GPIO36）留给 JTAG，目标串口（GPIO42
-//         TXD、GPIO41 RXD）暂不使用。单核：所有任务都在核 0。
+//         （经 0 Ω 电阻，模拟开关不焊），nRESET GPIO40；没有 USB 转串口芯片，正常配置
+//         不开排针串口；GPIO17 的 WS2812 显示状态，GPIO21 的按键长按 5 s 清除 Wi-Fi。
+//         BOOT 键只用于下载。排针上的 TDI（GPIO38）、TDO（GPIO36）留给 JTAG，串口（GPIO42
+//         TXD、GPIO41 RXD）仅诊断配置使用，115200 8N1。单核：所有任务都在核 0。
 //
 // Fixed parameters of the XR-DAP firmware for the ESP32-S2 and ESP32-S3 with native USB
 // OTG; shared ones are in probe_config.hpp. The board comes from Kconfig XRDAP_BOARD
@@ -33,20 +33,70 @@
 //            button for 5 s clears Wi-Fi (hold_button.hpp).
 //   S2:      ESP32-S2FH4 board (4 MB flash in the package, no PSRAM), SWCLK GPIO37,
 //            SWDIO GPIO35 (through a 0 ohm resistor, the analog switch not fitted),
-//            nRESET GPIO40; no USB-UART chip, so no serial link; the WS2812 on GPIO17
-//            shows the state, holding the GPIO21 button for 5 s clears Wi-Fi, and BOOT is
+//            nRESET GPIO40; no USB-UART chip, so the normal profile has no serial link;
+//            the WS2812 on GPIO17 shows the state, holding the GPIO21 button for 5 s
+//            clears Wi-Fi, and BOOT is
 //            for download mode only. TDI (GPIO38) and TDO (GPIO36) on the header are kept
-//            for JTAG; the target UART (GPIO42 TXD, GPIO41 RXD) is not used yet. Single
-//            core: every task runs on core 0.
+//            for JTAG; the header UART (GPIO42 TXD, GPIO41 RXD) is used only by
+//            diagnostic profiles, at 115200 8N1. Single core: every task runs on core 0.
 
 #include <cstdint>
 
+#include "freertos/FreeRTOS.h"
 #include "probe_config.hpp"
 #include "sdkconfig.h"
 #include "xrdap/probe/family.hpp"
 
+// 诊断配置需要对应的 defaults 文件，防止沿用别的构建的控制台设置。
+// Diagnostic profiles require their matching defaults file, not a stale console setup.
+#if CONFIG_XRDAP_S2_PROFILE_BOOT_DIAG || CONFIG_XRDAP_S2_PROFILE_CDC_ONLY
+#if !CONFIG_ESP_CONSOLE_UART_CUSTOM || CONFIG_ESP_CONSOLE_UART_NUM != 0 ||            \
+    CONFIG_ESP_CONSOLE_UART_TX_GPIO != 42 || CONFIG_ESP_CONSOLE_UART_RX_GPIO != 41 || \
+    CONFIG_ESP_CONSOLE_UART_BAUDRATE != 115200
+#error "S2 diagnostics require the matching sdkconfig.defaults.s2-* UART overlay"
+#endif
+#if CONFIG_LOG_DEFAULT_LEVEL < 3 || CONFIG_BOOTLOADER_LOG_LEVEL < 3 || \
+    !CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_ENABLE ||                 \
+    !CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT
+#error "S2 diagnostics require INFO logs, assertion messages and panic output"
+#endif
+#endif
+
+#if CONFIG_XRDAP_S2_PROFILE_UART_DAP
+#if !CONFIG_ESP_CONSOLE_NONE || CONFIG_BOOTLOADER_LOG_LEVEL != 0 || \
+    CONFIG_LOG_DEFAULT_LEVEL != 0 || !CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT
+#error "S2 UART DAP requires silent bootloader, application and panic output"
+#endif
+#endif
+
+#if CONFIG_XRDAP_S2_PROFILE_BOOT_DIAG || CONFIG_XRDAP_S2_PROFILE_UART_DAP || \
+    CONFIG_XRDAP_S2_PROFILE_CDC_ONLY
+#if CONFIG_ESP_CONSOLE_USB_CDC || CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || \
+    CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG
+#error "S2 diagnostics must not share USB OTG or UART with another console"
+#endif
+#endif
+
 namespace XrDap::Config
 {
+#if CONFIG_XRDAP_S2_PROFILE_BOOT_DIAG
+constexpr bool kS2BootDiag = true;
+#else
+constexpr bool kS2BootDiag = false;
+#endif
+#if CONFIG_XRDAP_S2_PROFILE_UART_DAP
+constexpr bool kS2UartDap = true;
+#else
+constexpr bool kS2UartDap = false;
+#endif
+#if CONFIG_XRDAP_S2_PROFILE_CDC_ONLY
+constexpr bool kS2CdcOnly = true;
+#else
+constexpr bool kS2CdcOnly = false;
+#endif
+/// 排针日志配置 / Profiles that emit diagnostic logs on the header UART.
+constexpr bool kS2Diagnostics = kS2BootDiag || kS2CdcOnly;
+
 #if CONFIG_IDF_TARGET_ESP32S2
 /// DAP_Info 产品名 / DAP_Info product name.
 inline constexpr char kProductName[] = "XR-DAP-S2";
@@ -80,9 +130,9 @@ constexpr int kSwdioSelectGpio = -1;
 /// 目标 nRESET 引脚（开漏，上电释放），-1 表示没有 / Target nRESET pin (open drain,
 /// released at power-up); -1 when there is none.
 constexpr int kNresetGpio = 40;
-/// 是否启用串口 DAP 链路；S2 板没有 USB 转串口芯片 / Enable the serial DAP link; the S2
-/// board has no USB-UART chip.
-constexpr bool kSerialLink = false;
+/// 排针串口仅用于 UART_DAP 诊断 / The header serial link is for UART_DAP diagnostics
+/// only.
+constexpr bool kSerialLink = kS2UartDap;
 /// 状态灯（WS2812，3.3 V 供电）数据脚 / Status light (WS2812, 3.3 V supply) data pin.
 constexpr int kStatusLedGpio = 17;
 /// Wi-Fi 清除按键（按下接地）/ Wi-Fi clear button (shorts to ground).
@@ -139,17 +189,14 @@ constexpr unsigned kStepPriority = 10;
 #if CONFIG_IDF_TARGET_ESP32S2
 /// 所有任务所在的核（S2 为单核）/ Core running every task (the S2 is single-core).
 constexpr int kSwdCore = 0;
-// 优先级从低到高：状态灯、按键 2 < libxr 定时器 3 < 命令行 4 < USB DAP、网络服务 10 <
-// lwIP 18 < 采样 19 < esp_timer 22 < Wi-Fi 23。采样在节拍之间阻塞，XRDAP-Core 每帧之后
-// 至少留 max(15 µs, 周期/8, 本帧耗时/4) 给别的任务，所以可以排在 lwIP 之上；它低于
-// esp_timer 和 Wi-Fi 驱动，不拖住无线协议栈。与 C3 相同。
-// Priorities low to high: status light and button 2 < libxr timer 3 < console 4 < USB
-// DAP and network server 10 < lwIP 18 < sampling 19 < esp_timer 22 < Wi-Fi 23. Sampling
-// blocks between ticks and XRDAP-Core leaves at least max(15 us, period/8, frame
-// time/4) to the others after every frame, so it can sit above lwIP; it stays below
-// esp_timer and the Wi-Fi driver so the radio stack is not starved. As on the C3.
+// 单核 S2：采样高于 Wi-Fi(23) / lwIP(18)，中断仍可抢占。采样在节拍之间阻塞，
+// 每帧之后仍留 max(15 us, 周期/8, 帧耗时/4) 给其他任务。
+// Single-core S2: sampling preempts Wi-Fi (23) / lwIP (18), but not interrupts.
+// It blocks between ticks and retains the Core's bounded inter-frame gap.
 /// 采样任务优先级 / Sampling task priority.
-constexpr unsigned kSamplingPriority = 19;
+constexpr unsigned kSamplingPriority = 24;
+static_assert(kSamplingPriority < configMAX_PRIORITIES,
+              "sampling priority must fit the FreeRTOS priority range");
 /// USB DAP 线程的栈；暂定值，见 probe_config.hpp / Stack of the USB DAP thread;
 /// provisional, see probe_config.hpp.
 constexpr uint32_t kStepStack = 6144;
@@ -171,6 +218,14 @@ constexpr uint32_t kLibxrTimerStack = 8192;
 
 /// 串口 UART 号 / Serial UART number.
 constexpr int kSerialUart = 0;
+#if CONFIG_IDF_TARGET_ESP32S2
+/// 排针 TXD（接 USB 转串口的 RX）/ Header TXD (connect to USB-UART RX).
+constexpr int kSerialTxGpio = 42;
+/// 排针 RXD（接 USB 转串口的 TX）/ Header RXD (connect to USB-UART TX).
+constexpr int kSerialRxGpio = 41;
+/// 初始诊断使用保守速率 / Conservative baud rate for initial bring-up.
+constexpr uint32_t kSerialBaud = 115200;
+#else
 /// 串口 TX 引脚 / Serial TX pin.
 constexpr int kSerialTxGpio = 43;
 /// 串口 RX 引脚 / Serial RX pin.
@@ -178,6 +233,7 @@ constexpr int kSerialRxGpio = 44;
 /// 串口波特率，取板上 USB 转串口芯片（CH343）能稳定工作的最高速率 / Serial baud rate,
 /// the highest the on-board USB-UART chip (CH343) runs reliably.
 constexpr uint32_t kSerialBaud = 4000000;
+#endif
 /// 串口 DAP 任务优先级 / Serial DAP task priority.
 constexpr unsigned kSerialPriority = 12;
 }  // namespace XrDap::Config
