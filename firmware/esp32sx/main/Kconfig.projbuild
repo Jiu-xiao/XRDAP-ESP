@@ -20,33 +20,8 @@ menu "XR-DAP"
             depends on IDF_TARGET_ESP32S2
     endchoice
 
-    choice XRDAP_S2_PROFILE
-        prompt "ESP32-S2 bring-up profile"
-        depends on IDF_TARGET_ESP32S2
-        default XRDAP_S2_PROFILE_NORMAL
-        help
-            Use a separate build directory and SDKCONFIG for each profile. Diagnostic
-            profiles require their matching sdkconfig.defaults.s2-* overlay; see
-            docs/s2-bringup.md. They do not change the normal S3 build.
-
-        config XRDAP_S2_PROFILE_NORMAL
-            bool "Normal: USB DAP + CDC and Wi-Fi"
-
-        config XRDAP_S2_PROFILE_BOOT_DIAG
-            bool "Boot diagnostics: full application with header UART logs"
-
-        config XRDAP_S2_PROFILE_UART_DAP
-            bool "UART DAP: header UART only, no USB or network"
-
-        config XRDAP_S2_PROFILE_CDC_ONLY
-            bool "CDC only: USB CDC and header UART logs, no SWD or network"
-    endchoice
-
     config XRDAP_VERSION_SUFFIX
         string "Firmware version suffix"
-        default "-preview-boot-diag" if XRDAP_S2_PROFILE_BOOT_DIAG
-        default "-preview-uart-dap" if XRDAP_S2_PROFILE_UART_DAP
-        default "-preview-cdc-only" if XRDAP_S2_PROFILE_CDC_ONLY
         default "-preview" if XRDAP_BOARD_S2
         default ""
         help
