@@ -12,10 +12,10 @@
 //         没有 USB 转串口芯片，不开串口链路；GPIO48 的 WS2812 显示状态，GPIO21 的按键
 //         长按 5 s 清除 Wi-Fi（hold_button.hpp）。
 //   S2：ESP32-S2FH4 板（芯片内 4 MB Flash，没有 PSRAM），SWCLK GPIO37，SWDIO GPIO35
-//         （经 0 Ω 电阻，模拟开关不焊），nRESET GPIO40；没有 USB 转串口芯片，正常配置
-//         不开排针串口；GPIO17 的 WS2812 显示状态，GPIO21 的按键长按 5 s 清除 Wi-Fi。
+//         （经 0 Ω 电阻，模拟开关不焊），nRESET GPIO40；没有 USB 转串口芯片，不开排针
+//         串口；GPIO17 的 WS2812 显示状态，GPIO21 的按键长按 5 s 清除 Wi-Fi。
 //         BOOT 键只用于下载。排针上的 TDI（GPIO38）、TDO（GPIO36）留给 JTAG，串口（GPIO42
-//         TXD、GPIO41 RXD）仅诊断配置使用，115200 8N1。单核：所有任务都在核 0。
+//         TXD、GPIO41 RXD）固件不使用。单核：所有任务都在核 0。
 //
 // Fixed parameters of the XR-DAP firmware for the ESP32-S2 and ESP32-S3 with native USB
 // OTG; shared ones are in probe_config.hpp. The board comes from Kconfig XRDAP_BOARD
@@ -33,12 +33,12 @@
 //            button for 5 s clears Wi-Fi (hold_button.hpp).
 //   S2:      ESP32-S2FH4 board (4 MB flash in the package, no PSRAM), SWCLK GPIO37,
 //            SWDIO GPIO35 (through a 0 ohm resistor, the analog switch not fitted),
-//            nRESET GPIO40; no USB-UART chip, so the normal profile has no serial link;
+//            nRESET GPIO40; no USB-UART chip, so no serial link;
 //            the WS2812 on GPIO17 shows the state, holding the GPIO21 button for 5 s
 //            clears Wi-Fi, and BOOT is
 //            for download mode only. TDI (GPIO38) and TDO (GPIO36) on the header are kept
-//            for JTAG; the header UART (GPIO42 TXD, GPIO41 RXD) is used only by
-//            diagnostic profiles, at 115200 8N1. Single core: every task runs on core 0.
+//            for JTAG; the header UART (GPIO42 TXD, GPIO41 RXD) is not used by the
+//            firmware. Single core: every task runs on core 0.
 
 #include <cstdint>
 
@@ -47,56 +47,8 @@
 #include "sdkconfig.h"
 #include "xrdap/probe/family.hpp"
 
-// 诊断配置需要对应的 defaults 文件，防止沿用别的构建的控制台设置。
-// Diagnostic profiles require their matching defaults file, not a stale console setup.
-#if CONFIG_XRDAP_S2_PROFILE_BOOT_DIAG || CONFIG_XRDAP_S2_PROFILE_CDC_ONLY
-#if !CONFIG_ESP_CONSOLE_UART_CUSTOM || CONFIG_ESP_CONSOLE_UART_NUM != 0 ||            \
-    CONFIG_ESP_CONSOLE_UART_TX_GPIO != 42 || CONFIG_ESP_CONSOLE_UART_RX_GPIO != 41 || \
-    CONFIG_ESP_CONSOLE_UART_BAUDRATE != 115200
-#error "S2 diagnostics require the matching sdkconfig.defaults.s2-* UART overlay"
-#endif
-#if CONFIG_LOG_DEFAULT_LEVEL < 3 || CONFIG_BOOTLOADER_LOG_LEVEL < 3 || \
-    !CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_ENABLE ||                 \
-    !CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT
-#error "S2 diagnostics require INFO logs, assertion messages and panic output"
-#endif
-#endif
-
-#if CONFIG_XRDAP_S2_PROFILE_UART_DAP
-#if !CONFIG_ESP_CONSOLE_NONE || CONFIG_BOOTLOADER_LOG_LEVEL != 0 || \
-    CONFIG_LOG_DEFAULT_LEVEL != 0 || !CONFIG_ESP_SYSTEM_PANIC_SILENT_REBOOT
-#error "S2 UART DAP requires silent bootloader, application and panic output"
-#endif
-#endif
-
-#if CONFIG_XRDAP_S2_PROFILE_BOOT_DIAG || CONFIG_XRDAP_S2_PROFILE_UART_DAP || \
-    CONFIG_XRDAP_S2_PROFILE_CDC_ONLY
-#if CONFIG_ESP_CONSOLE_USB_CDC || CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG || \
-    CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG
-#error "S2 diagnostics must not share USB OTG or UART with another console"
-#endif
-#endif
-
 namespace XrDap::Config
 {
-#if CONFIG_XRDAP_S2_PROFILE_BOOT_DIAG
-constexpr bool kS2BootDiag = true;
-#else
-constexpr bool kS2BootDiag = false;
-#endif
-#if CONFIG_XRDAP_S2_PROFILE_UART_DAP
-constexpr bool kS2UartDap = true;
-#else
-constexpr bool kS2UartDap = false;
-#endif
-#if CONFIG_XRDAP_S2_PROFILE_CDC_ONLY
-constexpr bool kS2CdcOnly = true;
-#else
-constexpr bool kS2CdcOnly = false;
-#endif
-/// 排针日志配置 / Profiles that emit diagnostic logs on the header UART.
-constexpr bool kS2Diagnostics = kS2BootDiag || kS2CdcOnly;
-
 #if CONFIG_IDF_TARGET_ESP32S2
 /// DAP_Info 产品名 / DAP_Info product name.
 inline constexpr char kProductName[] = "XR-DAP-S2";
@@ -130,9 +82,8 @@ constexpr int kSwdioSelectGpio = -1;
 /// 目标 nRESET 引脚（开漏，上电释放），-1 表示没有 / Target nRESET pin (open drain,
 /// released at power-up); -1 when there is none.
 constexpr int kNresetGpio = 40;
-/// 排针串口仅用于 UART_DAP 诊断 / The header serial link is for UART_DAP diagnostics
-/// only.
-constexpr bool kSerialLink = kS2UartDap;
+/// 排针没有串口链路 / No serial link on the header.
+constexpr bool kSerialLink = false;
 /// 状态灯（WS2812，3.3 V 供电）数据脚 / Status light (WS2812, 3.3 V supply) data pin.
 constexpr int kStatusLedGpio = 17;
 /// Wi-Fi 清除按键（按下接地）/ Wi-Fi clear button (shorts to ground).
@@ -223,7 +174,7 @@ constexpr int kSerialUart = 0;
 constexpr int kSerialTxGpio = 42;
 /// 排针 RXD（接 USB 转串口的 TX）/ Header RXD (connect to USB-UART TX).
 constexpr int kSerialRxGpio = 41;
-/// 初始诊断使用保守速率 / Conservative baud rate for initial bring-up.
+/// 排针串口速率 / Header UART baud rate.
 constexpr uint32_t kSerialBaud = 115200;
 #else
 /// 串口 TX 引脚 / Serial TX pin.
