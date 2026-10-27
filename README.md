@@ -97,7 +97,7 @@ Keil：Debug 选 CMSIS-DAP Debugger，Settings 里端口选 SW，SW Device 栏�
 C3 的 USB 口是固定功能的 USB Serial/JTAG，传统 ESP32 的 USB 口接的是 USB 转串口芯片，电脑上都是一个串口。用 `xrdap share usbip` 把它变成 USB 探针（`COMx` 换成实际的口，Linux 上是 `/dev/ttyACM0` 或 `/dev/ttyUSB0`）：
 
 ```
-xrdap -p COMx share usbip
+xrdap share usbip -p COMx
 ```
 
 再在另一个终端挂载：
@@ -113,7 +113,7 @@ usbip attach -r 127.0.0.1 -b 1-1
 先按 2.6 配好 Wi-Fi。探针本身不带 USB 设备模型，只说 DAP（TCP 端口 3241）。要把它变成 USB 探针，在局域网里任意一台电脑上运行 `xrdap share usbip`，再用 USB/IP 挂载：
 
 ```
-xrdap -p xrdap-xxxxxx.local share usbip
+xrdap share usbip -p xrdap-xxxxxx.local
 usbip attach -r 127.0.0.1 -b 1-1
 ```
 
