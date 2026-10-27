@@ -101,7 +101,8 @@ void InstallProbe(ProbeCore<DapT>& probe, DapT& dap, WifiSettings& wifi,
 {
   SetProbeInfo(dap, ProbeIdentity{product, product, ProbeSerial(), kFirmwareVersion});
   probe.vendor.SetExtraCommand(WifiCommand::kCmd, WifiCommand::kFeature,
-                               &WifiCommand::Handle, &wifi);
+                               &WifiCommand::Handle, &wifi, &WifiCommand::Length);
+  probe.exec.SetFreeCommands(&WifiCommand::kFreeQuery, 1U);
   probe.session.SetLease(Transport::SERIAL, kSerialLeaseMs);
   (void)StartSamplerTask(probe.vendor, core, sampling_priority);
 }
