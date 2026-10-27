@@ -73,7 +73,7 @@ extern "C" void app_main(void)
   // extension and executor; serial and network both drive DAP through the executor.
   static ProbeCore<DapLink> probe(dap, swd_set.swd);
   InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName, Config::kSwdCore,
-               Config::kSamplingPriority);
+               Config::kDapPriority);
 
   // UART0 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令。
   using Link = SerialLink<Executor<DapLink>, Config::kDapPacketSize>;

@@ -82,7 +82,7 @@ extern "C" void app_main(void)
   // extension and executor; serial and network both drive DAP through the executor.
   static ProbeCore<DapLink> probe(dap, swd_set.swd);
   InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName, Config::kCore,
-               Config::kSamplingPriority);
+               Config::kDapPriority);
 
   // USB Serial/JTAG 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令。
   // 控制台不能用这个口（sdkconfig 里控制台已关掉）。
