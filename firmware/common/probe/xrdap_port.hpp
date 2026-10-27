@@ -13,8 +13,16 @@
 #include "freertos/FreeRTOS.h"
 #include "sdkconfig.h"
 
+namespace XrDap::Vendor
+{
+class TaskSampling;
+}  // namespace XrDap::Vendor
+
 namespace XrDap::Port
 {
+/// 采样在 RTOS 任务里 / Sampling runs in an RTOS task.
+using SamplerPolicy = Vendor::TaskSampling;
+
 
 /// 采样帧缓冲字节数，2 的幂。ESP32-S2 的内部 RAM 只有 320 KB，取 Core 默认的 4 KB；别的
 /// ESP 芯片 RAM 够大，取 16 KB / Sample frame buffer size, a power of two. The ESP32-S2

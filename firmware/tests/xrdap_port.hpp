@@ -6,8 +6,16 @@
 
 #include <cstdint>
 
+namespace XrDap::Vendor
+{
+class LoopSampling;
+}  // namespace XrDap::Vendor
+
 namespace XrDap::Port
 {
+/// 主机测试按单线程运行 / The host tests run single-threaded.
+using SamplerPolicy = Vendor::LoopSampling;
+
 
 inline constexpr uint32_t kRingBytes = 4096U;
 
