@@ -110,14 +110,16 @@ usbip attach -r 127.0.0.1 -b 1-1
 
 ### 2.3 走 Wi-Fi，用 Keil、pyOCD、probe-rs、OpenOCD
 
-先按 2.6 配好 Wi-Fi。探针在 3240 端口提供 USB/IP，直接挂载，不需要 `xrdap`：
+先按 2.6 配好 Wi-Fi。探针本身不带 USB 设备模型，只说 DAP（TCP 端口 3241）。要把它变成 USB 探针，在局域网里任意一台电脑上运行 `xrdap share usbip`，再用 USB/IP 挂载：
 
 ```
-usbip list -r xrdap-xxxxxx.local
-usbip attach -r xrdap-xxxxxx.local -b 1-1
+xrdap -p xrdap-xxxxxx.local share usbip
+usbip attach -r 127.0.0.1 -b 1-1
 ```
 
-`xrdap-xxxxxx.local` 是探针的 mDNS 主机名（`xxxxxx` 是 MAC 后 6 位十六进制），也可以写 IP；`xrdap list` 会列出来。挂载后用法同 2.1，用完 `usbip detach -p 0`。
+`xrdap-xxxxxx.local` 是探针的 mDNS 主机名（`xxxxxx` 是 MAC 后 6 位十六进制），也可以写 IP；`xrdap list` 会列出来。挂载后用法同 2.1，在 `xrdap` 的终端按 Ctrl-C 停止共享，用完 `usbip detach -p 0`。给局域网中另一台电脑使用时见 XRDAP-Host 的说明（`--listen`）。只用 OpenOCD 时不需要这一步，见 2.4。
+
+之前的固件在探针的 3240 端口自带 USB/IP，可以不运行 `xrdap` 直接 `usbip attach -r <探针>`；现在这个功能去掉了，探针不再监听 3240。
 
 ### 2.4 走 Wi-Fi，OpenOCD 直连
 
@@ -161,7 +163,7 @@ python -m serial.tools.miniterm COMx 115200 --dtr 0 --rts 0
 | 原生 USB（CMSIS-DAP v2） | 有 | 无 | 无 | 所有工具 |
 | 芯片 USB 口上的串口链路 | 无 | 有 | 无 | `xrdap`；`xrdap share` 转给其他工具 |
 | 板上 USB 转串口（UART0） | 有，4 Mbaud | 无 | 有，921600 | 同上 |
-| Wi-Fi，USB/IP，端口 3240 | 有 | 有 | 有 | 挂载后所有工具 |
+| Wi-Fi，经电脑上的 `xrdap share usbip` | 有 | 有 | 有 | 挂载后所有工具 |
 | Wi-Fi，OpenOCD TCP 后端，端口 3241 | 有 | 有 | 有 | OpenOCD、`xrdap` |
 
 `xrdap` 按串口芯片自动选波特率：CH343 等先试 4 Mbaud，CP2102、CH340 用 921600，不用手写 `--baud`。

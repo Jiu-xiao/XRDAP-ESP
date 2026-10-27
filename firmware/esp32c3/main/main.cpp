@@ -112,5 +112,5 @@ extern "C" void app_main(void)
   console.Start(Config::kCore);
 
   (void)StartNetwork(
-      probe, {Config::kChipName, Config::kUsbProductName, Config::kCore, nullptr});
+      probe, {Config::kChipName, Config::kCore, nullptr});
 }

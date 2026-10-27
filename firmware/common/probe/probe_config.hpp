@@ -21,9 +21,7 @@ constexpr uint8_t kDapPacketCount = 4;
 
 /// OpenOCD TCP 后端的端口 / Port of the OpenOCD TCP backend.
 constexpr uint16_t kTcpPort = 3241;
-/// USB/IP 虚拟 USB 探针的端口 / Port of the USB/IP virtual USB probe.
-constexpr uint16_t kUsbipPort = 3240;
-/// TCP 和 USB/IP 服务任务的优先级 / Priority of the TCP and USB/IP server task.
+/// TCP 服务任务的优先级 / Priority of the TCP server task.
 constexpr unsigned kNetPriority = 10;
 /// 开机时等 Wi-Fi 拿到 IP 的最长时间；超时后 Wi-Fi 在后台继续重连 / Longest wait for a
 /// Wi-Fi IP at boot; after it Wi-Fi keeps reconnecting in the background.

@@ -110,14 +110,16 @@ usbip attach -r 127.0.0.1 -b 1-1
 
 ### 2.3 Over Wi-Fi, with Keil, pyOCD, probe-rs, OpenOCD
 
-Set up Wi-Fi first as described in 2.6. The probe serves USB/IP on port 3240. Attach directly; `xrdap` is not needed:
+Set up Wi-Fi first as described in 2.6. The probe carries no USB device model; it only speaks DAP (TCP port 3241). To use it as a USB probe, run `xrdap share usbip` on any computer of the LAN and attach with USB/IP:
 
 ```
-usbip list -r xrdap-xxxxxx.local
-usbip attach -r xrdap-xxxxxx.local -b 1-1
+xrdap -p xrdap-xxxxxx.local share usbip
+usbip attach -r 127.0.0.1 -b 1-1
 ```
 
-`xrdap-xxxxxx.local` is the probe's mDNS host name (`xxxxxx` is the last 6 hex digits of the MAC). An IP address also works, and `xrdap list` shows both. After attaching, use the tools as in 2.1. When finished, run `usbip detach -p 0`.
+`xrdap-xxxxxx.local` is the probe's mDNS host name (`xxxxxx` is the last 6 hex digits of the MAC). An IP address also works, and `xrdap list` shows both. After attaching, use the tools as in 2.1; press Ctrl-C in the `xrdap` terminal to stop sharing, and run `usbip detach -p 0` when finished. For another computer of the LAN see the XRDAP-Host README (`--listen`). OpenOCD alone needs none of this, see 2.4.
+
+Earlier firmware served USB/IP on the probe's port 3240, so `usbip attach -r <probe>` worked without running `xrdap`. That is removed: the probe no longer listens on 3240.
 
 ### 2.4 Over Wi-Fi, OpenOCD direct
 
@@ -161,7 +163,7 @@ python -m serial.tools.miniterm COMx 115200 --dtr 0 --rts 0
 | Native USB (CMSIS-DAP v2) | yes | no | no | All tools |
 | Serial link on the chip's USB port | no | yes | no | `xrdap`; `xrdap share` passes it on to other tools |
 | On-board USB-to-serial (UART0) | yes, 4 Mbaud | no | yes, 921600 | Same as above |
-| Wi-Fi, USB/IP, port 3240 | yes | yes | yes | All tools after attaching |
+| Wi-Fi, through `xrdap share usbip` on a computer | yes | yes | yes | All tools after attaching |
 | Wi-Fi, OpenOCD TCP backend, port 3241 | yes | yes | yes | OpenOCD, `xrdap` |
 
 `xrdap` picks the baud rate from the serial chip: CH343 and similar try 4 Mbaud first, while CP2102 and CH340 use 921600, so `--baud` need not be given.

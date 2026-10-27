@@ -15,8 +15,6 @@ namespace XrDap::Config
 {
 /// DAP_Info 产品名 / DAP_Info product name.
 inline constexpr char kProductName[] = "XR-DAP-ESP32";
-/// USB/IP 虚拟设备的产品名 / Product name of the USB/IP virtual device.
-inline constexpr char kUsbProductName[] = "XR-DAP-ESP32 CMSIS-DAP";
 /// mDNS TXT 里的芯片名 / Chip name in the mDNS TXT.
 inline constexpr char kChipName[] = "esp32";
 

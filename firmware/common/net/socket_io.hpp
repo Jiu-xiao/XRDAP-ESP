@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 阻塞套接字上的整块读写，作为 DapTcpSession 和 UsbipDevice 的字节流。
+// 阻塞套接字上的整块读写，作为 DapTcpSession 的字节流。
 //
-// Whole-buffer reads and writes on a blocking socket, the byte stream for DapTcpSession
-// and UsbipDevice.
+// Whole-buffer reads and writes on a blocking socket, the byte stream for DapTcpSession.
 
 #include <atomic>
 #include <cerrno>
