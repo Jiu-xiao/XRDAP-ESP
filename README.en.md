@@ -97,7 +97,7 @@ Keil: select CMSIS-DAP Debugger under Debug, choose SW as the port in Settings, 
 The C3's USB port is a fixed-function USB Serial/JTAG, and the classic ESP32's USB port goes to a USB-to-serial chip; either appears as a serial port on the computer. `xrdap share usbip` turns it into a USB probe (replace `COMx` with the actual port; on Linux it is `/dev/ttyACM0` or `/dev/ttyUSB0`):
 
 ```
-xrdap -p COMx share usbip
+xrdap share usbip -p COMx
 ```
 
 Then attach it in another terminal:
@@ -113,7 +113,7 @@ usbip attach -r 127.0.0.1 -b 1-1
 Set up Wi-Fi first as described in 2.6. The probe carries no USB device model; it only speaks DAP (TCP port 3241). To use it as a USB probe, run `xrdap share usbip` on any computer of the LAN and attach with USB/IP:
 
 ```
-xrdap -p xrdap-xxxxxx.local share usbip
+xrdap share usbip -p xrdap-xxxxxx.local
 usbip attach -r 127.0.0.1 -b 1-1
 ```
 
