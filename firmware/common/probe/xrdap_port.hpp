@@ -18,10 +18,18 @@ namespace XrDap::Vendor
 class TaskSampling;
 }  // namespace XrDap::Vendor
 
+namespace XrDap::Session
+{
+class MultiTransport;
+}  // namespace XrDap::Session
+
 namespace XrDap::Port
 {
 /// 采样在 RTOS 任务里 / Sampling runs in an RTOS task.
 using SamplerPolicy = Vendor::TaskSampling;
+
+/// USB、串口、TCP 三条传输 / Three transports: USB, serial and TCP.
+using TransportPolicy = Session::MultiTransport;
 
 
 /// 采样帧缓冲字节数，2 的幂。ESP32-S2 的内部 RAM 只有 320 KB，取 Core 默认的 4 KB；别的
