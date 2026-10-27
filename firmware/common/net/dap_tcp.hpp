@@ -2,16 +2,16 @@
 #pragma once
 
 // CMSIS-DAP over TCP 服务（帧格式见 dap_tcp_session.hpp）。同一时间只服务一个客户端，
-// 请求按顺序执行并应答。这里只做套接字：监听、接入、保活，协议在会话类里。探针不带 USB
+// 请求按顺序执行并应答。这里只做套接字：监听、接入、保活，协议在会话类里。请求以
+// Transport::TCP 经 XRDAP-Core 的执行器执行，连接关闭时告诉它这条链路丢了。探针不带 USB
 // 设备模型：要当 USB 探针用，电脑上运行 `xrdap share usbip`。
 //
 // CMSIS-DAP over TCP server (frame format in dap_tcp_session.hpp). Only one client is
 // served at a time; requests are executed and answered in order. Only the sockets live
 // here (listen, accept, keepalive); the protocol is in the session class. Requests run
-// through XRDAP-Core's executor as Transport::TCP: while another transport owns the
-// probe they are answered busy, and a closed connection ends the TCP session. The probe
-// carries no USB device model: to use it as a USB probe, run `xrdap share usbip` on a
-// computer.
+// through XRDAP-Core's executor as Transport::TCP, and a closed connection tells it the
+// link is lost. The probe carries no USB device model: to use it as a USB probe, run
+// `xrdap share usbip` on a computer.
 
 #include <atomic>
 #include <cstdint>
@@ -22,7 +22,7 @@
 #include "lwip/sockets.h"
 #include "probe_config.hpp"
 #include "socket_io.hpp"
-#include "xrdap/session/session_owner.hpp"
+#include "xrdap/session/transport.hpp"
 
 namespace XrDap
 {
@@ -124,11 +124,11 @@ class DapTcpServer
     }
   }
 
-  // 连接关了，TCP 是主人时它的会话结束，采样随之停止 / The connection closed; if TCP owns
-  // the probe its session ends and sampling stops with it.
+  // 连接关了：连接在 TCP 上时，连接作废，采样随之停止 / The connection closed: if the
+  // DAP connection is on TCP it lapses and sampling stops with it.
   void Disconnected()
   {
-    exec_.exec.EndSession(Transport::TCP);
+    exec_.exec.LinkLost(Transport::TCP);
     Net::disconnections.fetch_add(1U);
     if (client_ != nullptr)
     {

@@ -233,19 +233,3 @@ TEST(wifi_cmd_length_rejects_incomplete_or_unknown)
   CHECK(Length({0x86, 0x01, 0x03, 0x6C, 0x61}) == 0U);
   CHECK(Length({0x85, 0x00}) == 0U);
 }
-
-// 只读查询不需要拥有探针，保存和清除要 / The read-only query needs no ownership; save and
-// clear do.
-TEST(wifi_cmd_only_the_query_is_free)
-{
-  const XrDap::FreeCommand* free_query = &XrDap::WifiCommand::kFreeQuery;
-  const Bytes query = {0x86, 0x00};
-  const Bytes save = {0x86, 0x01, 0x00, 0x00};
-  const Bytes clear = {0x86, 0x02, 0xA5};
-  CHECK(XrDap::ClassifyCommand(query.data(), 2U, free_query, 1U) ==
-        XrDap::CommandClass::FREE);
-  CHECK(XrDap::ClassifyCommand(save.data(), 4U, free_query, 1U) ==
-        XrDap::CommandClass::OWNER);
-  CHECK(XrDap::ClassifyCommand(clear.data(), 3U, free_query, 1U) ==
-        XrDap::CommandClass::OWNER);
-}

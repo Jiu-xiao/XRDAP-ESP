@@ -32,8 +32,7 @@ add_executable(xrdap_esp_tests
     test_link_state.cpp
     test_timer_deadline.cpp
     ${COMMON}/console/console_core.cpp
-    ${COMMON}/net/wifi_command.cpp
-    ${CORE}/xrdap/session/command_class.cpp)
+    ${COMMON}/net/wifi_command.cpp)
 target_include_directories(xrdap_esp_tests PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${COMMON}/console
