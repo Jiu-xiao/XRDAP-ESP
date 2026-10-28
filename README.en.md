@@ -262,7 +262,7 @@ idf.py -D IDF_TARGET=esp32s2 -B build-s2 -D SDKCONFIG=build-s2/sdkconfig build m
 
 The board can also be chosen in `idf.py menuconfig` under XR-DAP → Board.
 
-The pure logic (console, 0x86, TCP framing, USB/IP and the status light inputs) does not depend on ESP-IDF; `firmware/tests` runs its unit tests on a PC (CMake and a C++17 compiler, GCC or MSVC):
+The pure logic (console, 0x86, TCP framing, USB/IP and the status light inputs) does not depend on ESP-IDF; `firmware/tests` runs its unit tests on a PC (CMake and a C++20 compiler, GCC or MSVC):
 
 ```
 cmake -S firmware/tests -B build-tests
