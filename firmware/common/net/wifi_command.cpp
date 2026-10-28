@@ -96,8 +96,8 @@ bool WifiCommand::Handle(void* ctx, const uint8_t* req, uint16_t len, uint8_t* r
 uint16_t WifiCommand::Control(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
                               uint16_t cap)
 {
-  // 设置、清除是最长的请求：1 个 op + 1 + ssid + 1 + 密码 / The longest request is a save:
-  // op + 1 + ssid + 1 + password.
+  // 设置、清除是最长的请求：1 个 op + 1 + ssid + 1 + 密码 / The longest request is a
+  // save: op + 1 + ssid + 1 + password.
   uint8_t command[4U + kSsidMax + kPasswordMax];
   if (req == nullptr || len < 1U || len + 1U > sizeof(command))
   {
@@ -106,8 +106,8 @@ uint16_t WifiCommand::Control(void* ctx, const uint8_t* req, uint16_t len, uint8
   }
   if (req[0] != kOpStatus && req[0] != kOpSet && req[0] != kOpClear)
   {
-    return ::XrDap::Control::StatusOnly(req[0], ::XrDap::Control::kStatusUnsupported, resp,
-                                        cap);
+    return ::XrDap::Control::StatusOnly(req[0], ::XrDap::Control::kStatusUnsupported,
+                                        resp, cap);
   }
   command[0] = kCmd;
   std::memcpy(&command[1], req, len);
