@@ -260,7 +260,7 @@ idf.py -D IDF_TARGET=esp32s2 -B build-s2 -D SDKCONFIG=build-s2/sdkconfig build m
 
 也可以在 `idf.py menuconfig` 的 XR-DAP → Board 里选板型。
 
-命令行、0x86、TCP 帧、USB/IP 和状态灯输入这些纯逻辑不依赖 ESP-IDF，`firmware/tests` 是它们在电脑上运行的单元测试（CMake 和 C++17 编译器，GCC 或 MSVC）：
+命令行、0x86、TCP 帧、USB/IP 和状态灯输入这些纯逻辑不依赖 ESP-IDF，`firmware/tests` 是它们在电脑上运行的单元测试（CMake 和 C++20 编译器，GCC 或 MSVC）：
 
 ```
 cmake -S firmware/tests -B build-tests
