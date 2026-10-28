@@ -206,7 +206,7 @@ extern "C" void app_main(void)
   // 和采样都在它里面一件一件做 / The execution task sits on the SWD core, apart from the USB
   // interrupt on core 0: USB DAP commands, requests posted by serial and TCP, and sampling
   // run in it one after the other.
-  const bool dap_created = InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName,
+  const bool dap_created = InstallProbe<true>(probe, dap, WifiStaSettings(), Config::kProductName,
                                         Config::kSwdCore, Config::kDapPriority);
 #if CONFIG_IDF_TARGET_ESP32S2
   RequireStartup(dap_created);
