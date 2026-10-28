@@ -1,8 +1,8 @@
 [submodule "third_party/libxr"]
 	path = third_party/libxr
 	url = https://github.com/xrobot-org/libxr.git
-	branch = feat/xrdap
+	branch = release/0.6-candidate
 [submodule "third_party/xrdap-core"]
 	path = third_party/xrdap-core
 	url = https://github.com/Jiu-xiao/XRDAP-Core.git
-	branch = main
+	branch = refactor/0.6
