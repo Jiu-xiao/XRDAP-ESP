@@ -28,6 +28,7 @@ add_executable(xrdap_esp_tests
     main.cpp
     test_console.cpp
     test_wifi_command.cpp
+    test_wifi_posted.cpp
     test_dap_tcp.cpp
     test_link_state.cpp
     test_timer_deadline.cpp

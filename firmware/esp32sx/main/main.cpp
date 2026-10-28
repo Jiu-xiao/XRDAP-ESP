@@ -216,6 +216,10 @@ extern "C" void app_main(void)
   // S3 保留原来的降级行为：此任务失败不阻止串口和网络启动。
   // Preserve S3 degradation: failure of the DAP task does not prevent UART or network use.
 
+  // 命令行和清除按键经执行上下文改设置 / The console and the clear button change settings
+  // through the execution context.
+  static PostedWifiSettings<Executor<DapLink>> wifi_posted(probe.exec, WifiStaSettings());
+
   // USB
   static LibXR::USB::CDCUart cdc(LibXR::USB::Endpoint::EPNumber::EP2,
                                  LibXR::USB::Endpoint::EPNumber::EP2,
@@ -271,7 +275,7 @@ extern "C" void app_main(void)
 #else
   heap_report.SetExtraReport(&WriteProbeDiagnostics<DapLink>, &probe);
 #endif
-  static UartConsole<LibXR::USB::CDCUart> console(cdc, WifiStaSettings(), &heap_report);
+  static UartConsole<LibXR::USB::CDCUart> console(cdc, wifi_posted, &heap_report);
   const bool console_started = console.Start(0);
 #if CONFIG_IDF_TARGET_ESP32S2
   RequireStartup(console_started);
@@ -290,7 +294,7 @@ extern "C" void app_main(void)
         Config::kWifiButtonGpio, Config::kWifiClearHoldMs,
         [](void*)
         {
-          WifiSettings& wifi = WifiStaSettings();
+          WifiSettings& wifi = wifi_posted;
           if (wifi.Clear(EraseSource::BUTTON))
           {
             wifi.RestartLater();
