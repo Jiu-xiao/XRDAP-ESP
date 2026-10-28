@@ -102,7 +102,12 @@ uint16_t WifiCommand::Control(void* ctx, const uint8_t* req, uint16_t len, uint8
   if (req == nullptr || len < 1U || len + 1U > sizeof(command))
   {
     return ::XrDap::Control::StatusOnly(len < 1U || req == nullptr ? 0U : req[0],
-                               ::XrDap::Control::kStatusBadRequest, resp, cap);
+                                        ::XrDap::Control::kStatusBadRequest, resp, cap);
+  }
+  if (req[0] != kOpStatus && req[0] != kOpSet && req[0] != kOpClear)
+  {
+    return ::XrDap::Control::StatusOnly(req[0], ::XrDap::Control::kStatusUnsupported, resp,
+                                        cap);
   }
   command[0] = kCmd;
   std::memcpy(&command[1], req, len);
