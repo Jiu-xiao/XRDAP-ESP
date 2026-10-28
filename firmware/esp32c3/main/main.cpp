@@ -91,10 +91,12 @@ extern "C" void app_main(void)
       /*rx_buffer_size=*/8192, /*tx_buffer_size=*/4096, /*tx_queue_size=*/5,
       LibXR::UART::Configuration{Config::kSerialBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1});
+  // 命令行经执行上下文改设置 / The console changes settings through the execution context.
+  static PostedWifiSettings<Executor<DapLink>> wifi_posted(probe.exec, WifiStaSettings());
   static Link link(probe.exec, usj);
   // 命令行的 heap 命令 / The console's heap command.
   static EspHeapReport heap_report;
-  static SerialMux<Link, LibXR::ESP32CDCJtag> mux(link, usj, WifiStaSettings(),
+  static SerialMux<Link, LibXR::ESP32CDCJtag> mux(link, usj, wifi_posted,
                                                   &heap_report);
   mux.Start(Config::kCore, Config::kSerialPriority);
 
@@ -107,7 +109,7 @@ extern "C" void app_main(void)
       LibXR::UART::Configuration{Config::kConsoleBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1},
       /*enable_dma=*/false);
-  static UartConsole<LibXR::ESP32UART> console(console_uart, WifiStaSettings(),
+  static UartConsole<LibXR::ESP32UART> console(console_uart, wifi_posted,
                                                &heap_report);
   console.Start(Config::kCore);
 

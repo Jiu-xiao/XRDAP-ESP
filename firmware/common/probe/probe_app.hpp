@@ -23,6 +23,7 @@
 #include "probe_config.hpp"
 #include "probe_info.hpp"
 #include "tick_timer.hpp"
+#include "wifi_posted.hpp"
 #include "xrdap/control/usb_control.hpp"
 #include "wifi_command.hpp"
 #include "wifi_sta.hpp"

@@ -85,10 +85,12 @@ extern "C" void app_main(void)
       LibXR::UART::Configuration{Config::kSerialBaud, LibXR::UART::Parity::NO_PARITY, 8,
                                  1},
       /*enable_dma=*/false);
+  // 命令行经执行上下文改设置 / The console changes settings through the execution context.
+  static PostedWifiSettings<Executor<DapLink>> wifi_posted(probe.exec, WifiStaSettings());
   static Link link(probe.exec, uart);
   // 命令行的 heap 命令 / The console's heap command.
   static EspHeapReport heap_report;
-  static SerialMux<Link, LibXR::ESP32UART> mux(link, uart, WifiStaSettings(),
+  static SerialMux<Link, LibXR::ESP32UART> mux(link, uart, wifi_posted,
                                                &heap_report);
   mux.Start(Config::kTransportCore, Config::kSerialPriority);
 
