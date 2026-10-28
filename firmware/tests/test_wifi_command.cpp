@@ -272,3 +272,12 @@ TEST(wifi_control_rejects_empty_and_oversized_requests)
   CHECK(XrDap::WifiCommand::Control(&wifi, nullptr, 0U, resp.data(), 64U) == 2U);
   CHECK(resp[1] == XrDap::Control::kStatusBadRequest);
 }
+
+TEST(wifi_control_answers_an_unknown_op_as_unsupported)
+{
+  FakeWifiSettings wifi;
+  Bytes resp(64);
+  const uint8_t req[1] = {0x7F};
+  CHECK(XrDap::WifiCommand::Control(&wifi, req, 1U, resp.data(), 64U) == 2U);
+  CHECK(resp[0] == 0x7F && resp[1] == XrDap::Control::kStatusUnsupported);
+}
