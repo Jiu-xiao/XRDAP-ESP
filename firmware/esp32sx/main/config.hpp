@@ -149,12 +149,14 @@ static_assert(kDapPriority < configMAX_PRIORITIES,
 /// libxr 定时器任务的栈 / Stack of the libxr timer task.
 constexpr uint32_t kLibxrTimerStack = 4096;
 #else
-/// SWD 位带、执行任务（DAP 命令和采样）和网络服务所在的核。专用 GPIO 只能在创建它的核上
-/// 访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the
-/// execution task (DAP commands and sampling) and the network server. Dedicated GPIO is only accessible
-/// from its creating core; USB interrupts, Wi-Fi and lwIP live on core 0, hence core 1.
+/// SWD 位带、执行任务（DAP 命令和采样）和网络服务所在的核。专用 GPIO 只能在创建它的核
+/// 上访问；USB 中断、Wi-Fi、lwIP 在核 0，所以用核 1 / Core for SWD bit-banging, the
+/// execution task (DAP commands and sampling) and the network server. Dedicated GPIO is
+/// only accessible from its creating core; USB interrupts, Wi-Fi and lwIP live on core
+/// 0, hence core 1.
 constexpr int kSwdCore = 1;
-/// 执行任务优先级，为 SWD 核上最高 / Execution task priority, the highest on the SWD core.
+/// 执行任务优先级，为 SWD 核上最高 / Execution task priority, the highest on the SWD
+/// core.
 constexpr unsigned kDapPriority = 14;
 /// libxr 定时器任务的栈 / Stack of the libxr timer task.
 constexpr uint32_t kLibxrTimerStack = 8192;

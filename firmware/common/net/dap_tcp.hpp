@@ -71,8 +71,8 @@ class DapTcpServer
       return 0;
     }
 
-    /// 控制请求(帧类型 3)走控制口,与 DAP 命令同一条连接 / A control request (frame type 3)
-    /// goes through the control port on the same connection as the DAP commands.
+    /// 控制请求(帧类型 3)走控制口,与 DAP 命令同一条连接 / A control request (frame type
+    /// 3) goes through the control port on the same connection as the DAP commands.
     int ExecuteControl(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
                        uint16_t& out)
     {

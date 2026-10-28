@@ -48,10 +48,11 @@ constexpr int kSwdCore = 1;
 /// 驱动 SWD，两个核都能访问，SWD 由执行器的轮次和 MemAp 锁串行；串口和网络命令因此不必
 /// 等采样两帧之间的空隙 / Core of the serial DAP and TCP/USB-IP services, shared with
 /// Wi-Fi and lwIP. The classic ESP32 drives SWD through the GPIO registers, which both
-/// cores reach, and SWD is serialised by the executor turn and MemAp::Lock; serial and
+/// cores reach, and SWD is serialised by the executor turn and MemAp::Access; serial and
 /// network commands therefore do not wait for the gaps between sample frames.
 constexpr int kTransportCore = 0;
-/// 执行任务优先级，为 SWD 核上最高 / Execution task priority, the highest on the SWD core.
+/// 执行任务优先级，为 SWD 核上最高 / Execution task priority, the highest on the SWD
+/// core.
 constexpr unsigned kDapPriority = 14;
 /// libxr 定时器任务优先级 / libxr timer task priority.
 constexpr unsigned kLibxrTimerPriority = 3;

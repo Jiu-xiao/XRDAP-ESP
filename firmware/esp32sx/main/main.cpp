@@ -203,18 +203,20 @@ extern "C" void app_main(void)
   // extension and executor; every transport drives DAP through the executor.
   static ProbeCore<DapLink> probe(dap, GetSwdSet().swd);
   // 执行任务放在 SWD 核上，与核 0 的 USB 中断分开：USB 的 DAP 命令、串口和 TCP 投来的请求
-  // 和采样都在它里面一件一件做 / The execution task sits on the SWD core, apart from the USB
-  // interrupt on core 0: USB DAP commands, requests posted by serial and TCP, and sampling
-  // run in it one after the other.
-  const bool dap_created = InstallProbe<true>(probe, dap, WifiStaSettings(), Config::kProductName,
-                                        Config::kSwdCore, Config::kDapPriority);
+  // 和采样都在它里面一件一件做 / The execution task sits on the SWD core, apart from the
+  // USB interrupt on core 0: USB DAP commands, requests posted by serial and TCP, and
+  // sampling run in it one after the other.
+  const bool dap_created =
+      InstallProbe<true>(probe, dap, WifiStaSettings(), Config::kProductName,
+                         Config::kSwdCore, Config::kDapPriority);
 #if CONFIG_IDF_TARGET_ESP32S2
   RequireStartup(dap_created);
 #else
   (void)dap_created;
 #endif
   // S3 保留原来的降级行为：此任务失败不阻止串口和网络启动。
-  // Preserve S3 degradation: failure of the DAP task does not prevent UART or network use.
+  // Preserve S3 degradation: failure of the DAP task does not prevent UART or network
+  // use.
 
   // 命令行和清除按键经执行上下文改设置 / The console and the clear button change settings
   // through the execution context.
@@ -321,6 +323,5 @@ extern "C" void app_main(void)
       nullptr);
   (void)panel.Start(0);
 
-  (void)StartNetwork(
-      probe, {Config::kChipName, Config::kSwdCore, &net_client});
+  (void)StartNetwork(probe, {Config::kChipName, Config::kSwdCore, &net_client});
 }

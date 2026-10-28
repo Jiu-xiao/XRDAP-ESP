@@ -77,9 +77,9 @@ TEST(wifi_cmd_query_connected)
                                               0xD8, 0x03, 'l', 'a', 'b', 0x00, 0x00}));
 }
 
-// 查询不需要会话所有权，任何链路都能发（XRDAP-Core B2 扩展），所以它只读：不保存、不清除、
-// 不重启 / A query needs no session ownership and may come from any link (XRDAP-Core B2
-// extension), so it is read-only: no save, no clear, no restart.
+// 查询不需要会话所有权，任何链路都能发（XRDAP-Core B2 扩展），所以它只读：不保存、
+// 不清除、不重启 / A query needs no session ownership and may come from any link
+// (XRDAP-Core B2 extension), so it is read-only: no save, no clear, no restart.
 TEST(wifi_cmd_query_changes_nothing)
 {
   FakeWifiSettings wifi;
@@ -235,8 +235,8 @@ TEST(wifi_cmd_length_rejects_incomplete_or_unknown)
 }
 
 // 控制口:请求是去掉 0x86 的 op + 载荷,应答以 op 开头,其余与 0x86 的应答相同 / The control
-// port: the request is op + payload without the 0x86 byte, the answer starts with the op and is
-// otherwise the same as the 0x86 answer.
+// port: the request is op + payload without the 0x86 byte, the answer starts with the op
+// and is otherwise the same as the 0x86 answer.
 TEST(wifi_control_matches_the_dap_command)
 {
   FakeWifiSettings a;
@@ -255,9 +255,8 @@ TEST(wifi_control_matches_the_dap_command)
   Bytes save = SetRequest("net", "password123");
   Bytes ctl_req(save.begin() + 1, save.end());
   Bytes resp(64);
-  const uint16_t m = XrDap::WifiCommand::Control(&b, ctl_req.data(),
-                                                 static_cast<uint16_t>(ctl_req.size()),
-                                                 resp.data(), 64U);
+  const uint16_t m = XrDap::WifiCommand::Control(
+      &b, ctl_req.data(), static_cast<uint16_t>(ctl_req.size()), resp.data(), 64U);
   resp.resize(m);
   CHECK_BYTES(resp, (Bytes{0x01, 0x00}));
 }

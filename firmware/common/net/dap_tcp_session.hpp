@@ -18,8 +18,8 @@ namespace XrDap
 {
 
 /// CMSIS-DAP over TCP 的一个连接 / One CMSIS-DAP over TCP connection.
-/// @tparam DapT 需提供 ExecuteExternal 和 ExecuteControl(req, len, resp, cap, out_len) / Must
-///         provide ExecuteExternal and ExecuteControl(req, len, resp, cap, out_len).
+/// @tparam DapT 需提供 ExecuteExternal 和 ExecuteControl(req, len, resp, cap, out_len) /
+///         Must provide ExecuteExternal and ExecuteControl(req, len, resp, cap, out_len).
 /// @tparam kMaxPayload 一个 DAP 包的上限 / Limit of one DAP packet.
 template <typename DapT, uint16_t kMaxPayload>
 class DapTcpSession
@@ -31,8 +31,8 @@ class DapTcpSession
   static constexpr uint8_t kTypeRequest = 1U;
   /// 响应帧类型 / Response frame type.
   static constexpr uint8_t kTypeResponse = 2U;
-  /// 控制请求帧类型：探针自己的设置，不是 DAP 命令（OpenOCD 不会发）/ Control request frame
-  /// type: the probe's own settings, not a DAP command (OpenOCD never sends it).
+  /// 控制请求帧类型：探针自己的设置，不是 DAP 命令（OpenOCD 不会发）/ Control request
+  /// frame type: the probe's own settings, not a DAP command (OpenOCD never sends it).
   static constexpr uint8_t kTypeControlRequest = 3U;
   /// 控制应答帧类型 / Control response frame type.
   static constexpr uint8_t kTypeControlResponse = 4U;
@@ -48,10 +48,11 @@ class DapTcpSession
   ///         bool WriteAll(const uint8_t*, size_t)，读满或写完才返回 true / Must provide
   ///         bool ReadAll(uint8_t*, size_t) and bool WriteAll(const uint8_t*, size_t),
   ///         returning true only when the whole buffer was transferred.
-  /// @note 无效帧头：签名不是 "DAP\0"、类型不是请求或控制请求、长度为 0 或大于 kMaxPayload。没有
-  ///       应答的命令（DAP_TransferAbort）不回帧 / Invalid header: signature not
-  ///       "DAP\0", type neither request nor control request, length 0 or above kMaxPayload. A command without a
-  ///       response (DAP_TransferAbort) gets no frame.
+  /// @note 无效帧头：签名不是 "DAP\0"、类型不是请求或控制请求、长度为 0 或大于
+  ///       kMaxPayload。没有应答的命令（DAP_TransferAbort）不回帧 / Invalid header:
+  ///       signature not "DAP\0", type neither request nor control request, length 0 or
+  ///       above kMaxPayload. A command without a response (DAP_TransferAbort) gets no
+  ///       frame.
   template <typename StreamT>
   void Serve(StreamT& io)
   {

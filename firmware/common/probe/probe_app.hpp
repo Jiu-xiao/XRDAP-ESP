@@ -23,10 +23,10 @@
 #include "probe_config.hpp"
 #include "probe_info.hpp"
 #include "tick_timer.hpp"
-#include "wifi_posted.hpp"
-#include "xrdap/control/usb_control.hpp"
 #include "wifi_command.hpp"
+#include "wifi_posted.hpp"
 #include "wifi_sta.hpp"
+#include "xrdap/control/usb_control.hpp"
 #include "xrdap/session/executor.hpp"
 
 namespace XrDap
@@ -42,8 +42,7 @@ struct ProbeCore
   ///        command hook on dap.
   /// @note app_main 里构造一次；dap 和 swd 的生命周期需长于本对象 / Construct once in
   ///       app_main; dap and swd must outlive this object.
-  ProbeCore(DapT& dap, LibXR::Debug::Swd& swd)
-      : vendor(swd), exec(dap, vendor, activity)
+  ProbeCore(DapT& dap, LibXR::Debug::Swd& swd) : vendor(swd), exec(dap, vendor, activity)
   {
   }
 
@@ -79,13 +78,13 @@ void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
 }
 
 /// @brief 创建执行任务：固定在 SWD 所在的核上，USB 命令、别的链路投来的请求和采样都在这里
-///        一件一件做 / Create the execution task: pinned to the core that drives SWD, where
-///        USB commands, requests posted by other links and sampling are done one after the
-///        other.
+///        一件一件做 / Create the execution task: pinned to the core that drives SWD,
+///        where USB commands, requests posted by other links and sampling are done one
+///        after the other.
 /// @param core 必须是 SWD 所在的核 / Must be the core that drives SWD.
 /// @param priority 应为该核上最高 / Should be the highest on that core.
-/// @return 任务创建失败（内存不足）时返回 false / False when the task could not be created
-///         (out of memory).
+/// @return 任务创建失败（内存不足）时返回 false / False when the task could not be
+///         created (out of memory).
 template <typename DapT>
 bool StartExecutionTask(ProbeCore<DapT>& probe, int core, unsigned priority)
 {
@@ -108,13 +107,14 @@ bool StartExecutionTask(ProbeCore<DapT>& probe, int core, unsigned priority)
 /// @param wifi 0x86 读写的 Wi-Fi 设置，生命周期需长于 probe / Wi-Fi settings behind 0x86;
 ///        must outlive probe.
 /// @param product DAP_Info 产品名，例如 "XR-DAP-S3" / DAP_Info product, e.g. "XR-DAP-S3".
-/// @tparam kUsbControl 在 USB 上提供控制口（EP0 厂商请求）/ Offer the control port over USB
-///         (EP0 vendor requests).
+/// @tparam kUsbControl 在 USB 上提供控制口（EP0 厂商请求）/ Offer the control port over
+///         USB (EP0 vendor requests).
 /// @param core SWD 所在的核 / Core that owns the SWD pins.
 /// @param priority 执行任务优先级 / Execution task priority.
-/// @return 执行任务建不起来时返回 false / False when the execution task cannot be created.
-/// @note 在 app_main 里、DAP 命令开始处理之前调用一次 / Call once from app_main before DAP
-///       commands are processed.
+/// @return 执行任务建不起来时返回 false / False when the execution task cannot be
+///         created.
+/// @note 在 app_main 里、DAP 命令开始处理之前调用一次 / Call once from app_main before
+///       DAP commands are processed.
 template <bool kUsbControl = false, typename DapT>
 bool InstallProbe(ProbeCore<DapT>& probe, DapT& dap, WifiSettings& wifi,
                   const char* product, int core, unsigned priority)

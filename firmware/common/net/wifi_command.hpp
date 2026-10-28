@@ -51,18 +51,18 @@ class WifiCommand
   static bool Handle(void* settings, const uint8_t* req, uint16_t len, uint8_t* resp,
                      uint16_t cap, uint16_t& out);
 
-  /// @brief 同样的设置经控制口：请求是 op + 载荷（去掉 0x86 字节），应答是 op + 状态 + 载荷 /
-  ///        The same settings through the control port: the request is op + payload (without
-  ///        the 0x86 byte), the answer op + status + payload.
+  /// @brief 同样的设置经控制口：请求是 op + 载荷（去掉 0x86 字节），应答是
+  ///        op + 状态 + 载荷 / The same settings through the control port: the request is
+  ///        op + payload (without the 0x86 byte), the answer op + status + payload.
   /// @note XRDAP-Core Control::Handler 的签名；在执行上下文里调用 / The signature of
   ///       XRDAP-Core's Control::Handler; called in the execution context.
   static uint16_t Control(void* settings, const uint8_t* req, uint16_t len, uint8_t* resp,
                           uint16_t cap);
 
   /// @brief 一条 0x86 请求的字节数，DAP_ExecuteCommands / DAP_QueueCommands 里要用；签名
-  ///        与 XRDAP-Core DapVendor::ExtraLength 相同 / Request bytes of one 0x86 command,
-  ///        needed inside DAP_ExecuteCommands / DAP_QueueCommands; the signature matches
-  ///        XRDAP-Core DapVendor::ExtraLength.
+  ///        与 XRDAP-Core DapVendor::ExtraLength 相同 / Request bytes of one 0x86
+  ///        command, needed inside DAP_ExecuteCommands / DAP_QueueCommands; the signature
+  ///        matches XRDAP-Core DapVendor::ExtraLength.
   /// @return 内容不完整或操作未知时 false / False when the content is incomplete or the
   ///         operation unknown.
   /// @note 纯解析，任何上下文 / Pure parsing, any context.

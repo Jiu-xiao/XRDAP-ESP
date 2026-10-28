@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 经执行上下文改设置:每个调用恰好经一次 Call 转给真正的设置,返回值和副作用不变 / Changing
-// settings through the execution context: each call goes to the real settings through exactly
-// one Call, with the same return value and side effects.
+// settings through the execution context: each call goes to the real settings through
+// exactly one Call, with the same return value and side effects.
 #include "fakes.hpp"
 #include "wifi_posted.hpp"
 
