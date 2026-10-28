@@ -88,6 +88,23 @@ TEST(tcp_invalid_headers_close_without_executing)
   }
 }
 
+// 帧类型 3 是控制请求,应答类型 4;与 DAP 请求在同一条连接上按顺序处理,控制请求不进 DAP /
+// Frame type 3 is a control request answered with type 4; it is handled in order with DAP
+// requests on the same connection and never reaches DAP.
+TEST(tcp_control_request_gets_control_frame)
+{
+  FakeDap dap;
+  Bytes in = Frame(1, {0x00, 0x01});
+  Test::Append(in, Frame(3, {0x00, 0xAB}));
+  Test::Append(in, Frame(1, {0x00, 0x02}));
+  Bytes want = Frame(2, {0x00, 0x01});
+  Test::Append(want, Frame(4, {0x00, 0x00, 0xAB}));
+  Test::Append(want, Frame(2, {0x00, 0x02}));
+  CHECK_BYTES(Serve(dap, in), want);
+  CHECK(dap.requests.size() == 2);
+  CHECK(dap.controls.size() == 1);
+}
+
 TEST(tcp_oversized_request_closes)
 {
   FakeDap dap;

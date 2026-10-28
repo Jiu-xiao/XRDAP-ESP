@@ -64,6 +64,23 @@ class FakeWifiSettings final : public XrDap::WifiSettings
 struct FakeDap
 {
   std::vector<Bytes> requests;
+  std::vector<Bytes> controls;
+
+  /// 控制请求的应答:op、状态 0、再回显载荷 / A control answer: the op, status 0, then the
+  /// payload echoed.
+  int ExecuteControl(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
+                     uint16_t& out_len)
+  {
+    controls.emplace_back(req, req + len);
+    out_len = static_cast<uint16_t>(len + 1U < cap ? len + 1U : cap);
+    resp[0] = req[0];
+    resp[1] = 0U;
+    if (out_len > 2U)
+    {
+      std::memcpy(resp + 2, req + 1, out_len - 2U);
+    }
+    return 0;
+  }
 
   int ExecuteExternal(const uint8_t* req, uint16_t len, uint8_t* resp, uint16_t cap,
                       uint16_t& out_len)
