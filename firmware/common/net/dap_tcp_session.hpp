@@ -18,8 +18,8 @@ namespace XrDap
 {
 
 /// CMSIS-DAP over TCP 的一个连接 / One CMSIS-DAP over TCP connection.
-/// @tparam DapT 需提供 ExecuteExternal(req, len, resp, cap, out_len) / Must provide
-///         ExecuteExternal(req, len, resp, cap, out_len).
+/// @tparam DapT 需提供 ExecuteExternal 和 ExecuteControl(req, len, resp, cap, out_len) / Must
+///         provide ExecuteExternal and ExecuteControl(req, len, resp, cap, out_len).
 /// @tparam kMaxPayload 一个 DAP 包的上限 / Limit of one DAP packet.
 template <typename DapT, uint16_t kMaxPayload>
 class DapTcpSession
@@ -31,6 +31,11 @@ class DapTcpSession
   static constexpr uint8_t kTypeRequest = 1U;
   /// 响应帧类型 / Response frame type.
   static constexpr uint8_t kTypeResponse = 2U;
+  /// 控制请求帧类型：探针自己的设置，不是 DAP 命令（OpenOCD 不会发）/ Control request frame
+  /// type: the probe's own settings, not a DAP command (OpenOCD never sends it).
+  static constexpr uint8_t kTypeControlRequest = 3U;
+  /// 控制应答帧类型 / Control response frame type.
+  static constexpr uint8_t kTypeControlResponse = 4U;
 
   /// @param dap 执行请求的 DAP 实例，生命周期需长于本对象 / DAP instance that runs the
   ///        requests; must outlive this object.
@@ -43,9 +48,9 @@ class DapTcpSession
   ///         bool WriteAll(const uint8_t*, size_t)，读满或写完才返回 true / Must provide
   ///         bool ReadAll(uint8_t*, size_t) and bool WriteAll(const uint8_t*, size_t),
   ///         returning true only when the whole buffer was transferred.
-  /// @note 无效帧头：签名不是 "DAP\0"、类型不是请求、长度为 0 或大于 kMaxPayload。没有
+  /// @note 无效帧头：签名不是 "DAP\0"、类型不是请求或控制请求、长度为 0 或大于 kMaxPayload。没有
   ///       应答的命令（DAP_TransferAbort）不回帧 / Invalid header: signature not
-  ///       "DAP\0", type not request, length 0 or above kMaxPayload. A command without a
+  ///       "DAP\0", type neither request nor control request, length 0 or above kMaxPayload. A command without a
   ///       response (DAP_TransferAbort) gets no frame.
   template <typename StreamT>
   void Serve(StreamT& io)
@@ -58,8 +63,9 @@ class DapTcpSession
         return;
       }
       const uint16_t len = static_cast<uint16_t>(hdr[4] | (hdr[5] << 8));
-      if (memcmp(hdr, "DAP\0", 4) != 0 || hdr[6] != kTypeRequest || len == 0U ||
-          len > kMaxPayload)
+      const bool control = hdr[6] == kTypeControlRequest;
+      if (memcmp(hdr, "DAP\0", 4) != 0 || (hdr[6] != kTypeRequest && !control) ||
+          len == 0U || len > kMaxPayload)
       {
         return;
       }
@@ -69,7 +75,14 @@ class DapTcpSession
       }
 
       uint16_t out_len = 0U;
-      (void)dap_.ExecuteExternal(req_, len, out_ + kHeaderLen, kMaxPayload, out_len);
+      if (control)
+      {
+        (void)dap_.ExecuteControl(req_, len, out_ + kHeaderLen, kMaxPayload, out_len);
+      }
+      else
+      {
+        (void)dap_.ExecuteExternal(req_, len, out_ + kHeaderLen, kMaxPayload, out_len);
+      }
       if (out_len == 0U)
       {
         continue;
@@ -77,7 +90,7 @@ class DapTcpSession
       memcpy(out_, "DAP\0", 4);
       out_[4] = static_cast<uint8_t>(out_len & 0xFFU);
       out_[5] = static_cast<uint8_t>(out_len >> 8);
-      out_[6] = kTypeResponse;
+      out_[6] = control ? kTypeControlResponse : kTypeResponse;
       out_[7] = 0U;
       if (!io.WriteAll(out_, kHeaderLen + out_len))
       {
