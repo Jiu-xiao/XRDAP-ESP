@@ -233,3 +233,42 @@ TEST(wifi_cmd_length_rejects_incomplete_or_unknown)
   CHECK(Length({0x86, 0x01, 0x03, 0x6C, 0x61}) == 0U);
   CHECK(Length({0x85, 0x00}) == 0U);
 }
+
+// 控制口:请求是去掉 0x86 的 op + 载荷,应答以 op 开头,其余与 0x86 的应答相同 / The control
+// port: the request is op + payload without the 0x86 byte, the answer starts with the op and is
+// otherwise the same as the 0x86 answer.
+TEST(wifi_control_matches_the_dap_command)
+{
+  FakeWifiSettings a;
+  FakeWifiSettings b;
+  a.status.connected = true;
+  b.status.connected = true;
+  Bytes dap = Run(a, {0x86, 0x00});
+  Bytes ctl(64);
+  const uint8_t req[1] = {0x00};
+  const uint16_t n = XrDap::WifiCommand::Control(&b, req, 1U, ctl.data(), 64U);
+  ctl.resize(n);
+  dap[0] = 0x00;  // the op instead of 0x86
+  CHECK_BYTES(ctl, dap);
+
+  // Save and clear go through the same code.
+  Bytes save = SetRequest("net", "password123");
+  Bytes ctl_req(save.begin() + 1, save.end());
+  Bytes resp(64);
+  const uint16_t m = XrDap::WifiCommand::Control(&b, ctl_req.data(),
+                                                 static_cast<uint16_t>(ctl_req.size()),
+                                                 resp.data(), 64U);
+  resp.resize(m);
+  CHECK_BYTES(resp, (Bytes{0x01, 0x00}));
+}
+
+TEST(wifi_control_rejects_empty_and_oversized_requests)
+{
+  FakeWifiSettings wifi;
+  Bytes resp(64);
+  const uint8_t big[200] = {0x01};
+  CHECK(XrDap::WifiCommand::Control(&wifi, big, 200U, resp.data(), 64U) == 2U);
+  CHECK(resp[0] == 0x01 && resp[1] == XrDap::Control::kStatusBadRequest);
+  CHECK(XrDap::WifiCommand::Control(&wifi, nullptr, 0U, resp.data(), 64U) == 2U);
+  CHECK(resp[1] == XrDap::Control::kStatusBadRequest);
+}

@@ -23,6 +23,7 @@
 #include "probe_config.hpp"
 #include "probe_info.hpp"
 #include "tick_timer.hpp"
+#include "xrdap/control/usb_control.hpp"
 #include "wifi_command.hpp"
 #include "wifi_sta.hpp"
 #include "xrdap/session/executor.hpp"
@@ -106,18 +107,27 @@ bool StartExecutionTask(ProbeCore<DapT>& probe, int core, unsigned priority)
 /// @param wifi 0x86 读写的 Wi-Fi 设置，生命周期需长于 probe / Wi-Fi settings behind 0x86;
 ///        must outlive probe.
 /// @param product DAP_Info 产品名，例如 "XR-DAP-S3" / DAP_Info product, e.g. "XR-DAP-S3".
+/// @tparam kUsbControl 在 USB 上提供控制口（EP0 厂商请求）/ Offer the control port over USB
+///         (EP0 vendor requests).
 /// @param core SWD 所在的核 / Core that owns the SWD pins.
 /// @param priority 执行任务优先级 / Execution task priority.
 /// @return 执行任务建不起来时返回 false / False when the execution task cannot be created.
 /// @note 在 app_main 里、DAP 命令开始处理之前调用一次 / Call once from app_main before DAP
 ///       commands are processed.
-template <typename DapT>
+template <bool kUsbControl = false, typename DapT>
 bool InstallProbe(ProbeCore<DapT>& probe, DapT& dap, WifiSettings& wifi,
                   const char* product, int core, unsigned priority)
 {
   SetProbeInfo(dap, ProbeIdentity{product, product, ProbeSerial(), kFirmwareVersion});
   probe.vendor.SetExtraCommand(WifiCommand::kCmd, WifiCommand::kFeature,
                                &WifiCommand::Handle, &wifi, &WifiCommand::Length);
+  // 设置也经控制口：同样的 Wi-Fi 操作，不占 DAP 命令号 / The settings are also reachable
+  // through the control port: the same Wi-Fi operations, without a DAP command number.
+  probe.exec.SetControl(&WifiCommand::Control, &wifi);
+  if constexpr (kUsbControl)
+  {
+    static Control::UsbControl<DapT> usb_control(dap, probe.exec);
+  }
   return StartExecutionTask(probe, core, priority);
 }
 
