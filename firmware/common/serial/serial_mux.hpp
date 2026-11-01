@@ -76,6 +76,10 @@ class SerialMux
     bool seen_frame = false;
     for (;;)
     {
+      // 这里代替 SerialLink::Poll，租期也由这里检查（每轮至多等 50 ms）/ This loop
+      // replaces SerialLink::Poll, so it also checks the lease (each pass waits at most
+      // 50 ms).
+      link_.CheckLease();
       // 零长度读等到队列非空（不取走字节），再按实际字节数取一块，与
       // SerialLink::Poll 相同。
       LibXR::ReadOperation wait_op(wait_sem, 50U);
