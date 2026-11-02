@@ -46,6 +46,15 @@ CONFIG_LWIP_MAX_LISTENING_TCP=4
 # DAP 一问一答，包不超过 1 KB，TCP 缓冲用 16 KB 足够；Wi-Fi 收发缓冲用 IDF 默认值。
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
 CONFIG_LWIP_TCP_WND_DEFAULT=16384
+# TCP 计时粒度：lwIP 按慢计时器（2 x TCP_TMR_INTERVAL）计 RTT 和重传，默认 250 ms 时 RTT
+# 只有几毫秒也会量成 0，重传超时一直停在初值 1.5 s，Wi-Fi 偶尔丢一个应答就要等 1-2 s，采样
+# 缓冲因此溢出。改为 50 ms、初值 300 ms 后丢包重传约 0.3 s（C3 实测）。
+# TCP timer granularity: lwIP counts RTT and retransmits in slow ticks (2 x TCP_TMR_INTERVAL);
+# at the default 250 ms a few-ms RTT measures 0 and the retransmit timeout stays at its 1.5 s
+# start, so a reply lost on Wi-Fi waited 1-2 s and the sample buffer overflowed. At 50 ms with
+# a 300 ms start a lost reply is resent after about 0.3 s (measured on the C3).
+CONFIG_LWIP_TCP_TMR_INTERVAL=50
+CONFIG_LWIP_TCP_RTO_TIME=300
 
 # 传统 ESP32 的 IRAM 比 S3 小：SWD、采样的热路径要放进 IRAM，Wi-Fi 接收路径改回 Flash 执行
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
