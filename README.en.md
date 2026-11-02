@@ -234,7 +234,7 @@ OpenOCD reading 128 KiB (4 MHz requested):
 | Wi-Fi, USB/IP | 2.1 s | 2.7 s |
 | C3 over USB, `xrdap share usbip` | - | 1.8 s |
 
-The C3 has a single core, so Wi-Fi traffic and sampling run on the same core. Sampling 4 variables over Wi-Fi at 1 ms skips no ticks. At 500 µs about 0.2% of ticks are skipped.
+The C3 has a single core, so Wi-Fi traffic and sampling run on the same core; the execution task has a higher priority than the Wi-Fi task. Sampling 4 variables over Wi-Fi at 500 µs skips no ticks. At 250 µs about 1% of ticks are skipped.
 
 Classic ESP32 (serial at 921600 baud): reads and writes are correct for SWD clock requests from 1 to 40 MHz. The GPIO registers are on the peripheral bus (about 12 CPU cycles per write, 17 per read), so any request above 5 MHz runs at full speed, and `xrdap info` reports about 30 µs per access (about 150 SWCLK cycles, i.e. just under 5 MHz). Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs a tick is skipped now and then); OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
 
