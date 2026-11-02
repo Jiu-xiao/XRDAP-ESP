@@ -232,7 +232,7 @@ OpenOCD 读 128 KiB（4 MHz 请求）：
 | Wi-Fi，USB/IP | 2.1 s | 2.7 s |
 | C3 插 USB，`xrdap share usbip` | - | 1.8 s |
 
-C3 是单核，Wi-Fi 收发和采样在同一个核上：经 Wi-Fi 采样 4 个变量 1 ms 不跳拍，500 µs 约跳 0.2% 的拍。
+C3 是单核，Wi-Fi 收发和采样在同一个核上，执行任务的优先级高于 Wi-Fi 任务：经 Wi-Fi 采样 4 个变量 500 µs 不跳拍，250 µs 约跳 1% 的拍。
 
 传统 ESP32（串口 921600 baud）：SWD 1 到 40 MHz 请求下读写全部正确；GPIO 寄存器在外设总线上（写一次约 12 个 CPU 周期，读一次约 17 个），请求 5 MHz 以上都按全速跑，`xrdap info` 报告的单次访问约 30 µs（约 150 个 SWCLK 周期，折合不到 5 MHz）；探针端采样 8 个变量 1 ms、1 个变量 200 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share usbip`，OpenOCD 读 128 KiB 3.4 s。经 Wi-Fi：4 个变量 500 µs、8 个变量 600 µs、1 个变量 150 µs 不丢帧（150 µs 时偶尔跳 1 拍）；USB/IP 挂载后 OpenOCD 读 128 KiB 3.2 s，TCP 后端 2.3 s。
 
