@@ -22,7 +22,6 @@ menu "XR-DAP"
 
     config XRDAP_VERSION_SUFFIX
         string "Firmware version suffix"
-        default "-preview" if XRDAP_BOARD_S2
         default ""
         help
             Appended to the firmware version in DAP_Info and mDNS. Boards not yet
