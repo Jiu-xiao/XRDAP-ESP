@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "debug/swd_general_gpio.hpp"
+#include "freertos/FreeRTOS.h"
 #include "probe_config.hpp"
 
 namespace XrDap::Config
@@ -44,15 +45,22 @@ inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{80, 247, 0};
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
 constexpr int kCore = 0;
-// 优先级从低到高：libxr 定时器 3 < 命令行 4 < 串口 DAP 8 < 网络服务 10 < lwIP 18 < 采样
-// 19 < esp_timer 22 < Wi-Fi 23。采样在节拍之间阻塞，每周期给别的任务留至少 1/8，所以可以
-// 排在 lwIP 之上；它低于 esp_timer 和 Wi-Fi 驱动，不拖住无线协议栈。
+// 优先级从低到高：libxr 定时器 3 < 命令行 4 < 串口 DAP 8 < 网络服务 10 < lwIP 18 <
+// esp_timer 22 < Wi-Fi 23 < 执行任务 24（与单核 S2 相同），中断仍可抢占。执行任务没有事做
+// 时阻塞，每帧之后仍留 max(15 us, 周期/8, 帧耗时/4) 给其他任务。排在 Wi-Fi 之下时，经
+// Wi-Fi 收发时 Wi-Fi 任务偶尔占住 CPU 超过一个 1 ms 节拍，采样跳拍（实测 TCP 1 ms 单变量
+// 40 次 10 s 采样有 4 次跳 1 拍，改为 24 后 30 次 0 次）。
 // Priorities low to high: libxr timer 3 < console 4 < serial DAP 8 < network server 10
-// < lwIP 18 < sampling 19 < esp_timer 22 < Wi-Fi 23. Sampling blocks between ticks and
-// leaves at least 1/8 of each period to others, so it can sit above lwIP; it stays below
-// esp_timer and the Wi-Fi driver so the radio stack is not starved.
+// < lwIP 18 < esp_timer 22 < Wi-Fi 23 < execution task 24 (as on the single-core S2);
+// interrupts still preempt it. The execution task blocks when it has nothing to do and
+// keeps max(15 us, period/8, frame time/4) after each frame for other tasks. Below Wi-Fi,
+// the Wi-Fi task sometimes held the CPU across a 1 ms tick while traffic went over Wi-Fi
+// and sampling skipped it (measured over TCP, 1 variable at 1 ms: 4 of 40 10 s runs
+// skipped one tick; at 24, 0 of 30).
 /// 执行任务优先级 / Execution task priority.
-constexpr unsigned kDapPriority = 19;
+constexpr unsigned kDapPriority = 24;
+static_assert(kDapPriority < configMAX_PRIORITIES,
+              "DAP task priority must fit the FreeRTOS priority range");
 /// libxr 定时器任务优先级 / libxr timer task priority.
 constexpr unsigned kLibxrTimerPriority = 3;
 /// 串口 DAP 任务优先级 / Serial DAP task priority.
