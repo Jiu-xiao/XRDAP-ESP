@@ -1,8 +1,9 @@
-# 电脑上运行的单元测试：只编译不依赖 ESP-IDF 的纯逻辑（命令行、0x86、TCP 帧、USB/IP、状态灯输入）。
+# 电脑上运行的单元测试：只编译不依赖 ESP-IDF 的纯逻辑（命令行、0x86、TCP 帧、USB/IP、
+# 状态灯输入、串口复用）。
 #   cmake -S firmware/tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests
 #
 # Unit tests that run on a PC: only the pure logic without ESP-IDF is compiled (console,
-# 0x86, TCP framing, USB/IP, status light inputs).
+# 0x86, TCP framing, USB/IP, status light inputs, serial multiplexing).
 cmake_minimum_required(VERSION 3.16)
 project(xrdap_esp_tests CXX)
 set(CMAKE_CXX_STANDARD 20)
@@ -32,6 +33,7 @@ add_executable(xrdap_esp_tests
     test_dap_tcp.cpp
     test_link_state.cpp
     test_timer_deadline.cpp
+    test_serial_mux.cpp
     ${COMMON}/console/console_core.cpp
     ${COMMON}/net/wifi_command.cpp)
 target_include_directories(xrdap_esp_tests PRIVATE
@@ -39,6 +41,8 @@ target_include_directories(xrdap_esp_tests PRIVATE
     ${COMMON}/console
     ${COMMON}/net
     ${COMMON}/probe
+    ${COMMON}/serial
+    ${CMAKE_CURRENT_LIST_DIR}/freertos
     ${CORE}
     ${LIBXR_DAP_DIRS})
 target_link_libraries(xrdap_esp_tests PRIVATE xr)
