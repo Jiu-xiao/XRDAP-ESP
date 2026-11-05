@@ -20,8 +20,10 @@ entries:
     if IDF_TARGET_ESP32S2 = n:
         main (noflash)
     dap_vendor (noflash)
+    protocol (noflash)
     mem_ap (noflash)
     sampler (noflash)
+    sampling (noflash)
 
 # libxr 的 FreeRTOS 信号量、互斥量和时基：节拍唤醒采样任务、MemAp::Lock、帧时间戳每拍都走
 # 这里 / libxr's FreeRTOS semaphore, mutex and time base: every tick goes through them (the
