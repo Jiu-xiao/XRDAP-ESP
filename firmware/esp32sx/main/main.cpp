@@ -44,6 +44,7 @@
 #include "uart_console.hpp"
 #include "xrdap/probe/family.hpp"
 #include "xrdap/serial/serial_link.hpp"
+#include "xrdap/vendor/reset_counting_usb.hpp"
 
 namespace
 {
@@ -73,29 +74,7 @@ using DapBase =
 // USB 的 DAP 接口，另外数 USB 总线复位：计数变了，USB 的会话就结束（拔线、主机复位）/
 // The USB DAP interface, which also counts USB bus resets: a changed count ends the USB
 // session (unplug, host reset).
-class DapLink final : public DapBase
-{
- public:
-  using DapBase::DapBase;
-
-  /// 总线复位次数，任何任务可读 / Bus reset count; readable from any task.
-  uint32_t ResetCount() const { return resets_.load(std::memory_order_relaxed); }
-
-  // libxr 在 USB 的 owner 上下文（中断或应用线程）里调用 / Called by libxr in the USB
-  // owner context (an interrupt or an application thread).
-  void OnDeviceEvent(bool in_isr, LibXR::USB::DeviceEvent event,
-                     uint8_t endpoint) override
-  {
-    if (event == LibXR::USB::DeviceEvent::RESET)
-    {
-      resets_.fetch_add(1U, std::memory_order_relaxed);
-    }
-    DapBase::OnDeviceEvent(in_isr, event, endpoint);
-  }
-
- private:
-  std::atomic<uint32_t> resets_{0U};
-};
+using DapLink = ResetCountingUsb<DapBase>;
 
 // SWD 相关对象。必须在 Config::kSwdCore 上创建：专用 GPIO 只能在创建它的核上访问。
 struct SwdSet
@@ -244,9 +223,7 @@ extern "C" void app_main(void)
   usb.Start(false);
   // USB 总线复位（拔线、主机复位）使 USB 上的连接作废 / A USB bus reset (unplug, host
   // reset) lapses a connection on USB.
-  probe.vendor.SetUsbResetSource([](void* ctx) -> uint32_t
-                                 { return static_cast<DapLink*>(ctx)->ResetCount(); },
-                                 &dap);
+  probe.vendor.SetUsbResetSource(&dap.BusResets());
 
   // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里创建。
   if constexpr (Config::kSerialLink)
