@@ -12,7 +12,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
+
+#include "xrdap/net/tcp_frame.hpp"
 
 namespace XrDap
 {
@@ -25,18 +26,6 @@ template <typename DapT, uint16_t kMaxPayload>
 class DapTcpSession
 {
  public:
-  /// 帧头长度 / Header length.
-  static constexpr size_t kHeaderLen = 8U;
-  /// 请求帧类型 / Request frame type.
-  static constexpr uint8_t kTypeRequest = 1U;
-  /// 响应帧类型 / Response frame type.
-  static constexpr uint8_t kTypeResponse = 2U;
-  /// 控制请求帧类型：探针自己的设置，不是 DAP 命令（OpenOCD 不会发）/ Control request
-  /// frame type: the probe's own settings, not a DAP command (OpenOCD never sends it).
-  static constexpr uint8_t kTypeControlRequest = 3U;
-  /// 控制应答帧类型 / Control response frame type.
-  static constexpr uint8_t kTypeControlResponse = 4U;
-
   /// @param dap 执行请求的 DAP 实例，生命周期需长于本对象 / DAP instance that runs the
   ///        requests; must outlive this object.
   explicit DapTcpSession(DapT& dap) : dap_(dap) {}
@@ -58,18 +47,18 @@ class DapTcpSession
   {
     for (;;)
     {
-      uint8_t hdr[kHeaderLen];
+      uint8_t hdr[Net::kHeaderLen];
       if (!io.ReadAll(hdr, sizeof(hdr)))
       {
         return;
       }
-      const uint16_t len = static_cast<uint16_t>(hdr[4] | (hdr[5] << 8));
-      const bool control = hdr[6] == kTypeControlRequest;
-      if (memcmp(hdr, "DAP\0", 4) != 0 || (hdr[6] != kTypeRequest && !control) ||
-          len == 0U || len > kMaxPayload)
+      Net::Header frame{};
+      if (!Net::DecodeRequestHeader(hdr, kMaxPayload, frame))
       {
         return;
       }
+      const uint16_t len = frame.length;
+      const bool control = frame.type == Net::FrameType::CONTROL_REQUEST;
       if (!io.ReadAll(req_, len))
       {
         return;
@@ -78,22 +67,20 @@ class DapTcpSession
       uint16_t out_len = 0U;
       if (control)
       {
-        (void)dap_.ExecuteControl(req_, len, out_ + kHeaderLen, kMaxPayload, out_len);
+        (void)dap_.ExecuteControl(req_, len, out_ + Net::kHeaderLen, kMaxPayload,
+                                  out_len);
       }
       else
       {
-        (void)dap_.ExecuteExternal(req_, len, out_ + kHeaderLen, kMaxPayload, out_len);
+        (void)dap_.ExecuteExternal(req_, len, out_ + Net::kHeaderLen, kMaxPayload,
+                                   out_len);
       }
       if (out_len == 0U)
       {
         continue;
       }
-      memcpy(out_, "DAP\0", 4);
-      out_[4] = static_cast<uint8_t>(out_len & 0xFFU);
-      out_[5] = static_cast<uint8_t>(out_len >> 8);
-      out_[6] = control ? kTypeControlResponse : kTypeResponse;
-      out_[7] = 0U;
-      if (!io.WriteAll(out_, kHeaderLen + out_len))
+      Net::EncodeHeader(out_, Net::ResponseTypeOf(frame.type), out_len);
+      if (!io.WriteAll(out_, Net::kHeaderLen + out_len))
       {
         return;
       }
@@ -105,7 +92,7 @@ class DapTcpSession
   uint8_t req_[kMaxPayload] = {};
   // 帧头和数据放在同一块缓冲里，一个响应只写一次 / Header and data share one buffer, so
   // one response is one write.
-  uint8_t out_[kHeaderLen + kMaxPayload] = {};
+  uint8_t out_[Net::kHeaderLen + kMaxPayload] = {};
 };
 
 }  // namespace XrDap
