@@ -2,18 +2,17 @@
 #pragma once
 
 // 厂商命令 0x86：经 DAP 本身（USB、串口、TCP 均可）查询、设置、清除 Wi-Fi 热点参数，
-// 无需另开串口终端。格式见 XRDAP-Core 的 docs/protocol.md 3.7
-// 节。这里只解析命令、填回复， 设置经 WifiSettings 读写，不依赖 ESP-IDF。
+// 无需另开串口终端。格式和编解码见 XRDAP-Core 的 docs/protocol.md 3.7 节和
+// xrdap/vendor/wifi_command.hpp；这里把它接到 WifiSettings，不依赖 ESP-IDF。
 //   0x86 0x00                         查询：回状态、标志、IP、信号、热点名（不回密码）
 //   0x86 0x01 len ssid len password   保存热点参数，回复发出后约 0.5 秒重启
-//   0x86 0x02 0xA5                    清除热点参数（0xA5 为确认字节），回复发出后约 0.5
-//   秒
-//                                     重启
+//   0x86 0x02 0xA5                    清除热点参数（0xA5 为确认字节），回复发出后约
+//                                     0.5 秒重启
 //
 // Vendor command 0x86: query, set or clear the Wi-Fi credentials over DAP itself (USB,
-// serial or TCP) without a separate serial terminal. See section 3.7 of docs/protocol.md
-// in XRDAP-Core. Only the parsing and the reply live here; the settings are reached
-// through WifiSettings, without ESP-IDF.
+// serial or TCP) without a separate serial terminal. The format and codec are in section
+// 3.7 of docs/protocol.md and xrdap/vendor/wifi_command.hpp of XRDAP-Core; this connects
+// them to WifiSettings, without ESP-IDF.
 //   0x86 0x00                         query: status, flags, IP, RSSI, SSID (no password)
 //   0x86 0x01 len ssid len password   save credentials; restart ~0.5 s after the reply
 //   0x86 0x02 0xA5                    clear credentials (0xA5 confirms); restart ~0.5 s
@@ -23,6 +22,7 @@
 
 #include "wifi_settings.hpp"
 #include "xrdap/control/control.hpp"
+#include "xrdap/vendor/wifi_command.hpp"
 
 namespace XrDap
 {
@@ -32,9 +32,7 @@ class WifiCommand
 {
  public:
   /// 命令字节 / Command byte.
-  static constexpr uint8_t kCmd = 0x86U;
-  /// INFO 功能位 4：Wi-Fi 配置 / INFO feature bit 4: Wi-Fi configuration.
-  static constexpr uint32_t kFeature = 1U << 4;
+  static constexpr uint8_t kCmd = Vendor::WifiCommand::kCmd;
 
   /// @brief 处理一条 0x86 请求，签名与 XRDAP-Core DapVendor::ExtraHandler 相同 / Handle
   ///        one 0x86 request; the signature matches XRDAP-Core DapVendor::ExtraHandler.
@@ -70,10 +68,9 @@ class WifiCommand
 
  private:
   static bool Status(WifiSettings& settings, uint8_t* resp, uint16_t cap, uint16_t& out);
-  static bool Set(WifiSettings& settings, const uint8_t* req, uint16_t len, uint8_t* resp,
-                  uint16_t& out);
-  static bool Clear(WifiSettings& settings, const uint8_t* req, uint16_t len,
-                    uint8_t* resp, uint16_t& out);
+  static bool Set(WifiSettings& settings, const Vendor::WifiCommand::Request& request,
+                  uint8_t* resp, uint16_t& out);
+  static bool Clear(WifiSettings& settings, uint8_t* resp, uint16_t& out);
 };
 
 }  // namespace XrDap

@@ -4,65 +4,19 @@
 #include <cstring>
 
 #include "xrdap/vendor/protocol.hpp"
+#include "xrdap/vendor/wifi_command.hpp"
 
 namespace XrDap
 {
-using namespace Vendor;
-
-namespace
-{
-constexpr uint8_t kOpStatus = 0x00U;
-constexpr uint8_t kOpSet = 0x01U;
-constexpr uint8_t kOpClear = 0x02U;
-// 清除必须带的确认字节：请求为 86 02 A5 / Confirm byte a clear must carry: the request is
-// 86 02 A5.
-constexpr uint8_t kClearConfirm = 0xA5U;
-constexpr uint8_t kFlagStarted = 0x01U;
-constexpr uint8_t kFlagConnected = 0x02U;
-constexpr uint8_t kFlagStorageRepaired = 0x04U;
-// 状态回复：命令、状态、标志、IP(4)、信号、热点名长度，热点名，清除来源、复位原因 /
-// Status reply: command, status, flags, IP(4), RSSI, SSID length, SSID, erase source,
-// reset reason.
-constexpr size_t kStatusHead = 9U;
-constexpr size_t kStatusTail = 2U;
-}  // namespace
+namespace Codec = Vendor::WifiCommand;
+using Vendor::kStatusArg;
+using Vendor::kStatusOk;
+using Vendor::kStatusResource;
+using Vendor::Reply;
 
 bool WifiCommand::Length(const uint8_t* req, uint16_t avail, uint16_t& len)
 {
-  if (avail < 2U || req[0] != kCmd)
-  {
-    return false;
-  }
-  uint32_t need = 0U;
-  switch (req[1])
-  {
-    case kOpStatus:
-      need = 2U;
-      break;
-    case kOpClear:
-      need = 3U;
-      break;
-    case kOpSet:
-      if (avail < 3U)
-      {
-        return false;
-      }
-      need = 3U + req[2];
-      if (need >= avail)
-      {
-        return false;
-      }
-      need += 1U + req[need];
-      break;
-    default:
-      return false;
-  }
-  if (need > avail)
-  {
-    return false;
-  }
-  len = static_cast<uint16_t>(need);
-  return true;
+  return Codec::RequestLength(req, avail, len);
 }
 
 bool WifiCommand::Handle(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
@@ -75,22 +29,22 @@ bool WifiCommand::Handle(void* ctx, const uint8_t* req, uint16_t len, uint8_t* r
     return true;
   }
   resp[0] = kCmd;
-  if (len < 2U)
+  Codec::Request request{};
+  if (len < 2U || Codec::ParseRequest(&req[1], static_cast<uint16_t>(len - 1U),
+                                      request) != Codec::Parse::OK)
   {
     return Reply(resp, kStatusArg, out);
   }
-  switch (req[1])
+  switch (request.op)
   {
-    case kOpStatus:
-      return (len == 2U) ? Status(settings, resp, cap, out)
-                         : Reply(resp, kStatusArg, out);
-    case kOpSet:
-      return Set(settings, req, len, resp, out);
-    case kOpClear:
-      return Clear(settings, req, len, resp, out);
-    default:
-      return Reply(resp, kStatusArg, out);
+    case Codec::Op::QUERY:
+      return Status(settings, resp, cap, out);
+    case Codec::Op::SAVE:
+      return Set(settings, request, resp, out);
+    case Codec::Op::CLEAR:
+      return Clear(settings, resp, out);
   }
+  return Reply(resp, kStatusArg, out);
 }
 
 uint16_t WifiCommand::Control(void* ctx, const uint8_t* req, uint16_t len, uint8_t* resp,
@@ -104,7 +58,8 @@ uint16_t WifiCommand::Control(void* ctx, const uint8_t* req, uint16_t len, uint8
     return ::XrDap::Control::StatusOnly(len < 1U || req == nullptr ? 0U : req[0],
                                         ::XrDap::Control::kStatusBadRequest, resp, cap);
   }
-  if (req[0] != kOpStatus && req[0] != kOpSet && req[0] != kOpClear)
+  const auto op = static_cast<Codec::Op>(req[0]);
+  if (op != Codec::Op::QUERY && op != Codec::Op::SAVE && op != Codec::Op::CLEAR)
   {
     return ::XrDap::Control::StatusOnly(req[0], ::XrDap::Control::kStatusUnsupported,
                                         resp, cap);
@@ -124,48 +79,27 @@ bool WifiCommand::Status(WifiSettings& settings, uint8_t* resp, uint16_t cap,
                          uint16_t& out)
 {
   const WifiStatus st = settings.Status();
-  const size_t ssid_len = strnlen(st.ssid, kSsidMax);
-  const size_t total = kStatusHead + ssid_len + kStatusTail;
-  if (cap < total)
-  {
-    return Reply(resp, kStatusResource, out);
-  }
-  resp[1] = kStatusOk;
-  resp[2] = static_cast<uint8_t>((st.started ? kFlagStarted : 0U) |
-                                 (st.connected ? kFlagConnected : 0U) |
-                                 (st.storage_repaired ? kFlagStorageRepaired : 0U));
-  std::memcpy(&resp[3], st.ip, 4U);
-  resp[7] = static_cast<uint8_t>(st.rssi);
-  resp[8] = static_cast<uint8_t>(ssid_len);
-  std::memcpy(&resp[kStatusHead], st.ssid, ssid_len);
-  resp[kStatusHead + ssid_len] = static_cast<uint8_t>(st.last_erase);
-  resp[kStatusHead + ssid_len + 1U] = static_cast<uint8_t>(st.reset_reason);
-  out = static_cast<uint16_t>(total);
+  Codec::Query query{};
+  query.started = st.started;
+  query.connected = st.connected;
+  query.storage_repaired = st.storage_repaired;
+  std::memcpy(query.ip, st.ip, sizeof(query.ip));
+  query.rssi = st.rssi;
+  query.ssid = st.ssid;
+  query.ssid_len = static_cast<uint8_t>(strnlen(st.ssid, kSsidMax));
+  query.last_erase = st.last_erase;
+  query.reset_reason = st.reset_reason;
+  out = Codec::EncodeQuery(kCmd, query, resp, cap);
   return true;
 }
 
-// 0x86 0x01 ssid_len ssid[ssid_len] pw_len pw[pw_len]
-bool WifiCommand::Set(WifiSettings& settings, const uint8_t* req, uint16_t len,
+bool WifiCommand::Set(WifiSettings& settings, const Codec::Request& request,
                       uint8_t* resp, uint16_t& out)
 {
-  if (len < 4U)
-  {
-    return Reply(resp, kStatusArg, out);
-  }
-  const uint8_t ssid_len = req[2];
-  if (len < 3U + ssid_len + 1U)
-  {
-    return Reply(resp, kStatusArg, out);
-  }
-  const uint8_t pw_len = req[3U + ssid_len];
-  if (len != 4U + ssid_len + pw_len || ssid_len > kSsidMax || pw_len > kPasswordMax)
-  {
-    return Reply(resp, kStatusArg, out);
-  }
   char ssid[kSsidMax + 1U] = {};
   char password[kPasswordMax + 1U] = {};
-  std::memcpy(ssid, &req[3], ssid_len);
-  std::memcpy(password, &req[4U + ssid_len], pw_len);
+  std::memcpy(ssid, request.ssid, request.ssid_len);
+  std::memcpy(password, request.password, request.password_len);
   const WifiSettings::SaveResult result = settings.Save(ssid, password);
   std::memset(password, 0, sizeof(password));
   if (result == WifiSettings::SaveResult::INVALID)
@@ -180,15 +114,8 @@ bool WifiCommand::Set(WifiSettings& settings, const uint8_t* req, uint16_t len,
   return Reply(resp, kStatusOk, out);
 }
 
-bool WifiCommand::Clear(WifiSettings& settings, const uint8_t* req, uint16_t len,
-                        uint8_t* resp, uint16_t& out)
+bool WifiCommand::Clear(WifiSettings& settings, uint8_t* resp, uint16_t& out)
 {
-  // 86 02 A5：确认字节不对就不清除，不带确认字节的请求不接受 / 86 02 A5: nothing is
-  // cleared without the right confirm byte; a request without it is rejected.
-  if (len != 3U || req[2] != kClearConfirm)
-  {
-    return Reply(resp, kStatusArg, out);
-  }
   if (!settings.Clear(EraseSource::VENDOR_COMMAND))
   {
     return Reply(resp, kStatusResource, out);

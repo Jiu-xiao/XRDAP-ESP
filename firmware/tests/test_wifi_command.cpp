@@ -30,7 +30,7 @@ Bytes SetRequest(const char* ssid, const char* password)
 }  // namespace
 
 static_assert(XrDap::WifiCommand::kCmd == 0x86, "command byte");
-static_assert(XrDap::WifiCommand::kFeature == (1U << 4), "INFO feature bit 4");
+static_assert(XrDap::Vendor::kFeatureWifi == (1U << 4), "INFO feature bit 4");
 
 // 状态末尾是清除来源和复位原因（A4 用户决定 ⑤）/ The status ends with the erase source
 // and the reset reason (A4 user decision 5).

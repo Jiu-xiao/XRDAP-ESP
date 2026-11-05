@@ -13,15 +13,17 @@
 #include <cstdint>
 #include <cstring>
 
+#include "xrdap/vendor/wifi_command.hpp"
+
 namespace XrDap
 {
 
 /// 热点名最长字节数 / Longest SSID in bytes.
-constexpr size_t kSsidMax = 32U;
+constexpr size_t kSsidMax = Vendor::WifiCommand::kSsidMax;
 /// WPA 密码最短字节数 / Shortest WPA password in bytes.
-constexpr size_t kPasswordMin = 8U;
+constexpr size_t kPasswordMin = Vendor::WifiCommand::kPasswordMin;
 /// WPA 密码最长字节数 / Longest WPA password in bytes.
-constexpr size_t kPasswordMax = 63U;
+constexpr size_t kPasswordMax = Vendor::WifiCommand::kPasswordMax;
 
 /// @brief 热点参数长度是否合法：热点名 1 到 32 字节，密码为空（开放网络）或 8 到 63 字节
 ///        / Whether the credential lengths are valid: SSID 1 to 32 bytes, password empty
@@ -45,28 +47,11 @@ enum class WifiLink : uint8_t
 /// 是什么清除了已保存的热点参数，存在 NVS 里，跨重启保留；数值即 0x86 状态里的字节 /
 /// What erased the saved credentials; kept in NVS across restarts. The values are the
 /// byte in the 0x86 status.
-enum class EraseSource : uint8_t
-{
-  NONE = 0,            ///< 没有清除过，或记录丢失 / Never erased, or no record.
-  BUTTON = 1,          ///< 板上按键长按 / Board button long press.
-  CONSOLE = 2,         ///< 命令行 wifi clear / Console wifi clear.
-  VENDOR_COMMAND = 3,  ///< 0x86 清除 / 0x86 clear.
-  STORAGE_REPAIR = 4,  ///< NVS 损坏，擦除重建 / NVS damaged, erased and rebuilt.
-};
+using EraseSource = Vendor::WifiCommand::EraseSource;
 
 /// 上次复位的原因；数值即 0x86 状态里的字节 / Cause of the last reset; the values are
 /// the byte in the 0x86 status.
-enum class ResetReason : uint8_t
-{
-  UNKNOWN = 0,   ///< 未知 / Unknown.
-  POWER_ON = 1,  ///< 上电 / Power-on.
-  SOFTWARE = 2,  ///< 软件重启（改设置后）/ Software restart (after a setting change).
-  WATCHDOG = 3,  ///< 看门狗 / Watchdog.
-  PANIC = 4,     ///< 异常 / Panic.
-  BROWNOUT = 5,  ///< 欠压 / Brown-out.
-  OTHER = 6,     ///< 其他（外部复位脚、深睡、USB/JTAG 等）/ Other (reset pin, deep
-                 ///< sleep, USB/JTAG...).
-};
+using ResetReason = Vendor::WifiCommand::ResetReason;
 
 /// Wi-Fi 状态快照 / Wi-Fi status snapshot.
 struct WifiStatus

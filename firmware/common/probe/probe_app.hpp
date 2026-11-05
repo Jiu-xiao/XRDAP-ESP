@@ -115,7 +115,7 @@ bool InstallProbe(ProbeCore<DapT>& probe, DapT& dap, WifiSettings& wifi,
                   const char* product, int core, unsigned priority)
 {
   SetProbeInfo(dap, ProbeIdentity{product, product, ProbeSerial(), kFirmwareVersion});
-  probe.vendor.SetExtraCommand(WifiCommand::kCmd, WifiCommand::kFeature,
+  probe.vendor.SetExtraCommand(WifiCommand::kCmd, Vendor::kFeatureWifi,
                                &WifiCommand::Handle, &wifi, &WifiCommand::Length);
   // 设置也经控制口：同样的 Wi-Fi 操作，不占 DAP 命令号 / The settings are also reachable
   // through the control port: the same Wi-Fi operations, without a DAP command number.
