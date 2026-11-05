@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 // SwdEngine 的高速路径：汇编写死每个半周期的指令，高低半周期指令数相同。
-// 每一档展开后 3 到 10 KB，12 档共约 90 KB，大多放在 flash 里（linker.lf 不把本文件放进
-// IRAM）。指令缓存未命中只会拉长某一个半周期，SWD 是同步协议，不影响正确性；但缓存与
-// Wi-Fi、lwIP 共用（S3 上它们在核 0），被挤掉后重新取指约 60 µs，会推迟一帧采样。所以
-// kIramLevelN 这一档放进 IRAM（S2 和 S3）：它是 10 MHz（测试工具
-// 采样用的时钟）对应的档位，约 7 KB；全部放进去要占掉大部分堆。
+// 每一档展开后都不小，全部档位合起来很大，所以大多放在 flash 里（linker.lf 不把本文件
+// 放进 IRAM）。指令缓存未命中只会拉长某一个半周期，SWD 是同步协议，不影响正确性；但
+// 缓存与 Wi-Fi、lwIP 共用（S3 上它们在核 0），被挤掉后重新取指会推迟一帧采样。所以
+// kIramLevelN 这一档放进 IRAM（S2 和 S3）：它是约 10 MHz 对应的档位；全部放进去要占掉
+// 大部分堆。
 //
 // SwdEngine fast path: the instructions of every half period are fixed in assembly, with
-// the same count in the high and low halves. Each unrolled level is 3 to 10 KB, about
-// 90 KB for all 12, so most of them live in flash (linker.lf leaves this file out of
-// IRAM). An instruction cache miss only stretches one half period, which SWD, being
-// synchronous, tolerates; but the cache is shared with Wi-Fi and lwIP (on core 0 on the
-// S3), and a refill after eviction takes about 60 us and delays a sample frame. The level
-// kIramLevelN therefore lives in IRAM (on the S2 and the S3): it is
-// the level for 10 MHz (the clock the test tool samples at), about 7 KB; all levels would
-// take most of the heap.
+// the same count in the high and low halves. Each unrolled level is sizeable and all the
+// levels together are large, so most of them live in flash (linker.lf leaves this file
+// out of IRAM). An instruction cache miss only stretches one half period, which SWD,
+// being synchronous, tolerates; but the cache is shared with Wi-Fi and lwIP (on core 0 on
+// the S3), and a refill after eviction delays a sample frame. The level kIramLevelN
+// therefore lives in IRAM (on the S2 and the S3): it is the level for about 10 MHz; all
+// levels would take most of the heap.
 
 #include "sdkconfig.h"
 #include "swd_engine.hpp"

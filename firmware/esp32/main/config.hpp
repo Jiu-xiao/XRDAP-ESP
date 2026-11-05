@@ -28,18 +28,15 @@ constexpr int kSwclkGpio = 18;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 19;
 
-/// 传统 ESP32 的 GPIO 读写走外设总线（写约 12、读约 17 个 CPU 周期），比 S3 的专用 GPIO
-/// 慢得多 / GPIO access on the classic ESP32 goes over the peripheral bus (about 12 CPU
-/// cycles per write, 17 per read), much slower than the S3's dedicated GPIO.
+/// 传统 ESP32 的 GPIO 读写走外设总线，比 S3 的专用 GPIO 慢得多 / GPIO access on the
+/// classic ESP32 goes over the peripheral bus, much slower than the S3's dedicated GPIO.
 /// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N，不带延时
-/// c。240 MHz 下用 ccount 实测：请求字节、读数据相、写数据相和 SWJ 序列按 N >= 2 拟合，
-/// b = 10.0（一次延时循环 5 个周期），a 取各路径的平均 28.9；c 取不带延时时最短的一条路径
-/// 35.0，所以选无延时路径时任何路径都不会比请求的时钟快 / Timing of libxr's
-/// SwdGeneralGPIO (CPU cycles x10): a + b*N per SWCLK period with delay, c without.
-/// Measured with ccount at 240 MHz: the request byte, read and write data phases and SWJ
-/// sequence fit b = 10.0 (5 cycles per delay-loop iteration) for N >= 2, and a is their
-/// mean, 28.9; c is the shortest path without delay, 35.0, so the no-delay path is never
-/// faster than the request on any path.
+/// c。b = 10.0 是一次延时循环的 5 个周期，a 是各路径的平均固定开销；c 取不带延时时最短的
+/// 一条路径，所以选无延时路径时任何路径都不会比请求的时钟快 / Timing of libxr's
+/// SwdGeneralGPIO (CPU cycles x10): a + b*N per SWCLK period with delay, c without. b =
+/// 10.0 is the 5 cycles of one delay-loop iteration and a is the mean fixed cost of the
+/// paths; c is the shortest path without delay, so the no-delay path is never faster than
+/// the request on any path.
 inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{100, 289, 350};
 
 /// 执行任务所在的核，核上只有它 / Core of the execution task, which runs alone there.

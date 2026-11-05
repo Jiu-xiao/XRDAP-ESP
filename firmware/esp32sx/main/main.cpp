@@ -214,9 +214,8 @@ extern "C" void app_main(void)
 #else
   (void)dap_created;
 #endif
-  // S3 保留原来的降级行为：此任务失败不阻止串口和网络启动。
-  // Preserve S3 degradation: failure of the DAP task does not prevent UART or network
-  // use.
+  // S3 降级运行：此任务失败不阻止串口和网络启动 / The S3 degrades: failure of this task
+  // does not prevent serial or network use.
 
   // 命令行和清除按键经执行上下文改设置 / The console and the clear button change settings
   // through the execution context.

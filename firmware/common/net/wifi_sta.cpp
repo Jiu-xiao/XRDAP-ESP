@@ -34,8 +34,8 @@ struct Credentials
   char password[kPasswordMax + 1U];
 };
 
-// 命名空间沿用早期固件的名字，已经配过网的板子升级后不用重配 / The namespace keeps the
-// early firmware's name so configured boards keep their credentials after an upgrade.
+// 命名空间名存在 NVS 里，改名会读不到已保存的热点参数 / The namespace name is stored in
+// NVS; renaming it would orphan the saved credentials.
 constexpr const char* kNvsNamespace = "rmlink";
 constexpr const char* kNvsKey = "wifi";
 constexpr const char* kNvsEraseKey = "wifi_erase";

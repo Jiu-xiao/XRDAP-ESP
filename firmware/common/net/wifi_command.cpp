@@ -183,9 +183,8 @@ bool WifiCommand::Set(WifiSettings& settings, const uint8_t* req, uint16_t len,
 bool WifiCommand::Clear(WifiSettings& settings, const uint8_t* req, uint16_t len,
                         uint8_t* resp, uint16_t& out)
 {
-  // 86 02 A5：确认字节不对就不清除，不兼容不带确认的旧请求（A4 用户决定 ③）/ 86 02 A5:
-  // nothing is cleared without the right confirm byte; the old request without it is not
-  // accepted (A4 user decision 3).
+  // 86 02 A5：确认字节不对就不清除，不带确认字节的请求不接受 / 86 02 A5: nothing is
+  // cleared without the right confirm byte; a request without it is rejected.
   if (len != 3U || req[2] != kClearConfirm)
   {
     return Reply(resp, kStatusArg, out);
