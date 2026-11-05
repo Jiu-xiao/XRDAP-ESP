@@ -5,7 +5,6 @@
 //
 // Whole-buffer reads and writes on a blocking socket, the byte stream for DapTcpSession.
 
-#include <atomic>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -14,11 +13,6 @@
 
 namespace XrDap::Net
 {
-
-inline std::atomic<uint32_t> socket_errors{0U};
-inline std::atomic<uint32_t> last_socket_error{0U};
-inline std::atomic<uint32_t> connections{0U};
-inline std::atomic<uint32_t> disconnections{0U};
 
 inline bool ConfigureSendTimeout(int fd)
 {
@@ -45,11 +39,6 @@ struct SocketStream
         {
           continue;
         }
-        if (r < 0)
-        {
-          last_socket_error.store(static_cast<uint32_t>(errno));
-          socket_errors.fetch_add(1U);
-        }
         return false;
       }
       buf += r;
@@ -70,8 +59,6 @@ struct SocketStream
         {
           continue;
         }
-        last_socket_error.store(static_cast<uint32_t>(r < 0 ? errno : 0));
-        socket_errors.fetch_add(1U);
         return false;
       }
       buf += r;

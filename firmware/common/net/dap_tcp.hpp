@@ -126,7 +126,6 @@ class DapTcpServer
 
   void Connected()
   {
-    Net::connections.fetch_add(1U);
     if (client_ != nullptr)
     {
       client_->store(true);
@@ -138,7 +137,6 @@ class DapTcpServer
   void Disconnected()
   {
     exec_.exec.LinkLost(Transport::TCP);
-    Net::disconnections.fetch_add(1U);
     if (client_ != nullptr)
     {
       client_->store(false);

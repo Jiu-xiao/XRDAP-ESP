@@ -51,7 +51,8 @@ struct ProbeCore
   Executor<DapT> exec;   ///< 唯一的命令执行器 / The single command executor.
 };
 
-/// Extra lines in CDC heap output; no DAP command or SWD access.
+/// 命令行 heap 输出里的附加行；不发 DAP 命令，不访问 SWD / Extra lines in the console
+/// heap output; no DAP command or SWD access.
 template <typename DapT>
 void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
 {
@@ -69,12 +70,6 @@ void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
   emit(snprintf(line, sizeof(line), "probe link=%u sampling=%u\r\n",
                 static_cast<unsigned>(probe.vendor.ConnectedLink()),
                 static_cast<unsigned>(probe.vendor.Sampling())));
-  emit(snprintf(line, sizeof(line),
-                "net accepted=%lu closed=%lu errors=%lu errno=%lu\r\n",
-                static_cast<unsigned long>(Net::connections.load()),
-                static_cast<unsigned long>(Net::disconnections.load()),
-                static_cast<unsigned long>(Net::socket_errors.load()),
-                static_cast<unsigned long>(Net::last_socket_error.load())));
 }
 
 /// @brief 创建执行任务：固定在 SWD 所在的核上，USB 命令、别的链路投来的请求和采样都在这里

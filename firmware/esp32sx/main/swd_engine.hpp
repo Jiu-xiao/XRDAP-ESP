@@ -92,13 +92,6 @@ SwdFastXferFn SwdFastTransferFn(size_t level);
 /// the call and SWCLK is left low.
 uint32_t SwdFastMeasureHalfX16(size_t level, const SwdFastPins& pins);
 
-#if CONFIG_IDF_TARGET_ESP32S2
-/// 最近一次选用的高速档位索引；尚未选用时 UINT32_MAX。低速模式不会更新此诊断值。
-/// Last selected fast-level index, or UINT32_MAX before selection. Paced mode
-/// does not update this diagnostic value.
-uint32_t SwdFastLastLevel();
-#endif
-
 /// 专用 GPIO 上的 SWD 位带引擎 / SWD bit-bang engine on dedicated GPIO.
 /// @note 非线程安全；所有方法只能由同一个任务在创建 swclk、swdio 的核上调用 / Not
 ///       thread-safe; call every method from one task on the core that created swclk and
