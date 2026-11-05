@@ -7,11 +7,10 @@
 # XRDAP_COMMON_REQUIRES to idf_component_register. The chip directory comes first on the
 # include path, so config.hpp is the chip's own.
 set(XRDAP_COMMON_DIR "${CMAKE_CURRENT_LIST_DIR}")
-# 会话主人、命令执行器、串口链路、厂商扩展、状态灯规则和探针身份来自 XRDAP-Core
+# 命令执行器、串口链路、厂商扩展、状态灯规则和探针身份来自 XRDAP-Core
 # （third_party/xrdap-core）。
-# The session owner, the command executor, the serial link, the vendor extension, the
-# status light rule and the probe identity come from XRDAP-Core
-# (third_party/xrdap-core).
+# The command executor, the serial link, the vendor extension, the status light rule and
+# the probe identity come from XRDAP-Core (third_party/xrdap-core).
 include("${XRDAP_COMMON_DIR}/../../third_party/xrdap-core/xrdap_core.cmake")
 set(XRDAP_COMMON_SRCS
     "${XRDAP_COMMON_DIR}/console/console_core.cpp"

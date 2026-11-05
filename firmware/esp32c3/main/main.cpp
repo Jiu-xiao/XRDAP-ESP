@@ -5,9 +5,9 @@
 //         也是 Wi-Fi 命令行（serial_mux.hpp）。
 //   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针，与 S3 版相同。
 // 两种传输经 XRDAP-Core 的同一个执行器驱动 DAP 和 XR 厂商扩展（多地址读写、指针链、
-// 探针端采样），同一时间只有一条传输拥有探针。C3 没有
-// 能做自定义 USB 设备的 USB 控制器，所以没有 S3 版的 USB CMSIS-DAP 接口。与 S3 版共用的
-// 源文件在 firmware/common 下。
+// 探针端采样）；探针一次只使用一条传输由使用者保证。C3 没有能做自定义 USB 设备的 USB
+// 控制器，所以没有 S3 版的 USB CMSIS-DAP 接口。与 S3 版共用的源文件在 firmware/common
+// 下。
 //
 // XR-DAP for the ESP32-C3: a CMSIS-DAP debug probe built on libxr.
 //   Serial: the built-in USB Serial/JTAG (a CDC port on the PC) carries CMSIS-DAP in
@@ -16,8 +16,8 @@
 //   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe,
 //           as on the S3.
 // Both transports drive DAP and the XR vendor extension (multi-address access, pointer
-// chains, probe-side sampling) through XRDAP-Core's one executor; one transport owns the
-// probe at a time. The C3 has no USB controller usable for
+// chains, probe-side sampling) through XRDAP-Core's one executor; that the probe is used
+// over one transport at a time is up to the user. The C3 has no USB controller usable for
 // custom USB devices, so it lacks the S3's USB CMSIS-DAP interface. Sources shared with
 // the S3 build live in firmware/common.
 #include <cstdint>
@@ -78,8 +78,8 @@ extern "C" void app_main(void)
   static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
                      LibXR::USB::Endpoint::EPNumber::EP1, swd_set.swd, nullptr);
 
-  // 会话主人、厂商扩展和执行器；串口和网络都经执行器驱动 DAP / Session owner, vendor
-  // extension and executor; serial and network both drive DAP through the executor.
+  // 厂商扩展和执行器；串口和网络都经执行器驱动 DAP / Vendor extension and executor;
+  // serial and network both drive DAP through the executor.
   static ProbeCore<DapLink> probe(dap, swd_set.swd);
   InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName, Config::kCore,
                Config::kDapPriority);

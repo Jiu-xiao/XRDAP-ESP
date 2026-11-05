@@ -3,8 +3,9 @@
 //   串口：UART0 接板上的 USB 转串口芯片，用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端
 //         xrdap 使用；同一个口也是 Wi-Fi 命令行（serial_mux.hpp）。
 //   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针，与 S3、C3 相同。
-// 两种传输经 XRDAP-Core 的同一个执行器驱动 DAP，同一时间只有一条传输拥有探针。传统
-// ESP32 没有 USB 控制器，也没有 CPU 专用 GPIO：SWD 经 GPIO 寄存器驱动（RegGpioPin）。
+// 两种传输经 XRDAP-Core 的同一个执行器驱动 DAP；探针一次只使用一条传输由使用者保证。
+// 传统 ESP32 没有 USB 控制器，也没有 CPU 专用 GPIO：SWD 经 GPIO 寄存器驱动
+// （RegGpioPin）。
 //
 // XR-DAP for the classic ESP32: a CMSIS-DAP debug probe built on libxr.
 //   Serial: UART0, wired to the on-board USB-UART chip, carries CMSIS-DAP in libxr Topic
@@ -12,9 +13,9 @@
 //           (serial_mux.hpp).
 //   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe,
 //           as on the S3 and C3.
-// Both transports drive DAP through XRDAP-Core's one executor; one transport owns the
-// probe at a time. The classic ESP32 has no USB controller and no CPU dedicated GPIO: SWD
-// is driven through the GPIO registers (RegGpioPin).
+// Both transports drive DAP through XRDAP-Core's one executor; that the probe is used
+// over one transport at a time is up to the user. The classic ESP32 has no USB controller
+// and no CPU dedicated GPIO: SWD is driven through the GPIO registers (RegGpioPin).
 #include <cstdint>
 
 #include "config.hpp"
@@ -69,8 +70,8 @@ extern "C" void app_main(void)
   static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
                      LibXR::USB::Endpoint::EPNumber::EP1, swd_set.swd, nullptr);
 
-  // 会话主人、厂商扩展和执行器；串口和网络都经执行器驱动 DAP / Session owner, vendor
-  // extension and executor; serial and network both drive DAP through the executor.
+  // 厂商扩展和执行器；串口和网络都经执行器驱动 DAP / Vendor extension and executor;
+  // serial and network both drive DAP through the executor.
   static ProbeCore<DapLink> probe(dap, swd_set.swd);
   InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName, Config::kSwdCore,
                Config::kDapPriority);

@@ -6,7 +6,7 @@
 //   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap 使用（板上有 USB
 //         转串口芯片时，见 config.hpp 的板型）。
 // 三种传输经 XRDAP-Core 的同一个执行器驱动 DAP 和 XR 厂商扩展（多地址读写、指针链、
-// 探针端采样）；同一时间只有一条传输拥有探针，别的传输收到“忙”。
+// 探针端采样）；探针一次只使用一条传输由使用者保证。
 //
 // XR-DAP-S3 / XR-DAP-S2: a CMSIS-DAP debug probe for the ESP32-S3 and ESP32-S2 built on
 // libxr (the chip's native USB OTG; boards in config.hpp).
@@ -15,8 +15,8 @@
 //   Serial: CMSIS-DAP in libxr Topic frames on UART0, for the PC-side xrdap (on boards
 //           with a USB-UART chip, see the board choice in config.hpp).
 // All three transports drive DAP and the XR vendor extension (multi-address access,
-// pointer chains, probe-side sampling) through XRDAP-Core's one executor; one transport
-// owns the probe at a time and the others get busy.
+// pointer chains, probe-side sampling) through XRDAP-Core's one executor; that the probe
+// is used over one transport at a time is up to the user.
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -199,8 +199,8 @@ extern "C" void app_main(void)
   static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
                      LibXR::USB::Endpoint::EPNumber::EP1, GetSwdSet().swd, nreset);
 
-  // 会话主人、厂商扩展和执行器；所有传输经执行器驱动 DAP / Session owner, vendor
-  // extension and executor; every transport drives DAP through the executor.
+  // 厂商扩展和执行器；所有传输经执行器驱动 DAP / Vendor extension and executor; every
+  // transport drives DAP through the executor.
   static ProbeCore<DapLink> probe(dap, GetSwdSet().swd);
   // 执行任务放在 SWD 核上，与核 0 的 USB 中断分开：USB 的 DAP 命令、串口和 TCP 投来的请求
   // 和采样都在它里面一件一件做 / The execution task sits on the SWD core, apart from the
