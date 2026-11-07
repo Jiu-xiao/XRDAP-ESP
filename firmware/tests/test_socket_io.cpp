@@ -16,13 +16,16 @@ int main()
   if (getsockopt(fd[0], SOL_SOCKET, SO_SNDTIMEO, &timeout, &length) != 0 ||
       timeout.tv_sec != 5)
     return 3;
-  timeout = {0, 100000};  // Exercise the same timeout path without a ten-second test.
+  // 走同样的超时路径，不用测试等十秒 / Exercise the same timeout path without a
+  // ten-second test.
+  timeout = {0, 100000};
   setsockopt(fd[0], SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
   const int small = 4096;
   setsockopt(fd[0], SOL_SOCKET, SO_SNDBUF, &small, sizeof(small));
   SocketStream stream{fd[0]};
   const auto start = std::chrono::steady_clock::now();
-  // Peer is alive but never reads. Keepalive alone cannot release this writer.
+  // 对端活着但不读，只靠 keepalive 放不开这个写者 / Peer is alive but never reads.
+  // Keepalive alone cannot release this writer.
   const std::vector<uint8_t> bytes(1U << 20, 0x5A);
   const bool sent = stream.WriteAll(bytes.data(), bytes.size());
   const auto elapsed = std::chrono::steady_clock::now() - start;
@@ -33,7 +36,8 @@ int main()
   stream.fd = fd[0];
   close(fd[1]);
   uint8_t byte = 0;
-  // Peer closed: the read reports end of stream instead of waiting.
+  // 对端关了：读报告流结束，不再等待 / Peer closed: the read reports end of stream
+  // instead of waiting.
   if (stream.ReadAll(&byte, 1)) return 6;
   close(fd[0]);
   std::puts("stalled writer is bounded; peer close ends the read");

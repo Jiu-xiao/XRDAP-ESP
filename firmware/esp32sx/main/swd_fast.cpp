@@ -62,6 +62,13 @@ inline void Out(uint32_t value) { dedic_gpio_cpu_ll_write_all(value); }
 // 低半周期：写沿（SWCLK 低，SWDIO 为这一位）、算高电平值、N 个 nop；
 // 高半周期：写沿（SWCLK 高）、在空闲指令位算下一位要输出的值、凑够 N + 2 条指令。
 // 下一位直接从 val 取（extui 取一位，movnez 选 SWDIO 的位），不先展开成数组。
+//
+// Writes BITS bits of data (the low BITS bits of val, low bit first), then a parity bit
+// pb when PAR is 1. Low half: write the edge (SWCLK low, SWDIO this bit), compute the
+// high level value, N nops. High half: write the edge (SWCLK high), compute the next
+// bit's value in the free instruction slots, fill up to N + 2 instructions. The next bit
+// comes straight from val (extui takes one bit, movnez picks the SWDIO bit), without an
+// array first.
 template <int N, int BITS, int PAR>
 inline __attribute__((always_inline)) void WriteBits(uint32_t val, uint32_t dm,
                                                      uint32_t cm, uint32_t pb)
@@ -103,6 +110,13 @@ inline __attribute__((always_inline)) void WriteBits(uint32_t val, uint32_t dm,
 // 放回原位、or 合并，都放在空闲指令位里）；第 32 位起的原始输入寄存器值存进 raw[]。
 // 低半周期：写沿、N 个 nop、采样；高半周期：写沿、处理采到的这一位、凑够 N + 2 条指令。
 // 采样是低半周期的最后一条指令，紧挨着上升沿。
+//
+// Reads COUNT bits. The first 32 bits are assembled into acc during the high half (srl to
+// the lowest bit, extui one bit, slli back in place, or to merge, all in the free
+// instruction slots); from bit 32 on, the raw input register values go into raw[]. Low
+// half: write the edge, N nops, sample. High half: write the edge, handle the sampled
+// bit, fill up to N + 2 instructions. The sample is the last instruction of the low half,
+// right before the rising edge.
 template <int N, int COUNT>
 inline __attribute__((always_inline)) uint32_t ReadBits(uint32_t* raw, uint32_t vlo,
                                                         uint32_t vhi, uint32_t shift)
@@ -158,7 +172,9 @@ inline __attribute__((always_inline)) LibXR::ErrorCode XferBody(const SwdFastPin
   pins.swdio->SetOutputEnable(true);
   WriteBits<N, 8, 0>(MakeRequest(req), dm, cm, 0U);
 
-  // 释放 SWDIO：换向时钟 + 3 位 ACK（acc 的位 0 是换向时钟，位 1 到 3 是 ACK）
+  // 释放 SWDIO：换向时钟 + 3 位 ACK（acc 的位 0 是换向时钟，位 1 到 3 是 ACK）/ Release
+  // SWDIO: turnaround clock + 3 ACK bits (bit 0 of acc is the turnaround, bits 1 to 3 the
+  // ACK).
   pins.swdio->SetOutputEnable(false);
   const uint32_t ack_bits = ReadBits<N, 4>(raw, dm, dm | cm, sh);
   resp.ack = DecodeAck(static_cast<uint8_t>((ack_bits >> 1) & 7U));
@@ -168,12 +184,15 @@ inline __attribute__((always_inline)) LibXR::ErrorCode XferBody(const SwdFastPin
     if (resp.ack == Ack::NO_ACK || resp.ack == Ack::PROTOCOL)
     {
       // 与 CMSIS-DAP 一致：ACK 不是 OK、WAIT、FAULT 时目标可能仍在数据阶段，换向时钟加
-      // 33 个时钟都在释放 SWDIO 的状态下发出。
+      // 33 个时钟都在释放 SWDIO 的状态下发出 / As in CMSIS-DAP: with an ACK other than
+      // OK, WAIT or FAULT the target may still be in the data phase, so the turnaround
+      // and 33 more clocks all run with SWDIO released.
       (void)ReadBits<N, 34>(raw, dm, dm | cm, sh);
     }
     else
     {
-      (void)ReadBits<N, 1>(raw, dm, dm | cm, sh);  // 换向时钟，不进数据阶段
+      // 换向时钟，不进数据阶段 / Turnaround clock, no data phase.
+      (void)ReadBits<N, 1>(raw, dm, dm | cm, sh);
     }
     Out(dm);
     pins.swdio->SetOutputEnable(true);
@@ -182,7 +201,8 @@ inline __attribute__((always_inline)) LibXR::ErrorCode XferBody(const SwdFastPin
 
   if (req.rnw)
   {
-    // 32 位数据 + 校验位 + 换向时钟；raw[0] 是校验位的采样
+    // 32 位数据 + 校验位 + 换向时钟；raw[0] 是校验位的采样 / 32 data bits + parity +
+    // turnaround clock; raw[0] is the sampled parity.
     const uint32_t data = ReadBits<N, 34>(raw, dm, dm | cm, sh);
     Out(dm);
     pins.swdio->SetOutputEnable(true);
@@ -193,13 +213,17 @@ inline __attribute__((always_inline)) LibXR::ErrorCode XferBody(const SwdFastPin
   else
   {
     const uint32_t data = req.wdata;
-    (void)ReadBits<N, 1>(raw, dm, dm | cm, sh);  // 换向时钟，之后主机驱动 SWDIO
+    // 换向时钟，之后主机驱动 SWDIO / Turnaround clock, then the host drives SWDIO.
+    (void)ReadBits<N, 1>(raw, dm, dm | cm, sh);
     pins.swdio->SetOutputEnable(true);
-    // GPIO_ENABLE 读回之后输出已经生效，不再额外等待
+    // GPIO_ENABLE 读回之后输出已经生效，不再额外等待 / After the GPIO_ENABLE read-back
+    // the output is in effect, so no further wait.
     WriteBits<N, 32, 1>(data, dm, cm, static_cast<uint32_t>(__builtin_parity(data)));
     if (req.port == LibXR::Debug::SwdProtocol::Port::AP)
     {
-      // AP 写之后多发几个低电平时钟，让 MEM-AP 忙完，否则紧接着的读会收到 WAIT
+      // AP 写之后多发几个低电平时钟，让 MEM-AP 忙完，否则紧接着的读会收到 WAIT / After an
+      // AP write, a few more clocks with SWDIO low let the MEM-AP finish; a read right
+      // after would get WAIT.
       for (uint32_t i = 0; i < pins.idle_after_ap_write; ++i)
       {
         WriteBits<N, 1, 0>(0U, dm, cm, 0U);
@@ -211,6 +235,9 @@ inline __attribute__((always_inline)) LibXR::ErrorCode XferBody(const SwdFastPin
 }
 
 // 用这一档读 32 位（64 个半周期），取 4 次里最少的一次。调用前 SWDIO 应已释放。
+//
+// Reads 32 bits at this level (64 half periods), the least of 4 runs. SWDIO must be
+// released before the call.
 // 放在 flash 里的档位 / A level in flash.
 template <int N>
 LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& resp)
@@ -248,6 +275,11 @@ uint32_t MeasureHalfX16(const SwdFastPins& pins)
 // 档位：每个半周期 N + 2 条指令。240 MHz 下 N = 3 约 23.7 MHz，N = 4 约 19.8 MHz，
 // N = 16 约 6.7 MHz。不提供 N = 2（约 29.5 MHz）：目标在上升沿后约 45 ns 才让数据有效，
 // 半周期短于约 4.5 个 CPU 周期就采不到。N = 3 裕量很小。
+//
+// Levels: N + 2 instructions per half period. At 240 MHz N = 3 is about 23.7 MHz, N = 4
+// about 19.8 MHz, N = 16 about 6.7 MHz. N = 2 (about 29.5 MHz) is left out: the target's
+// data becomes valid about 45 ns after the rising edge, so a half period under about 4.5
+// CPU cycles cannot sample it. N = 3 has little margin.
 struct Level
 {
   SwdFastXferFn xfer;

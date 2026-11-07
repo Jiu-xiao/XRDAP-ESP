@@ -73,7 +73,9 @@ class RegGpioPin final : public LibXR::GPIO
     output_enabled_ = on;
     REG_WRITE(on ? GPIO_ENABLE_W1TS_REG : GPIO_ENABLE_W1TC_REG, mask_);
     // 写进外设总线的写缓冲后要一段时间才生效；读回同一外设的寄存器会等写完成，之后引脚才
-    // 真正切换了方向。
+    // 真正切换了方向 / A write into the peripheral bus's write buffer takes a while to
+    // apply; reading back a register of the same peripheral waits for it, and only then
+    // has the pin changed direction.
     (void)REG_READ(GPIO_ENABLE_REG);
   }
 

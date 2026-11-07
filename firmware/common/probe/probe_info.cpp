@@ -18,7 +18,8 @@ struct Identity
   char hostname[16] = {};
 };
 
-// 局部静态量的初始化是线程安全的，任何任务第一次调用都可以。
+// 局部静态量的初始化是线程安全的，任何任务第一次调用都可以 / Initialising a local static
+// is thread-safe, so any task may make the first call.
 const Identity& GetIdentity()
 {
   static const Identity id = []

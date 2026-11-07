@@ -119,6 +119,9 @@ class DapTcpServer
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_idle, sizeof(keep_idle));
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &keep_interval, sizeof(keep_interval));
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &keep_count, sizeof(keep_count));
+    // keepalive 发现不了对端活着但程序不再读的情况，所以应答的阻塞写也要有上限；空闲的
+    // 调试连接仍然有效。
+    //
     // Keepalive cannot detect a live peer whose application stopped reading. Bound
     // a blocked response write as well; idle debugging connections remain valid.
     return Net::ConfigureSendTimeout(fd);

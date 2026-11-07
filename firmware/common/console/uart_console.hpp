@@ -60,7 +60,9 @@ class UartConsole
   {
     for (;;)
     {
-      // 队列为空时睡眠让出 CPU；S3 的 USB 关闭期间读端口一直没有数据。
+      // 队列为空时睡眠让出 CPU；S3 的 USB 关闭期间读端口一直没有数据 / Sleep and yield
+      // the CPU while the queue is empty; the read port stays empty while the S3's USB is
+      // closed.
       if (uart_.read_port_->Size() == 0)
       {
         vTaskDelay(pdMS_TO_TICKS(20));

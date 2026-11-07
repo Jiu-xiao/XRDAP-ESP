@@ -60,6 +60,9 @@ bool IRAM_ATTR GptimerTick::OnAlarm(gptimer_handle_t timer,
       AdvanceTimerDeadline(event->alarm_value, event->count_value, self.period_us_);
   gptimer_alarm_config_t alarm = {};
   alarm.alarm_count = deadline.next_alarm;
+  // 先重新定闹钟再唤醒：唤醒可能从这个中断切换任务。设置期间就已到期的闹钟，GPTimer 会
+  // 再次触发。
+  //
   // Rearm before waking: the wake may yield from this ISR. GPTimer retriggers an alarm
   // that becomes overdue while it is being programmed.
   gptimer_set_alarm_action(timer, &alarm);

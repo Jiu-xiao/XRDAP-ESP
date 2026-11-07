@@ -52,6 +52,10 @@ using namespace XrDap;
 
 // S3 的 IN 端点只有 EP0 和 EP1 到 EP4。EP1 是 DAP（收发共用），EP2 是 CDC 数据，EP3 的
 // IN 是 CDC 通知。缓冲按 64 字节对齐（DMA 缓存行），每个方向至少两倍最大包长。
+//
+// The S3 has IN endpoints EP0 and EP1 to EP4 only. EP1 is DAP (both directions), EP2 CDC
+// data, and the IN side of EP3 CDC notifications. Buffers are aligned to 64 bytes (DMA
+// cache line), with at least twice the largest packet per direction.
 alignas(64) uint8_t ep0_buffer[128];
 alignas(64) uint8_t ep1_dap[4096];
 alignas(64) uint8_t ep2_cdc[1024];
@@ -76,7 +80,9 @@ using DapBase =
 // session (unplug, host reset).
 using DapLink = ResetCountingUsb<DapBase>;
 
-// SWD 相关对象。必须在 Config::kSwdCore 上创建：专用 GPIO 只能在创建它的核上访问。
+// SWD 相关对象。必须在 Config::kSwdCore 上创建：专用 GPIO 只能在创建它的核上访问 / The
+// SWD objects. They must be created on Config::kSwdCore: a dedicated GPIO is only
+// accessible from the core that created it.
 struct SwdSet
 {
   DedicGpioPin swclk{Config::kSwclkGpio, /*bidirectional=*/false, /*pull_up=*/false,
@@ -134,7 +140,9 @@ extern "C" void app_main(void)
   // errors.
   (void)WifiStaInitStorage();
 
-  // 有 SWDIO 模拟开关的板子（Lite）先把开关接到 SWDIO 引脚那一侧，再建 SWD 对象。
+  // 有 SWDIO 模拟开关的板子（Lite）先把开关接到 SWDIO 引脚那一侧，再建 SWD 对象 / On a
+  // board with a SWDIO analog switch (Lite), connect the switch to the SWDIO pin before
+  // the SWD objects are built.
   if constexpr (Config::kSwdioSelectGpio >= 0)
   {
     const auto sel = static_cast<gpio_num_t>(Config::kSwdioSelectGpio);
@@ -205,7 +213,8 @@ extern "C" void app_main(void)
                                  LibXR::USB::Endpoint::EPNumber::EP2,
                                  LibXR::USB::Endpoint::EPNumber::EP3, 1024, 1024, 8);
   // USB 序列号 = 前缀 + 出厂 MAC（6 字节），协议栈把它转成十六进制接在前缀后面，和
-  // DAP_Info 的序列号相同。
+  // DAP_Info 的序列号相同 / USB serial = prefix + factory MAC (6 bytes); the stack
+  // appends it in hex to the prefix, which gives the same serial as DAP_Info.
   static constexpr auto lang = LibXR::USB::DescriptorStrings::MakeLanguagePack(
       LibXR::USB::DescriptorStrings::Language::EN_US, kVendorName,
       Config::kUsbProductName, kSerialPrefix);
@@ -225,7 +234,9 @@ extern "C" void app_main(void)
   // reset) lapses a connection on USB.
   probe.vendor.SetUsbResetSource(&dap.BusResets());
 
-  // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里创建。
+  // 串口 DAP 链路。执行 DAP 命令的线程必须在 SWD 核上（专用 GPIO 的限制），由这里创建 /
+  // The serial DAP link. The thread that runs DAP commands must be on the SWD core (a
+  // dedicated GPIO limit) and is created here.
   if constexpr (Config::kSerialLink)
   {
     // 默认 S3 的串口为可选传输，失败时 USB 和网络仍可用。
@@ -233,7 +244,8 @@ extern "C" void app_main(void)
     (void)StartSerialLink(probe);
   }
 
-  // Wi-Fi 命令行在 USB 虚拟串口上，没有热点参数时也能用它来设置。
+  // Wi-Fi 命令行在 USB 虚拟串口上，没有热点参数时也能用它来设置 / The Wi-Fi console is on
+  // the USB virtual serial port, usable for setup also without credentials.
   // 命令行的 heap 命令 / The console's heap command.
   static EspHeapReport heap_report;
   static UartConsole<LibXR::USB::CDCUart> console(cdc, wifi_posted, &heap_report);

@@ -36,8 +36,9 @@ namespace
 using namespace XrDap;
 
 using SwdLink = LibXR::Debug::SwdGeneralGPIO<RegGpioPin, RegGpioPin>;
-// DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal()
-// 执行命令；端点号用不到。
+// DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal() 执行命令；端点号用
+// 不到 / The DAP class is a USB device class. Here it is not attached to USB and only
+// ExecuteExternal() runs commands; the endpoint numbers are not used.
 using DapLink =
     LibXR::USB::DapLinkV2Class<SwdLink, Config::kDapPacketSize, Config::kDapPacketCount,
                                Config::kDapPacketSize>;
@@ -65,7 +66,8 @@ extern "C" void app_main(void)
   // errors.
   (void)WifiStaInitStorage();
 
-  // GPIO 寄存器在哪个核上都能访问，SWD 对象直接在这里创建。
+  // GPIO 寄存器在哪个核上都能访问，SWD 对象直接在这里创建 / The GPIO registers are
+  // reachable from either core, so the SWD objects are created right here.
   static SwdSet swd_set;
   static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
                      LibXR::USB::Endpoint::EPNumber::EP1, swd_set.swd, nullptr);
@@ -76,7 +78,9 @@ extern "C" void app_main(void)
   InstallProbe(probe, dap, WifiStaSettings(), Config::kProductName, Config::kSwdCore,
                Config::kDapPriority);
 
-  // UART0 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令。
+  // UART0 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令 / UART0 carries
+  // both the DAP link and the Wi-Fi console; DAP frames and typed commands are told
+  // apart automatically.
   using Link = SerialLink<Executor<DapLink>, Config::kDapPacketSize>;
   static LibXR::ESP32UART uart(
       static_cast<uart_port_t>(Config::kSerialUart), Config::kSerialTxGpio,

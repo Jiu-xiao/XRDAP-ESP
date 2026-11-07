@@ -9,6 +9,9 @@ namespace XrDap
 namespace
 {
 // 取下一个词：以空格分隔，可以用双引号括起带空格的词。返回 false 表示没有更多的词。
+//
+// Takes the next word: words are separated by spaces, and double quotes enclose a word
+// with spaces. Returns false when there are no more words.
 bool NextToken(char*& p, char*& token)
 {
   while (*p == ' ')
@@ -90,7 +93,8 @@ void ConsoleCore::Reset()
 
 void ConsoleCore::OnByte(uint8_t c)
 {
-  if (c == '\n' && last_was_cr_)  // CR LF 只算一次换行
+  // CR LF 只算一次换行 / CR LF counts as one line end.
+  if (c == '\n' && last_was_cr_)
   {
     last_was_cr_ = false;
     return;
@@ -130,7 +134,9 @@ void ConsoleCore::OnByte(uint8_t c)
   }
   if (c < 0x20 || (len_ == 0 && c == 'Z'))
   {
-    // 不是人打的字，多半是二进制协议：整行作废，到下一个换行之前什么也不输出
+    // 不是人打的字，多半是二进制协议：整行作废，到下一个换行之前什么也不输出 / Not typed
+    // text, most likely a binary protocol: drop the line and print nothing until the
+    // next line end.
     if (len_ > 0)
     {
       Print("\r\n");

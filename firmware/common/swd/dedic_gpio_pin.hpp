@@ -45,7 +45,8 @@ class DedicGpioPin final : public LibXR::GPIO
 #if SOC_GPIO_PIN_COUNT > 32
     if (gpio_num >= 32)
     {
-      // GPIO32 以后的输出使能在第二组寄存器里
+      // GPIO32 以后的输出使能在第二组寄存器里 / The output enables from GPIO32 up are in
+      // the second register set.
       enable_set_ = GPIO_ENABLE1_W1TS_REG;
       enable_clr_ = GPIO_ENABLE1_W1TC_REG;
       enable_ = GPIO_ENABLE1_REG;
@@ -72,6 +73,11 @@ class DedicGpioPin final : public LibXR::GPIO
     // CPU 数据通路一直保留，只用 GPIO_ENABLE 寄存器控制引脚方向，
     // 这样切换输入输出只需写一次寄存器。OEN_SEL 置 1 表示输出使能取自 GPIO_ENABLE，
     // 不取外设信号；三种芯片上这一位的含义相同，位号不同，用宏取。
+    //
+    // The CPU data path stays connected and only the GPIO_ENABLE register sets the pin
+    // direction, so switching between input and output takes one register write. OEN_SEL
+    // set to 1 takes the output enable from GPIO_ENABLE instead of the peripheral signal;
+    // this bit means the same on the three chips at different positions, hence the macro.
     uint32_t sel = REG_READ(GPIO_FUNC0_OUT_SEL_CFG_REG + gpio_ * 4);
     sel = (sel | GPIO_FUNC0_OEN_SEL) & ~GPIO_FUNC0_OEN_INV_SEL;
     REG_WRITE(GPIO_FUNC0_OUT_SEL_CFG_REG + gpio_ * 4, sel);
@@ -125,12 +131,19 @@ class DedicGpioPin final : public LibXR::GPIO
   {
     if (on == output_enabled_)
     {
-      return;  // 已经是这个状态，省掉一次外设总线写加读回
+      // 已经是这个状态，省掉一次外设总线写加读回 / Already in this state: skip one
+      // peripheral bus write and read-back.
+      return;
     }
     output_enabled_ = on;
     REG_WRITE(on ? enable_set_ : enable_clr_, enable_bit_);
     // GPIO_ENABLE 在外设总线上，写先进写缓冲，总线忙时要几十个 CPU 周期才生效，此前引脚
     // 仍被上拉。读回同一外设的寄存器会等写完成，调用方再等一小段，引脚就切换好了。
+    //
+    // GPIO_ENABLE is on the peripheral bus: a write first enters the write buffer and
+    // takes tens of CPU cycles on a busy bus, with the pin still pulled up until then.
+    // Reading back a register of the same peripheral waits for the write; after a short
+    // wait in the caller the pin has switched.
     (void)REG_READ(enable_);
   }
 

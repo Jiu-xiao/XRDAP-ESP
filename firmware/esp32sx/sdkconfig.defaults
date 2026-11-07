@@ -6,6 +6,9 @@ CONFIG_IDF_TARGET="esp32s3"
 # are in sdkconfig.defaults.esp32s3.
 # 镜像头写 4MB：检测到的 Flash 比镜像头小时 IDF 拒绝启动，比它大时只警告，所以 4MB 头在
 # N4、N8、N16 上都能启动。分区表到 0x217000 为止，4MB 放得下。
+# The image header says 4MB: IDF refuses to start when the detected flash is smaller than
+# the header and only warns when it is larger, so a 4MB header boots on N4, N8 and N16. The
+# partition table ends at 0x217000, which fits in 4MB.
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
@@ -14,7 +17,7 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_COMPILER_CXX_EXCEPTIONS=n
 CONFIG_COMPILER_CXX_RTTI=n
 CONFIG_FREERTOS_HZ=1000
-# QIO Flash、断言静默、lwIP 放 IRAM
+# QIO Flash、断言静默、lwIP 放 IRAM / QIO flash, silent assertions, lwIP in IRAM.
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y
 CONFIG_FREERTOS_CHECK_MUTEX_GIVEN_BY_OWNER=n
@@ -23,6 +26,8 @@ CONFIG_LWIP_IRAM_OPTIMIZATION=y
 CONFIG_LWIP_EXTRA_IRAM_OPTIMIZATION=y
 
 # 关掉用不到的功能：只用 Wi-Fi STA、IPv4、TCP 客户端连入，不用 SoftAP、企业认证、IPv6、DHCP 服务器
+# Turn off what is not used: only Wi-Fi STA, IPv4 and incoming TCP clients, without SoftAP,
+# enterprise authentication, IPv6 or a DHCP server.
 CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
 CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
 CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA=n
@@ -48,6 +53,8 @@ CONFIG_LWIP_TCP_TMR_INTERVAL=50
 CONFIG_LWIP_TCP_RTO_TIME=300
 CONFIG_FREERTOS_ENABLE_TASK_SNAPSHOT=n
 # 系统日志控制台关闭：默认 S3 板的 UART0 给串口 DAP 链路用（日志会混进 DAP 帧），别的板子没有接日志的口
+# The system log console is off: UART0 of the default S3 board is for the serial DAP link
+# (logs would mix into DAP frames), and the other boards have no port for logs.
 CONFIG_ESP_CONSOLE_NONE=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y

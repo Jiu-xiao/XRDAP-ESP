@@ -42,8 +42,10 @@ namespace
 using namespace XrDap;
 
 using SwdLink = LibXR::Debug::SwdGeneralGPIO<DedicGpioPin, DedicGpioPin>;
-// DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal() 执行命令，所以不需要
-// S3 版循环调用 Step() 的线程；端点号用不到，随便填。
+// DAP 类本身是 USB 设备类，这里不挂到 USB，只用 ExecuteExternal() 执行命令；端点号用
+// 不到，随便填 / The DAP class is a USB device class. Here it is not attached to USB and
+// only ExecuteExternal() runs commands; the endpoint numbers are not used, so any will
+// do.
 using DapLink =
     LibXR::USB::DapLinkV2Class<SwdLink, Config::kDapPacketSize, Config::kDapPacketCount,
                                Config::kDapPacketSize>;
@@ -73,7 +75,8 @@ extern "C" void app_main(void)
   // errors.
   (void)WifiStaInitStorage();
 
-  // 单核芯片，专用 GPIO 在哪个任务里创建都可以用。
+  // 单核芯片，专用 GPIO 在哪个任务里创建都可以用 / A single-core chip: a dedicated GPIO
+  // works whichever task creates it.
   static SwdSet swd_set;
   static DapLink dap(LibXR::USB::Endpoint::EPNumber::EP1,
                      LibXR::USB::Endpoint::EPNumber::EP1, swd_set.swd, nullptr);
@@ -86,6 +89,10 @@ extern "C" void app_main(void)
 
   // USB Serial/JTAG 上同时跑 DAP 链路和 Wi-Fi 命令行，自动区分 DAP 帧和人打的命令。
   // 控制台不能用这个口（sdkconfig 里控制台已关掉）。
+  //
+  // USB Serial/JTAG carries both the DAP link and the Wi-Fi console; DAP frames and typed
+  // commands are told apart automatically. The system console cannot use this port (it is
+  // off in sdkconfig).
   using Link = SerialLink<Executor<DapLink>, Config::kDapPacketSize>;
   static LibXR::ESP32CDCJtag usj(
       /*rx_buffer_size=*/8192, /*tx_buffer_size=*/4096, /*tx_queue_size=*/5,
@@ -100,7 +107,8 @@ extern "C" void app_main(void)
   static SerialMux<Link, LibXR::ESP32CDCJtag> mux(link, usj, wifi_posted, &heap_report);
   mux.Start(Config::kCore, Config::kSerialPriority);
 
-  // UART0 上也有一个命令行，给引出了 UART0 的开发板用。
+  // UART0 上也有一个命令行，给引出了 UART0 的开发板用 / UART0 has a console too, for
+  // dev boards that expose UART0.
   static LibXR::ESP32UART console_uart(
       static_cast<uart_port_t>(Config::kConsoleUart), Config::kConsoleTxGpio,
       Config::kConsoleRxGpio, LibXR::ESP32UART::PIN_NO_CHANGE,

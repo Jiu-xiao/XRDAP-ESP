@@ -118,7 +118,7 @@ class SwdEngine final : public LibXR::Debug::Swd
         dm_(swdio.OutMask()),
         im_(swdio.InMask())
   {
-    Out(dm_);  // 空闲：SWCLK 低，SWDIO 高
+    Out(dm_);  // 空闲：SWCLK 低，SWDIO 高 / Idle: SWCLK low, SWDIO high.
     Drive();
     Calibrate();
     (void)SetClockHz(kDefaultHz);
@@ -134,16 +134,20 @@ class SwdEngine final : public LibXR::Debug::Swd
       hz = kDefaultHz;
     }
     // 主机发来的是任意 32 位数：先限制在 1 kHz 到半个 CPU 时钟之内，再用 64 位计算，
-    // 避免乘法回绕和除 0。
+    // 避免乘法回绕和除 0 / The host sends any 32-bit number: clamp it between 1 kHz and
+    // half the CPU clock, then compute in 64 bits to avoid overflow and division by zero.
     const uint64_t hz64 = (hz < 1000U) ? 1000U : (hz > cpu_hz_ / 2U ? cpu_hz_ / 2U : hz);
+    // 想要的半周期，单位 1/16 CPU 周期 / The wanted half period, in 1/16 CPU cycles.
     const uint32_t want_x16 =
-        static_cast<uint32_t>((static_cast<uint64_t>(cpu_hz_) * 16U) /
-                              (2U * hz64));  // 想要的半周期，单位 1/16 CPU 周期
+        static_cast<uint32_t>((static_cast<uint64_t>(cpu_hz_) * 16U) / (2U * hz64));
     fast_ = nullptr;
-    // 想要的半周期比按时刻发沿的下限还短时，走汇编路径。
+    // 想要的半周期比按时刻发沿的下限还短时，走汇编路径 / A wanted half period below the
+    // limit of edges at set times takes the assembly path.
     if (want_x16 < min_half_ * 16U)
     {
-      // 选实际半周期不短于想要值的最快一档；请求比最快一档还快时用最快一档。
+      // 选实际半周期不短于想要值的最快一档；请求比最快一档还快时用最快一档 / Pick the
+      // fastest level whose real half period is not below the wanted one; a request above
+      // the fastest level uses that level.
       size_t pick = 0;
       for (size_t i = 0; i < kFastCount; ++i)
       {
@@ -156,10 +160,14 @@ class SwdEngine final : public LibXR::Debug::Swd
       }
       fast_ = SwdFastTransferFn(pick);
       idle_ap_write_ = IdleClocksFor((cpu_hz_ * 8U) / fast_half_x16_[pick]);
-      half_ = min_half_;  // 线复位、序列等操作仍走按时刻发沿的路径
+      // 线复位、序列等操作仍走按时刻发沿的路径 / Line resets and sequences still use
+      // edges at set times.
+      half_ = min_half_;
       return LibXR::ErrorCode::OK;
     }
-    // 四舍五入到整数个 CPU 周期；Advance 不累计迟到量，平均半周期就是 half_。
+    // 四舍五入到整数个 CPU 周期；Advance 不累计迟到量，平均半周期就是 half_ / Round to
+    // whole CPU cycles; Advance does not add up lateness, so the mean half period is
+    // half_.
     const uint32_t half = (want_x16 + 8U) / 16U;
     half_ = (half < min_half_) ? min_half_ : half;
     idle_ap_write_ = IdleClocksFor(cpu_hz_ / (2U * half_));
@@ -198,7 +206,8 @@ class SwdEngine final : public LibXR::Debug::Swd
     End(p);
     (void)LineReset();
     p = Begin();
-    ClockOutBits(p, 0U, 8U);  // 至少 2 个低电平空闲时钟
+    // 至少 2 个低电平空闲时钟 / At least 2 idle clocks with SWDIO low.
+    ClockOutBits(p, 0U, 8U);
     End(p);
     return LibXR::ErrorCode::OK;
   }
@@ -258,6 +267,10 @@ class SwdEngine final : public LibXR::Debug::Swd
   LibXR::ErrorCode XRDAP_S2_SWD_IRAM Transfer(const Request& req, Response& resp) override
   {
 #if CONFIG_IDF_TARGET_ESP32S2
+    // S2 与 Wi-Fi、lwIP 共用一个核。按时刻发沿的 SWD 请求中间来一次中断，可能把半周期
+    // 拉长到目标丢失请求的帧同步，之后每次读都报 ACK=PROTOCOL，直到线复位。所以一条
+    // 请求在电气上要连续。这一段只覆盖一次 SWD 传输，不等任务也不等套接字。
+    //
     // S2 shares one core with Wi-Fi/lwIP. An ISR in the middle of a paced SWD
     // request can stretch a half-cycle far enough for the target to lose the
     // request framing; after that every read reports ACK=PROTOCOL until a line
@@ -283,21 +296,26 @@ class SwdEngine final : public LibXR::Debug::Swd
  private:
   static constexpr uint32_t kDefaultHz = 1000000U;
   static constexpr uint32_t kLineResetCycles = 64U;
-  static constexpr uint32_t kJtagToSwd = 0xE79EU;  // 低位先发：0x9E、0xE7
+  // 低位先发：0x9E、0xE7 / Sent low byte first: 0x9E, 0xE7.
+  static constexpr uint32_t kJtagToSwd = 0xE79EU;
   static constexpr int32_t kLateSlack = 4;
   // MEM-AP 写完 TAR 后要忙一小段时间，紧接着读 DRW 会收到 WAIT，白白多一次完整传输。
   // 因此 AP 写之后多发 2 个时钟加约 0.35 µs 的低电平空闲时钟。
+  //
+  // The MEM-AP stays busy for a moment after a TAR write, and a DRW read right after it
+  // gets WAIT, which wastes a whole transfer. So an AP write is followed by 2 clocks plus
+  // about 0.35 µs of idle clocks with SWDIO low.
   static constexpr uint32_t kApWriteIdleNs = 350U;
   static uint32_t IdleClocksFor(uint32_t hz)
   {
     return 2U + (hz / 1000U * kApWriteIdleNs + 999999U) / 1000000U;
   }
 
-  // ------------------------------------------------------------ 按时刻发沿
+  // ---------------------------------------------- 按时刻发沿 / Edges at set times
 
   struct Pacer
   {
-    uint32_t t;     // 下一个沿的时刻（CPU 周期计数）
+    uint32_t t;     // 下一个沿的时刻（CPU 周期计数）/ Time of the next edge (CPU cycles).
     uint32_t half;  // 半周期
   };
 
@@ -307,7 +325,8 @@ class SwdEngine final : public LibXR::Debug::Swd
   }
 
   // 写整个专用 GPIO 输出寄存器：本工程只用到 SWCLK、SWDIO 两个通道，一条指令同时改
-  // 两个引脚。
+  // 两个引脚 / Writes the whole dedicated-GPIO output register: only the SWCLK and SWDIO
+  // channels are in use, so one instruction changes both pins.
   static inline __attribute__((always_inline)) void Out(uint32_t value)
   {
     dedic_gpio_cpu_ll_write_all(value);
@@ -334,6 +353,11 @@ class SwdEngine final : public LibXR::Debug::Swd
   // 下一个沿 = 这个沿的目标时刻 + 半周期：等待循环粒度造成的几个周期的迟到不累计，平均
   // 半周期正好是设定值。迟到超过 kLateSlack（计算没做完，或被中断打断）时从实际时刻起算，
   // 不去追赶，避免出现很短的半周期。
+  //
+  // Next edge = this edge's target time + half period: a few cycles of lateness from the
+  // wait loop's granularity do not add up, and the mean half period is exactly the set
+  // value. Lateness above kLateSlack (computation not done, or an interrupt) restarts
+  // from the actual time without catching up, which avoids very short half periods.
   static inline __attribute__((always_inline)) void Advance(Pacer& p, uint32_t now)
   {
     p.t = ((static_cast<int32_t>(now - p.t) > kLateSlack) ? now : p.t) + p.half;
@@ -346,7 +370,9 @@ class SwdEngine final : public LibXR::Debug::Swd
     Advance(p, now);
   }
 
-  // 一个时钟周期，SWDIO 由主机驱动：下降沿放出数据，上升沿目标采样。
+  // 一个时钟周期，SWDIO 由主机驱动：下降沿放出数据，上升沿目标采样 / One clock with the
+  // host driving SWDIO: data goes out on the falling edge, the target samples on the
+  // rising edge.
   inline __attribute__((always_inline)) void ClockOut(Pacer& p, uint32_t bit) const
   {
     const uint32_t lo = dm_ & (0U - (bit & 1U));
@@ -363,7 +389,8 @@ class SwdEngine final : public LibXR::Debug::Swd
     }
   }
 
-  // 一个时钟周期，SWDIO 由目标驱动：在上升沿之前一刻采样。
+  // 一个时钟周期，SWDIO 由目标驱动：在上升沿之前一刻采样 / One clock with the target
+  // driving SWDIO: sampled just before the rising edge.
   inline __attribute__((always_inline)) bool ClockIn(Pacer& p) const
   {
     Edge(p, dm_);
@@ -374,9 +401,12 @@ class SwdEngine final : public LibXR::Debug::Swd
     return (in & im_) != 0U;
   }
 
-  // 最后半个周期走完后回到空闲电平：SWCLK 低，SWDIO 高。
+  // 最后半个周期走完后回到空闲电平：SWCLK 低，SWDIO 高 / After the last half period, back
+  // to the idle levels: SWCLK low, SWDIO high.
   inline __attribute__((always_inline)) void End(Pacer& p) const { Edge(p, dm_); }
 
+  // 调试构建也在本地算校验：放在 Flash 里的编译器运行时函数会破坏 IRAM 路径的时间上限。
+  //
   // Keep parity local even in Debug builds: a compiler runtime helper in flash
   // would defeat the bounded IRAM path.
   static inline __attribute__((always_inline)) uint32_t Parity(uint32_t v)
@@ -389,6 +419,9 @@ class SwdEngine final : public LibXR::Debug::Swd
     return v & 1U;
   }
 
+  // 这些很小的协议操作在 -Og 下也强制内联：不内联的 constexpr 函数要从 S2 的 IRAM 段去
+  // Flash 调用或取常量。
+  //
   // Force these tiny protocol operations inline even at -Og. An out-of-line
   // constexpr helper would need a flash call/literal from the S2 IRAM section.
   static inline __attribute__((always_inline)) uint8_t RequestByte(const Request& req)
@@ -417,7 +450,8 @@ class SwdEngine final : public LibXR::Debug::Swd
     Pacer p = Begin();
     ClockOutBits(p, RequestByte(req), 8U);
 
-    // 释放 SWDIO，换向时钟，然后读 3 位 ACK
+    // 释放 SWDIO，换向时钟，然后读 3 位 ACK / Release SWDIO, turnaround clock, then read
+    // the 3 ACK bits.
     Release();
     ClockIn(p);
     uint32_t ack = 0U;
@@ -429,11 +463,13 @@ class SwdEngine final : public LibXR::Debug::Swd
 
     if (resp.ack != Ack::OK)
     {
-      ClockIn(p);  // 换向时钟，不进数据阶段
+      ClockIn(p);  // 换向时钟，不进数据阶段 / Turnaround clock, no data phase.
       if (resp.ack == Ack::NO_ACK || resp.ack == Ack::PROTOCOL)
       {
         // 与 CMSIS-DAP 一致：ACK 不是 OK、WAIT、FAULT 时目标可能仍在数据阶段，释放
-        // SWDIO 后再空转 33 个时钟。
+        // SWDIO 后再空转 33 个时钟 / As in CMSIS-DAP: with an ACK other than OK, WAIT or
+        // FAULT the target may still be in the data phase, so release SWDIO and run 33
+        // more clocks.
         for (uint32_t i = 0; i < 33U; ++i)
         {
           ClockIn(p);
@@ -452,7 +488,7 @@ class SwdEngine final : public LibXR::Debug::Swd
         data |= (ClockIn(p) ? 1U : 0U) << i;
       }
       const uint32_t parity = ClockIn(p) ? 1U : 0U;
-      ClockIn(p);  // 换向时钟，SWDIO 仍释放
+      ClockIn(p);  // 换向时钟，SWDIO 仍释放 / Turnaround clock, SWDIO still released.
       End(p);
       Drive();
       resp.rdata = data;
@@ -460,7 +496,8 @@ class SwdEngine final : public LibXR::Debug::Swd
     }
     else
     {
-      ClockIn(p);  // 换向时钟，之后主机驱动 SWDIO
+      // 换向时钟，之后主机驱动 SWDIO / Turnaround clock, then the host drives SWDIO.
+      ClockIn(p);
       Drive();
       p.t += kOutputEnableSettle;
       ClockOutBits(p, req.wdata, 32U);
@@ -477,7 +514,7 @@ class SwdEngine final : public LibXR::Debug::Swd
     return LibXR::ErrorCode::OK;
   }
 
-  // ------------------------------------------------- 汇编路径（见 swd_fast.cpp）
+  // ------------------- 汇编路径（见 swd_fast.cpp）/ Assembly path (see swd_fast.cpp)
   using FastXfer = LibXR::ErrorCode (*)(const SwdFastPins&, const Request&, Response&);
   static constexpr size_t kFastCount = kSwdFastLevels;
 
@@ -497,10 +534,12 @@ class SwdEngine final : public LibXR::Debug::Swd
   uint32_t fast_half_x16_[kFastCount] = {};
   FastXfer fast_ = nullptr;
 
-  // ------------------------------------------------------------ 标定
+  // ------------------------------------------------------ 标定 / Calibration
 
   // 用 h 作半周期跑 32 个读时钟和 32 个写时钟（含收尾共 129 个半周期），返回用掉的 CPU
-  // 周期数，取 4 次里最少的一次。
+  // 周期数，取 4 次里最少的一次 / Runs 32 read clocks and 32 write clocks with half
+  // period h (129 half periods with the ending) and returns the CPU cycles used, the
+  // least of 4 runs.
   uint32_t TimeBits(uint32_t h)
   {
     half_ = h;
@@ -523,10 +562,16 @@ class SwdEngine final : public LibXR::Debug::Swd
 
   // 开机标定，结束时 SWDIO 重新驱动。按时刻发沿的路径：半周期足够长时总耗时约为
   // 128 × h，取总耗时不超过此值太多的最小 h 作下限 min_half_；汇编路径：逐档实测半周期。
+  //
+  // Calibration at boot; SWDIO is driven again at the end. Edges at set times: with a
+  // long enough half period the total is about 128 × h, and the smallest h whose total
+  // stays close to it becomes the limit min_half_. Assembly path: the half period of each
+  // level is measured.
   void Calibrate()
   {
     Release();
-    // 32 个读时钟 + 32 个写时钟 = 128 个半周期，外加开头结尾几个周期的迟到。
+    // 32 个读时钟 + 32 个写时钟 = 128 个半周期，外加开头结尾几个周期的迟到 / 32 read and
+    // 32 write clocks are 128 half periods, plus a few late cycles at both ends.
     constexpr uint32_t kHalves = 128U;
     uint32_t h = 2U;
     for (; h < 60U; ++h)

@@ -58,7 +58,9 @@ class SerialMux
   }
 
  private:
-  static constexpr uint32_t kQuietMs = 2000U;  // 最近这么久有 DAP 帧时不理会文本输入
+  // 最近这么久有 DAP 帧时不理会文本输入 / Text input is ignored when a DAP frame came
+  // within this time.
+  static constexpr uint32_t kQuietMs = 2000U;
   static constexpr size_t kChunk = 512U;
 
   static void TaskEntry(void* arg) { static_cast<SerialMux*>(arg)->Run(); }
@@ -80,8 +82,9 @@ class SerialMux
       // replaces SerialLink::Poll, so it also checks the lease (each pass waits at most
       // 50 ms).
       link_.CheckLease();
-      // 零长度读等到队列非空（不取走字节），再按实际字节数取一块，与
-      // SerialLink::Poll 相同。
+      // 零长度读等到队列非空（不取走字节），再按实际字节数取一块，与 SerialLink::Poll
+      // 相同 / A zero-length read waits until the queue is not empty (taking no bytes),
+      // then a block of the actual size is taken, as in SerialLink::Poll.
       LibXR::ReadOperation wait_op(wait_sem, 50U);
       if (uart_.Read(LibXR::RawData(static_cast<void*>(nullptr), 0U), wait_op) !=
           LibXR::ErrorCode::OK)

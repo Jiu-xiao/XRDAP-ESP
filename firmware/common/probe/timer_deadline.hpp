@@ -11,6 +11,9 @@ struct TimerDeadline
   uint64_t next_alarm;
 };
 
+// 自由运行的 1 MHz GPTimer，period > 0，now >= alarm。硬件自动重装要关掉，否则计数器会
+// 丢掉已经过去的周期数。
+//
 // Free-running GPTimer at 1 MHz, period > 0, now >= alarm. Hardware auto-reload
 // must be disabled: otherwise the counter loses the number of elapsed periods.
 inline TimerDeadline AdvanceTimerDeadline(uint64_t alarm, uint64_t now, uint32_t period)

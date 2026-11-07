@@ -246,10 +246,10 @@ TEST(wifi_control_matches_the_dap_command)
   const uint8_t req[1] = {0x00};
   const uint16_t n = XrDap::WifiCommand::Control(&b, req, 1U, ctl.data(), 64U);
   ctl.resize(n);
-  dap[0] = 0x00;  // the op instead of 0x86
+  dap[0] = 0x00;  // op，不是 0x86 / The op instead of 0x86.
   CHECK_BYTES(ctl, dap);
 
-  // Save and clear go through the same code.
+  // 保存和清除走同样的代码 / Save and clear go through the same code.
   Bytes save = SetRequest("net", "password123");
   Bytes ctl_req(save.begin() + 1, save.end());
   Bytes resp(64);
