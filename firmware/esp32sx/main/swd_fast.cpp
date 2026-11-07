@@ -234,10 +234,6 @@ inline __attribute__((always_inline)) LibXR::ErrorCode XferBody(const SwdFastPin
   return LibXR::ErrorCode::OK;
 }
 
-// 用这一档读 32 位（64 个半周期），取 4 次里最少的一次。调用前 SWDIO 应已释放。
-//
-// Reads 32 bits at this level (64 half periods), the least of 4 runs. SWDIO must be
-// released before the call.
 // 放在 flash 里的档位 / A level in flash.
 template <int N>
 LibXR::ErrorCode Xfer(const SwdFastPins& pins, const Request& req, Response& resp)
@@ -255,6 +251,10 @@ XRDAP_IRAM_LEVEL_ATTR LibXR::ErrorCode XferIram(const SwdFastPins& pins,
   return XferBody<kIramLevelN>(pins, req, resp);
 }
 
+// 用这一档读 32 位（64 个半周期），取 4 次里最少的一次。调用前 SWDIO 应已释放。
+//
+// Reads 32 bits at this level (64 half periods), the least of 4 runs. SWDIO must be
+// released before the call.
 template <int N>
 uint32_t MeasureHalfX16(const SwdFastPins& pins)
 {
