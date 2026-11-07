@@ -20,11 +20,4 @@ menu "XR-DAP"
             depends on IDF_TARGET_ESP32S2
     endchoice
 
-    config XRDAP_VERSION_SUFFIX
-        string "Firmware version suffix"
-        default ""
-        help
-            Appended to the firmware version in DAP_Info and mDNS. Boards not yet
-            tested on hardware use "-preview".
-
 endmenu
