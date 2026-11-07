@@ -25,12 +25,11 @@ entries:
     sampler (noflash)
     sampling (noflash)
 
-# libxr 的 FreeRTOS 信号量、互斥量和时基：节拍唤醒采样任务、MemAp::Lock、帧时间戳每拍都走
-# 这里 / libxr's FreeRTOS semaphore, mutex and time base: every tick goes through them (the
-# sampling task wake-up, MemAp::Lock, the frame timestamp).
+# libxr 的 FreeRTOS 信号量和时基：执行任务的等待和投递、帧时间戳每拍都走这里 / libxr's
+# FreeRTOS semaphore and time base: every tick goes through them (the execution task's
+# wait and posts, the frame timestamp).
 [mapping:xrdap_hot_libxr]
 archive: libxr.a
 entries:
     semaphore (noflash)
-    mutex (noflash)
     esp_timebase (noflash)
