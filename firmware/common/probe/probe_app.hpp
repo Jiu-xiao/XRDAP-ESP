@@ -15,9 +15,7 @@
 
 #include <atomic>
 #include <cstdint>
-#include <cstdio>
 
-#include "console_core.hpp"
 #include "dap_tcp.hpp"
 #include "mdns_service.hpp"
 #include "probe_config.hpp"
@@ -50,27 +48,6 @@ struct ProbeCore
   DapActivity activity;  ///< 给状态灯的 DAP 活动 / DAP activity for the status light.
   Executor<DapT> exec;   ///< 唯一的命令执行器 / The single command executor.
 };
-
-/// 命令行 heap 输出里的附加行；不发 DAP 命令，不访问 SWD / Extra lines in the console
-/// heap output; no DAP command or SWD access.
-template <typename DapT>
-void WriteProbeDiagnostics(ConsoleWriteFn write, void* ctx, void* probe_ctx)
-{
-  auto& probe = *static_cast<ProbeCore<DapT>*>(probe_ctx);
-  char line[144];
-  auto emit = [&](int n)
-  {
-    if (n > 0)
-    {
-      write(ctx, line,
-            static_cast<size_t>(n) < sizeof(line) ? static_cast<size_t>(n)
-                                                  : sizeof(line) - 1U);
-    }
-  };
-  emit(snprintf(line, sizeof(line), "probe link=%u sampling=%u\r\n",
-                static_cast<unsigned>(probe.vendor.ConnectedLink()),
-                static_cast<unsigned>(probe.vendor.Sampling())));
-}
 
 /// @brief 创建执行任务：固定在 SWD 所在的核上，USB 命令、别的链路投来的请求和采样都在这里
 ///        一件一件做 / Create the execution task: pinned to the core that drives SWD,
