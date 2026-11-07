@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 各芯片相同的启动步骤：XRDAP-Core 的厂商扩展和命令执行器，采样任务，Wi-Fi、TCP/USB-IP
-// 服务和 mDNS。各芯片的 main.cpp 只做自己特有的部分（SWD 对象、S2 和 S3 的 USB 设备、
+// 各芯片相同的启动步骤：XRDAP-Core 的厂商扩展和命令执行器，执行任务，Wi-Fi、TCP 服务和
+// mDNS。各芯片的 main.cpp 只做自己特有的部分（SWD 对象、S2 和 S3 的 USB 设备、
 // 串口链路和命令行）。所有传输经同一个执行器驱动 DAP；探针一次只使用一条传输由使用者
 // 保证，探针不仲裁（XRDAP-Core docs/protocol.md 3.1）。
 //
 // Start-up steps shared by every chip: XRDAP-Core's vendor extension and command
-// executor, the sampling task, Wi-Fi, the TCP/USB-IP server and mDNS. Each chip's
+// executor, the execution task, Wi-Fi, the TCP server and mDNS. Each chip's
 // main.cpp only does its own parts (the SWD objects, the S2 and S3 USB device, the serial
 // link and the console). Every transport drives DAP through the one executor; that the
 // probe is used over one transport at a time is up to the user, the probe does not

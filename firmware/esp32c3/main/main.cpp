@@ -3,7 +3,7 @@
 //   串口：芯片自带的 USB Serial/JTAG（电脑上是 CDC 串口），用 libxr Topic 帧提供
 //         CMSIS-DAP，配合电脑端 xrdap 使用（xrdap share 再转给其他调试工具）；同一个口
 //         也是 Wi-Fi 命令行（serial_mux.hpp）。
-//   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针，与 S3 版相同。
+//   Wi-Fi：连上热点后提供 TCP 端口，给 OpenOCD 的 TCP 后端和 xrdap 用，与 S3 版相同。
 // 两种传输经 XRDAP-Core 的同一个执行器驱动 DAP 和 XR 厂商扩展（多地址读写、指针链、
 // 探针端采样）；探针一次只使用一条传输由使用者保证。C3 没有能做自定义 USB 设备的 USB
 // 控制器，所以没有 S3 版的 USB CMSIS-DAP 接口。与 S3 版共用的源文件在 firmware/common
@@ -13,8 +13,8 @@
 //   Serial: the built-in USB Serial/JTAG (a CDC port on the PC) carries CMSIS-DAP in
 //           libxr Topic frames for the PC-side xrdap (xrdap share passes it on to other
 //           debug tools); the same port is also the Wi-Fi console (serial_mux.hpp).
-//   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe,
-//           as on the S3.
+//   Wi-Fi:  once joined, serves a TCP port for OpenOCD's TCP backend and xrdap, as on
+//           the S3.
 // Both transports drive DAP and the XR vendor extension (multi-address access, pointer
 // chains, probe-side sampling) through XRDAP-Core's one executor; that the probe is used
 // over one transport at a time is up to the user. The C3 has no USB controller usable for

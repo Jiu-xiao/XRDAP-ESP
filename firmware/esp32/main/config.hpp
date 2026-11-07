@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// 传统 ESP32 版 XR-DAP 的固定参数；三种芯片共用的在 probe_config.hpp。
+// 传统 ESP32 版 XR-DAP 的固定参数；各芯片共用的在 probe_config.hpp。
 //
 // Fixed parameters of the classic ESP32 XR-DAP firmware; shared ones are in
 // probe_config.hpp.
@@ -41,10 +41,10 @@ inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{100, 289, 350};
 
 /// 执行任务所在的核，核上只有它 / Core of the execution task, which runs alone there.
 constexpr int kSwdCore = 1;
-/// 串口 DAP 和 TCP/USB-IP 服务所在的核，与 Wi-Fi、lwIP 同核。传统 ESP32 经 GPIO 寄存器
-/// 驱动 SWD，两个核都能访问，SWD 由执行器的轮次和 MemAp 锁串行；串口和网络命令因此不必
-/// 等采样两帧之间的空隙 / Core of the serial DAP and TCP/USB-IP services, shared with
-/// Wi-Fi and lwIP. The classic ESP32 drives SWD through the GPIO registers, which both
+/// 串口 DAP 和 TCP 服务所在的核，与 Wi-Fi、lwIP 同核。传统 ESP32 经 GPIO 寄存器驱动
+/// SWD，两个核都能访问，SWD 由执行器的轮次和 MemAp::Access 串行；串口和网络命令因此不必
+/// 等采样两帧之间的空隙 / Core of the serial DAP and TCP services, shared with Wi-Fi and
+/// lwIP. The classic ESP32 drives SWD through the GPIO registers, which both
 /// cores reach, and SWD is serialised by the executor turn and MemAp::Access; serial and
 /// network commands therefore do not wait for the gaps between sample frames.
 constexpr int kTransportCore = 0;

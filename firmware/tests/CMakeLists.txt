@@ -1,9 +1,9 @@
-# 电脑上运行的单元测试：只编译不依赖 ESP-IDF 的纯逻辑（命令行、0x86、TCP 帧、USB/IP、
-# 状态灯输入、串口复用）。
+# 电脑上运行的单元测试：只编译不依赖 ESP-IDF 的纯逻辑（命令行、0x86、TCP 帧、状态灯
+# 输入、串口复用）。
 #   cmake -S firmware/tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests
 #
 # Unit tests that run on a PC: only the pure logic without ESP-IDF is compiled (console,
-# 0x86, TCP framing, USB/IP, status light inputs, serial multiplexing).
+# 0x86, TCP framing, status light inputs, serial multiplexing).
 cmake_minimum_required(VERSION 3.16)
 project(xrdap_esp_tests CXX)
 set(CMAKE_CXX_STANDARD 20)

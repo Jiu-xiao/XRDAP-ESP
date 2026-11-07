@@ -3,7 +3,7 @@
 
 // 状态灯的输入怎么变成 XRDAP-Core 灯语里的连接和设置状态，以及按键长按的判定。纯逻辑，
 // 不依赖 ESP-IDF，电脑上可测。连接状态的优先级：
-//   无线   有网络调试客户端（OpenOCD TCP 或 USB/IP）
+//   无线   有网络调试客户端（TCP 端口上的 OpenOCD 或 xrdap）
 //   有线   USB 已被主机配置，或 5 s 内有经 USB、串口来的 DAP 命令
 //   无线   只连着 Wi-Fi
 //   正在连 Wi-Fi 正在入网
@@ -12,7 +12,7 @@
 // How the status light inputs become the link and setting states of XRDAP-Core's light
 // rule, and how a long button press is detected. Pure logic without ESP-IDF, so it is
 // PC-testable. Link priority:
-//   wireless  a network debug client (OpenOCD TCP or USB/IP)
+//   wireless  a network debug client (OpenOCD or xrdap on the TCP port)
 //   wired     USB configured by the host, or a DAP command over USB or serial within 5 s
 //   wireless  only Wi-Fi
 //   joining   Wi-Fi associating

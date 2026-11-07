@@ -19,7 +19,7 @@ jobs:
           pip install clang-format==21.1.8
           git ls-files 'firmware/*.hpp' 'firmware/*.cpp' 'firmware/*.c' | xargs clang-format --dry-run --Werror
 
-  # 纯逻辑（命令行、0x86、TCP 帧、USB/IP、状态灯输入）在电脑上的单元测试
+  # 纯逻辑（命令行、0x86、TCP 帧、状态灯输入、串口复用）在电脑上的单元测试
   host-tests:
     runs-on: ubuntu-latest
     steps:

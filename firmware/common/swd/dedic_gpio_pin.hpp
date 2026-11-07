@@ -23,9 +23,9 @@ namespace XrDap
 
 /// CPU 专用 GPIO，以 LibXR::GPIO 接口提供 / CPU dedicated GPIO exposed through the
 /// LibXR::GPIO interface.
-/// 读写都是单条 CPU 指令（S3 为 Xtensa GPIO 指令，C3 为 RISC-V CSR 读写），比走 GPIO 矩阵
-/// 快得多。专用 GPIO 只能在创建它的核上访问，对象需在目标核的任务里构造。
-/// Reads and writes are single CPU instructions (Xtensa GPIO ops on S3, RISC-V CSR
+/// 读写都是单条 CPU 指令（S2、S3 为 Xtensa GPIO 指令，C3 为 RISC-V CSR 读写），比走 GPIO
+/// 矩阵快得多。专用 GPIO 只能在创建它的核上访问，对象需在目标核的任务里构造。
+/// Reads and writes are single CPU instructions (Xtensa GPIO ops on S2 and S3, RISC-V CSR
 /// accesses on C3), much faster than the GPIO matrix. A dedicated GPIO is only accessible
 /// from the core that created it, so construct the object in a task on the target core.
 class DedicGpioPin final : public LibXR::GPIO

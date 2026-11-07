@@ -2,7 +2,7 @@
 // XR-DAP-S3 / XR-DAP-S2：基于 libxr 的 ESP32-S3、ESP32-S2 CMSIS-DAP 调试探针（芯片原生
 // USB OTG；板型见 config.hpp）。
 //   USB：Bulk v2 的 DAP 接口，外加一个 CDC 虚拟串口。
-//   Wi-Fi：连上热点后提供 OpenOCD 的 TCP 后端和 USB/IP 虚拟 USB 探针。
+//   Wi-Fi：连上热点后提供 TCP 端口，给 OpenOCD 的 TCP 后端和 xrdap 用。
 //   串口：UART0 上用 libxr Topic 帧提供 CMSIS-DAP，配合电脑端 xrdap 使用（板上有 USB
 //         转串口芯片时，见 config.hpp 的板型）。
 // 三种传输经 XRDAP-Core 的同一个执行器驱动 DAP 和 XR 厂商扩展（多地址读写、指针链、
@@ -11,7 +11,7 @@
 // XR-DAP-S3 / XR-DAP-S2: a CMSIS-DAP debug probe for the ESP32-S3 and ESP32-S2 built on
 // libxr (the chip's native USB OTG; boards in config.hpp).
 //   USB:    a Bulk v2 DAP interface plus a CDC virtual serial port.
-//   Wi-Fi:  once joined, serves the OpenOCD TCP backend and a USB/IP virtual USB probe.
+//   Wi-Fi:  once joined, serves a TCP port for OpenOCD's TCP backend and xrdap.
 //   Serial: CMSIS-DAP in libxr Topic frames on UART0, for the PC-side xrdap (on boards
 //           with a USB-UART chip, see the board choice in config.hpp).
 // All three transports drive DAP and the XR vendor extension (multi-address access,
@@ -246,8 +246,8 @@ extern "C" void app_main(void)
   // S3 的命令行创建失败不影响 DAP、状态灯和网络。
   // A failed S3 console task does not disable DAP, status indicators or networking.
 
-  // Wi-Fi 清除按键（只有 Lite 板有）：按满即清除并重启 / Wi-Fi clear button (Lite board
-  // only): clear and restart once the hold time is reached.
+  // Wi-Fi 清除按键（Lite 板和 S2 板有）：按满即清除并重启 / Wi-Fi clear button (on the
+  // Lite and S2 boards): clear and restart once the hold time is reached.
   static HoldButton* button = nullptr;
   if constexpr (Config::kWifiButtonGpio >= 0)
   {

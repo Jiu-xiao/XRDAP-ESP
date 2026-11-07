@@ -1,7 +1,7 @@
 # ESP32-S2 板（单核，S2FH4：芯片内 4 MB Flash，没有 PSRAM，不开 PSRAM）。所有任务都在核 0；
-# 采样任务优先级高于 lwIP，靠 XRDAP-Core 每帧之后留给别的任务的时间不饿死它们。
+# 执行任务优先级高于 lwIP，靠 XRDAP-Core 每帧之后留给别的任务的时间不饿死它们。
 # The ESP32-S2 board (single core, S2FH4: 4 MB flash in the package, no PSRAM, PSRAM
-# stays off). Every task runs on core 0; the sampling task is above lwIP and relies on
+# stays off). Every task runs on core 0; the execution task is above lwIP and relies on
 # the gap XRDAP-Core leaves after each frame so the others are not starved.
 CONFIG_XRDAP_BOARD_S2=y
 # 展开的 SWD 高速档位较大，采样又与 Wi-Fi、lwIP 共用缓存：16 KB 指令缓存（默认 8 KB，多占
