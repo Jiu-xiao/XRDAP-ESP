@@ -34,8 +34,8 @@
       "en": "ESP32-S2 board"
     },
     "note": {
-      "zh": "按住 BOOT 插上 USB，松开后烧录。BOOT 只用于下载，清除 Wi-Fi 用 KEY 长按 5 秒或电脑端 xrdap wifi clear。还没有在实物上测过。",
-      "en": "Hold BOOT while plugging in USB, release it, then flash. BOOT is only for download mode; clear Wi-Fi by holding KEY for 5 seconds or with xrdap wifi clear on the PC. Not yet tested on a real board."
+      "zh": "按住 BOOT 插上 USB，松开后烧录。BOOT 只用于下载，清除 Wi-Fi 用 KEY 长按 5 秒或电脑端 xrdap wifi clear。",
+      "en": "Hold BOOT while plugging in USB, release it, then flash. BOOT is only for download mode; clear Wi-Fi by holding KEY for 5 seconds or with xrdap wifi clear on the PC."
     }
   },
   {

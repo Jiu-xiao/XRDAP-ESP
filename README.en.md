@@ -8,16 +8,16 @@ The host tool is in [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host): a sing
 
 ## Choosing a board
 
-| | ESP32-S3 | ESP32-C3 | Classic ESP32 |
-|---|---|---|---|
-| USB cable, for Keil, pyOCD, probe-rs, OpenOCD | Works directly (native USB probe) | Run `xrdap share usbip` on the computer first | Same as C3 (through the board's USB-to-serial chip) |
-| Wi-Fi, for Keil, pyOCD, probe-rs, OpenOCD | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP |
-| Wi-Fi, for OpenOCD | OpenOCD TCP backend, direct | Same as S3 | Same as S3 |
-| SWD clock | up to about 23.7 MHz | up to about 5.2 MHz | up to about 5 MHz (GPIO register bit-banding, limited by the peripheral bus) |
-| Shortest probe-side sampling period (USB cable) | 4 variables 118 µs | 4 variables 300 µs | 8 variables 1 ms, 1 variable 200 µs |
-| OpenOCD reading 128 KiB (USB cable) | 0.62 s | 1.8 s | 3.4 s |
+| | ESP32-S3 | ESP32-S2 | ESP32-C3 | Classic ESP32 |
+|---|---|---|---|---|
+| USB cable, for Keil, pyOCD, probe-rs, OpenOCD | Works directly (native USB probe) | Same as S3 | Run `xrdap share usbip` on the computer first | Same as C3 (through the board's USB-to-serial chip) |
+| Wi-Fi, for Keil, pyOCD, probe-rs, OpenOCD | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP |
+| Wi-Fi, for OpenOCD | OpenOCD TCP backend, direct | Same as S3 | Same as S3 | Same as S3 |
+| SWD clock | up to about 23.7 MHz | - | up to about 5.2 MHz | up to about 5 MHz (GPIO register bit-banding, limited by the peripheral bus) |
+| Shortest probe-side sampling period (USB cable) | 4 variables 118 µs | - | 4 variables 300 µs | 8 variables 1 ms, 1 variable 200 µs |
+| OpenOCD reading 128 KiB (USB cable) | 0.62 s | - | 1.8 s | 3.4 s |
 
-The S3 is the fastest and simplest choice. A C3 or a classic ESP32 also works, with one extra step: `xrdap share`. The classic ESP32 has no native USB and no CPU-dedicated GPIO, so SWD and the serial link are one step slower; debugging and flashing work fine.
+The S3 is the fastest and simplest choice. The S2 also has native USB; it is single-core with less internal RAM, and the table lists no typical values for it. A C3 or a classic ESP32 also works, with one extra step: `xrdap share`. The classic ESP32 has no native USB and no CPU-dedicated GPIO, so SWD and the serial link are one step slower; debugging and flashing work fine.
 
 ## 1. Setup
 
@@ -33,7 +33,7 @@ Connect one probe to one target. GPIO5 of the classic ESP32 is a strapping pin, 
 
 The "Wireless DAP Lite" board (ESP32-S3 module, 2×5 header) uses its own image, `xrdap-esp32-s3-lite.bin`. SWCLK is GPIO37. SWDIO reaches the header through the on-board SGM3157 analog switch; the firmware holds the switch select pin GPIO36 low and drives and reads SWDIO on GPIO47. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available. Use a module without Octal PSRAM (WROOM-1-N4 or N8, MINI-1-N4 or N8); modules with Octal PSRAM use GPIO35 to 37.
 
-The ESP32-S2 board (ESP32-S2FH4 with 4 MB flash in the package and no PSRAM, 2×5 header) uses the image `xrdap-esp32-s2.bin`. SWCLK is GPIO37, SWDIO is GPIO35 (through a 0 ohm resistor; the on-board SGM3157 is not fitted), and target nRESET is GPIO40 (open drain, so power-up does not reset the target). TDI and TDO on the header are kept for JTAG later, and the target TXD and RXD are not used yet. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available, used as on the S3 (2.1, 2.3, 2.4). The S2 is single-core with only 320 KB of internal RAM, so its Wi-Fi buffers and task stacks are smaller than on the S3; the most-used code on the sampling path runs from IRAM and the instruction cache is 16 KB. This image has been tested on a real board sampling over USB with Wi-Fi connected.
+The ESP32-S2 board (ESP32-S2FH4 with 4 MB flash in the package and no PSRAM, 2×5 header) uses the image `xrdap-esp32-s2.bin`. SWCLK is GPIO37, SWDIO is GPIO35 (through a 0 ohm resistor; the on-board SGM3157 is not fitted), and target nRESET is GPIO40 (open drain, so power-up does not reset the target). TDI and TDO on the header are kept for JTAG later, and the target TXD and RXD are not used yet. The board has no USB-to-serial chip, so only native USB and Wi-Fi are available, used as on the S3 (2.1, 2.3, 2.4). The S2 is single-core with only 320 KB of internal RAM, so its Wi-Fi buffers and task stacks are smaller than on the S3; the most-used code on the sampling path runs from IRAM and the instruction cache is 16 KB.
 
 S3 and S2 status light (S3 dev board: the RGB LED on GPIO48; Lite board: its WS2812; S2 board: the WS2812 on GPIO17). Holding SW2 on the Lite board or KEY on the S2 board for 5 seconds clears the credentials and restarts the probe. The dev board's BOOT key is for download mode only: it sits on the USB-to-serial chip's auto-download circuit, where the serial DTR/RTS lines can pull it low, so the running firmware does not read it. On the dev board, Wi-Fi is cleared with `xrdap wifi clear` or the console command `wifi clear` (2.6).
 
@@ -41,7 +41,7 @@ S3 and S2 status light (S3 dev board: the RGB LED on GPIO48; Lite board: its WS2
 |---|---|
 | One rainbow sweep | Power-up |
 | Red | Wired: USB connected to a PC, or a command over USB or serial within 5 seconds |
-| Blue | Wireless: a network debug client (OpenOCD TCP or USB/IP), or Wi-Fi only |
+| Blue | Wireless: a network debug client (OpenOCD or `xrdap` on the TCP port, `xrdap share` included), or Wi-Fi only |
 | Purple | Neither USB nor Wi-Fi connected; breathing while joining Wi-Fi |
 | Main colour fading to purple and back every 2 seconds | The host reported connected through DAP_HostStatus |
 | Red and blue alternating every second | The host reported the target running |
@@ -64,11 +64,15 @@ python -m esptool --chip esp32 write_flash 0x0 xrdap-esp32.bin
 
 Upgrades use the same command. The Wi-Fi settings are kept. The dev board's BOOT key is only needed for flashing. S3 images of v0.5.1 and earlier have an 8MB flash header and reboot in a loop on boards with 4MB flash (N4, some Lite boards); with those older images add `--flash_size 4MB` after `write_flash`. If esptool reports `Wrong boot mode` and cannot enter download mode (on some boards the auto-download circuit can only reset and cannot pull GPIO0 low), hold BOOT, press RESET (EN) once, release BOOT, and then add `--before no_reset` to the command.
 
-The Lite board has neither a reset button nor a USB-to-serial chip, so it enters download mode by hand before flashing: unplug USB, hold SW1 (the button on GPIO0) while plugging it back in, then release it. In download mode the PC sees the native USB serial port (`303A:1001`); run the command above. After flashing, esptool resets the chip and the new firmware starts.
+The Lite board has neither a reset button nor a USB-to-serial chip, so it enters download mode by hand before flashing: unplug USB, hold SW1 (the button on GPIO0) while plugging it back in, then release it. In download mode the PC sees the native USB serial port (`303A:1001`); run the command below. Flashing over this port needs `--after watchdog_reset`: after flashing, the watchdog resets the chip and the new firmware starts.
+
+```
+python -m esptool --chip esp32s3 --after watchdog_reset write_flash 0x0 xrdap-esp32-s3-lite.bin
+```
 
 ### Installing the host tool
 
-Download `xrdap` for your platform from [XRDAP-Host Releases](https://github.com/Jiu-xiao/XRDAP-Host/releases). With the probe plugged in, run:
+Download `xrdap` for the platform from [XRDAP-Host Releases](https://github.com/Jiu-xiao/XRDAP-Host/releases), version 0.6.0 or newer: the firmware's vendor extension is protocol version 2. With the probe plugged in, run:
 
 ```
 xrdap list
@@ -146,9 +150,9 @@ xrdap wifi status
 
 Replace `lab` and `password` with the hotspot SSID and its password. The hotspot must be on 2.4 GHz: none of these chips support 5 GHz, so a 5 GHz-only hotspot cannot be joined (routers often merge both bands under one name; when the probe cannot connect, first check that the 2.4 GHz band is on). Use WPA2-Personal authentication; an open network also works. A WPA3-only hotspot has not been tested. After saving, the probe restarts in about 0.5 seconds and connects to the hotspot. To change the hotspot, run `set` again. `xrdap wifi clear` removes the settings, and the probe no longer connects to Wi-Fi. If the hotspot goes away, the probe keeps trying to reconnect.
 
-The credentials live in NVS. They are removed by `wifi clear`, the 0x86 clear command, a long press of SW2 on the Lite board, and the erase and rebuild the probe does at boot when the NVS partition is damaged (full, or a different format version). Every removal records its source. The console command `wifi status` and the 0x86 status reply show the source of the last clear and the cause of the last reset (power-on, software restart, watchdog, panic, brown-out), which tells why credentials are gone.
+The credentials live in NVS. They are removed by `wifi clear`, the 0x86 clear command, a long press of SW2 on the Lite board or KEY on the S2 board, and the erase and rebuild the probe does at boot when the NVS partition is damaged (full, or a different format version). Every removal records its source. The console command `wifi status` and the 0x86 status reply show the source of the last clear and the cause of the last reset (power-on, software restart, watchdog, panic, brown-out), which tells why credentials are gone.
 
-Without `xrdap`, a serial terminal also works: use the extra virtual serial port that appears when the S3 is plugged in by USB, or the C3's USB port (the terminal must not touch DTR/RTS). Enter `wifi set lab password`, `wifi status`, `wifi clear` or `help`.
+Without `xrdap`, a serial terminal also works: use the extra virtual serial port that appears when an S3, Lite or S2 board is plugged in by USB, the C3's USB port, or the on-board USB-to-serial chip of a classic ESP32 (at 921600 baud). The terminal must not touch DTR/RTS. Enter `wifi set lab password`, `wifi status`, `wifi clear` or `help`.
 
 ```
 python -m serial.tools.miniterm COMx 115200 --dtr 0 --rts 0
@@ -158,17 +162,17 @@ python -m serial.tools.miniterm COMx 115200 --dtr 0 --rts 0
 
 ### Connection overview
 
-| Connection | S3 | C3 | Classic ESP32 | Used by |
-|---|---|---|---|---|
-| Native USB (CMSIS-DAP v2) | yes | no | no | All tools |
-| Serial link on the chip's USB port | no | yes | no | `xrdap`; `xrdap share` passes it on to other tools |
-| On-board USB-to-serial (UART0) | yes, 4 Mbaud | no | yes, 921600 | Same as above |
-| Wi-Fi, through `xrdap share usbip` on a computer | yes | yes | yes | All tools after attaching |
-| Wi-Fi, OpenOCD TCP backend, port 3241 | yes | yes | yes | OpenOCD, `xrdap` |
+| Connection | S3 | S2 | C3 | Classic ESP32 | Used by |
+|---|---|---|---|---|---|
+| Native USB (CMSIS-DAP v2) | yes | yes | no | no | All tools |
+| Serial link on the chip's USB port | no | no | yes | no | `xrdap`; `xrdap share` passes it on to other tools |
+| On-board USB-to-serial (UART0) | yes, 4 Mbaud (not on the Lite board) | no | no | yes, 921600 | Same as above |
+| Wi-Fi, through `xrdap share usbip` on a computer | yes | yes | yes | yes | All tools after attaching |
+| Wi-Fi, OpenOCD TCP backend, port 3241 | yes | yes | yes | yes | OpenOCD, `xrdap` |
 
 `xrdap` picks the baud rate from the serial chip: CH343 and similar try 4 Mbaud first, while CP2102 and CH340 use 921600, so `--baud` need not be given.
 
-All connections share one DAP, and one connection owns the probe at a time: the first connection that sends a DAP or sampling command becomes the owner, and commands from the others are answered busy. DAP_Info, DAP_HostStatus, the vendor INFO command (0x80), the Wi-Fi status query (0x86 query) and 0x9F 0x13 work from any connection; they never take the probe or make another connection busy until the owner sends DAP_Disconnect, its TCP connection closes, the USB bus resets (unplug or host reset), or the serial link has been silent for 5 seconds. The Wi-Fi ports 3240 and 3241 accept one client at a time: while one is connected, the other waits. If a client does not disconnect cleanly, the probe releases it after about 11 seconds.
+All connections share one DAP. Using the probe over one connection at a time is up to the user: the probe does not arbitrate and runs every command it receives. When two connections send commands at once, the probe runs one at a time with USB commands first, and the SWD state can get mixed up. `DAP_Connect` records the connection it came from, and that connection lapses in these cases: any connection sends `DAP_Disconnect`; on TCP, the TCP client disconnects; on USB, the USB bus resets (unplug or host reset); on serial, the serial link has been silent for 5 seconds. After that, sampling in progress stops and the extension commands need a new `DAP_Connect`. Wi-Fi port 3241 serves one client at a time: while one is connected, another waits. If a client does not disconnect cleanly, the probe releases it after about 11 seconds. The full rules are in section 3.1 of [docs/protocol.en.md](https://github.com/Jiu-xiao/XRDAP-Core/blob/main/docs/protocol.en.md) in XRDAP-Core.
 
 ### Finding the probe
 
@@ -236,11 +240,11 @@ OpenOCD reading 128 KiB (4 MHz requested):
 
 The C3 has a single core, so Wi-Fi traffic and sampling run on the same core; the execution task has a higher priority than the Wi-Fi task. Sampling 4 variables over Wi-Fi at 500 µs skips no ticks. At 250 µs about 1% of ticks are skipped.
 
-Classic ESP32 (serial at 921600 baud): reads and writes are correct for SWD clock requests from 1 to 40 MHz. The GPIO registers are on the peripheral bus (about 12 CPU cycles per write, 17 per read), so any request above 5 MHz runs at full speed, and `xrdap info` reports about 30 µs per access (about 150 SWCLK cycles, i.e. just under 5 MHz). Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs a tick is skipped now and then); OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
+Classic ESP32 (serial at 921600 baud): reads and writes are correct for SWD clock requests from 1 to 40 MHz. The GPIO registers are on the peripheral bus (about 12 CPU cycles per write, 17 per read), so any request above 5 MHz runs at full speed, which is just under 5 MHz. Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs a tick is skipped now and then); OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
 
 ### SWD clock and wiring
 
-On the S3, SWCLK high and low times are equal and the frequency is computed in CPU cycles; a request of 25 MHz or more uses the fastest setting, about 23.7 MHz. The C3 and the classic ESP32 use libxr's generic GPIO bit-banging; libxr turns the requested frequency into delay-loop counts with `kSwdTiming` in `config.hpp` (CPU cycles per SWCLK period), and the clock lands within half a step of the request; on the C3 the fastest step is about 5.2 MHz, and higher requests run at that step. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
+On the S2 and S3, SWCLK high and low times are equal and the frequency is computed in CPU cycles; on the S3 a request of 25 MHz or more uses the fastest setting, about 23.7 MHz. The C3 and the classic ESP32 use libxr's generic GPIO bit-banging; libxr turns the requested frequency into delay-loop counts with `kSwdTiming` in `config.hpp` (CPU cycles per SWCLK period), and the clock lands within half a step of the request; on the C3 the fastest step is about 5.2 MHz, and higher requests run at that step. The usable speed depends on wire length, pull-ups on the target board and routing. Start with 4 MHz. If errors appear at a high clock, check the SWCLK and SWDIO waveforms first, shorten the wires or add series resistors. The pin drive strength is set to 1 (IDF default is 2) to reduce overshoot and ringing.
 
 ### Building from source
 
@@ -262,7 +266,7 @@ idf.py -D IDF_TARGET=esp32s2 -B build-s2 -D SDKCONFIG=build-s2/sdkconfig build m
 
 The board can also be chosen in `idf.py menuconfig` under XR-DAP → Board.
 
-The pure logic (console, 0x86, TCP framing, USB/IP and the status light inputs) does not depend on ESP-IDF; `firmware/tests` runs its unit tests on a PC (CMake and a C++20 compiler, GCC or MSVC):
+The pure logic (console, 0x86, TCP framing, the status light inputs and serial multiplexing) does not depend on ESP-IDF; `firmware/tests` runs its unit tests on a Linux PC (CMake, a C++20 compiler, and libudev for libxr's Linux driver: `libudev-dev` on Ubuntu):
 
 ```
 cmake -S firmware/tests -B build-tests
@@ -273,14 +277,14 @@ ctest --test-dir build-tests
 | Directory | Content |
 |---|---|
 | `firmware/esp32sx`, `firmware/esp32c3`, `firmware/esp32` | Per-chip projects: `main.cpp`, `config.hpp` (pins, cores, priorities; `esp32sx` is the project shared by S2 and S3, chosen by target and board), and the S2/S3 SWD engine and status light |
-| `firmware/common/net` | Wi-Fi and credential storage, 0x86 Wi-Fi command, OpenOCD TCP server, USB/IP virtual device, mDNS |
-| `firmware/common/serial`, `console` | Serial DAP link, C3 serial splitting, Wi-Fi command line |
-| `firmware/common/probe` | Parameters, probe identity, start-up steps, restart, status light inputs, the sampling task and its gptimer, shared by all three chips |
+| `firmware/common/net` | Wi-Fi and credential storage, 0x86 Wi-Fi command, OpenOCD TCP server, mDNS |
+| `firmware/common/serial`, `console` | Splitting DAP frames from the command line on the C3 and classic ESP32 serial port, Wi-Fi command line |
+| `firmware/common/probe` | Parameters, probe identity, start-up steps, restart, status light inputs, the execution task and the gptimer of the sampling tick, shared by every chip |
 | `firmware/tests` | Unit tests that run on a PC |
-| `firmware/common/swd` | S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins |
+| `firmware/common/swd` | S2, S3 and C3 dedicated-GPIO pins, classic ESP32 GPIO-register pins |
 | `third_party/xrdap-core` | XR vendor extension, status light rule, probe identity and protocol document ([XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)) |
 
-Every push builds the five firmware images (S3, S3 Lite, S2, C3, classic ESP32), runs the unit tests and checks formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release. The `pages` workflow publishes the web flasher from the newest release images and the page in `web/` on main, after a tagged build finishes or when `web/` changes (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
+A push to `main` or a `refactor/**` branch, a tag and a pull request each build the five firmware images (S3, S3 Lite, S2, C3, classic ESP32), run the unit tests and check formatting (clang-format 21.1.8) in GitHub Actions. A `v*` tag publishes a release. The `pages` workflow publishes the web flasher from the newest release images and the page in `web/` on main, after a tagged build finishes or when `web/` changes (`web/make_site.py` writes one ESP Web Tools manifest per board from `web/boards.json`).
 
 ### Vendor extension
 
