@@ -12,8 +12,8 @@
 
 namespace XrDap::Config
 {
-/// 通告给上位机的 DAP 包长，也是 TCP 和 USB/IP 一个包的上限 / DAP packet size advertised
-/// to the host; also the per-packet limit for TCP and USB/IP.
+/// 通告给上位机的 DAP 包长，也是 TCP 一个包的上限 / DAP packet size advertised to the
+/// host; also the per-packet limit for TCP.
 constexpr uint16_t kDapPacketSize = 1024;
 /// DAP_Info 报的包数，客户端最多同时有这么多个请求在途 / Packet count in DAP_Info; a
 /// client keeps at most this many requests in flight.
@@ -30,19 +30,17 @@ constexpr uint32_t kWifiWaitMs = 20000;
 constexpr unsigned kConsolePriority = 4;
 
 #if CONFIG_IDF_TARGET_ESP32S2
-// ESP32-S2 的内部 RAM 只有 320 KB，任务栈取小一档；暂定值，要在硬件上看各任务栈的最高
-// 水位后再定 / The ESP32-S2 has only 320 KB of internal RAM, so task stacks are one step
-// smaller; provisional until each task's stack high-water mark is checked on hardware.
-/// TCP 和 USB/IP 服务任务的栈 / Stack of the TCP and USB/IP server task.
+// ESP32-S2 的内部 RAM 只有 320 KB，任务栈取小一档 / The ESP32-S2 has only 320 KB of
+// internal RAM, so task stacks are one step smaller.
+/// TCP 服务任务的栈 / Stack of the TCP server task.
 constexpr uint32_t kNetStack = 6144;
-/// 执行任务的栈（USB 命令、别的链路投来的请求和采样）；暂定值 / Stack of the execution
-/// task (USB commands, requests posted by other links, and sampling); provisional.
+/// 执行任务的栈（USB 命令、别的链路投来的请求和采样）/ Stack of the execution task (USB
+/// commands, requests posted by other links, and sampling).
 constexpr uint32_t kDapStack = 6144;
 /// 命令行任务的栈 / Stack of the console task.
-// The supplied long run reached 656 bytes free before the extra diagnostic report.
 constexpr uint32_t kConsoleStack = 4096;
 #else
-/// TCP 和 USB/IP 服务任务的栈 / Stack of the TCP and USB/IP server task.
+/// TCP 服务任务的栈 / Stack of the TCP server task.
 constexpr uint32_t kNetStack = 12288;
 /// 执行任务的栈（USB 命令、别的链路投来的请求和采样）/ Stack of the execution task (USB
 /// commands, requests posted by other links, and sampling).
