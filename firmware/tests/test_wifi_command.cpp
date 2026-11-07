@@ -32,8 +32,8 @@ Bytes SetRequest(const char* ssid, const char* password)
 static_assert(XrDap::WifiCommand::kCmd == 0x86, "command byte");
 static_assert(XrDap::Vendor::kFeatureWifi == (1U << 4), "INFO feature bit 4");
 
-// 状态末尾是清除来源和复位原因（A4 用户决定 ⑤）/ The status ends with the erase source
-// and the reset reason (A4 user decision 5).
+// 状态末尾是清除来源和复位原因 / The status ends with the erase source and the reset
+// reason.
 TEST(wifi_cmd_query_without_credentials)
 {
   FakeWifiSettings wifi;
@@ -50,8 +50,7 @@ TEST(wifi_cmd_query_reports_erase_source_and_reset_reason)
               (Bytes{0x86, 0x00, 0x00, 0, 0, 0, 0, 0x00, 0x00, 0x03, 0x02}));
 }
 
-// NVS 损坏后擦除重建：标志位 2（A4 用户决定 ④）/ NVS rebuilt after damage: flag bit 2
-// (A4 user decision 4).
+// NVS 损坏后擦除重建：标志位 2 / NVS rebuilt after damage: flag bit 2.
 TEST(wifi_cmd_query_reports_storage_repair)
 {
   FakeWifiSettings wifi;
@@ -77,9 +76,8 @@ TEST(wifi_cmd_query_connected)
                                               0xD8, 0x03, 'l', 'a', 'b', 0x00, 0x00}));
 }
 
-// 查询不需要会话所有权，任何链路都能发（XRDAP-Core B2 扩展），所以它只读：不保存、
-// 不清除、不重启 / A query needs no session ownership and may come from any link
-// (XRDAP-Core B2 extension), so it is read-only: no save, no clear, no restart.
+// 查询任何链路都能发，所以它只读：不保存、不清除、不重启 / A query may come from any
+// link, so it is read-only: no save, no clear, no restart.
 TEST(wifi_cmd_query_changes_nothing)
 {
   FakeWifiSettings wifi;

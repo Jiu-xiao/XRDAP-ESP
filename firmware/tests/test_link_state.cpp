@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// 状态灯输入和按键：判据是用户定的 XR-DAP 灯语（红 = 有线、蓝 = 无线、紫 = 都没连或改
-// 设置）、status_panel.hpp 写明的优先级，以及 A4 决定（按键按满 5 s 清除一次）。
+// 状态灯输入和按键：判据是 XR-DAP 灯语（红 = 有线、蓝 = 无线、紫 = 都没连或改设置）、
+// link_state.hpp 写明的优先级，以及按键规则（按满 5 s 清除一次）。
 //
-// Status light inputs and the button: the oracles are the user's XR-DAP light rule (red
-// = wired, blue = wireless, purple = nothing connected or a setting change), the
-// priority stated in status_panel.hpp, and the A4 decision (holding the button 5 s
-// clears once).
+// Status light inputs and the button: the oracles are the XR-DAP light rule (red = wired,
+// blue = wireless, purple = nothing connected or a setting change), the priority stated
+// in link_state.hpp, and the button rule (holding the button 5 s clears once).
 #include "link_state.hpp"
 #include "test.hpp"
 

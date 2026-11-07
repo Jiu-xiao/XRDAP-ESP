@@ -95,9 +95,8 @@ TEST(console_clear_clears_and_restarts)
   CHECK(c.wifi.restarts == 1);
 }
 
-// wifi status 给出清除来源和复位原因，没有热点参数时也给（A4 用户决定 ⑤）/ wifi status
-// shows the erase source and the reset reason, also without credentials (A4 user
-// decision 5).
+// wifi status 给出清除来源和复位原因，没有热点参数时也给 / wifi status shows the erase
+// source and the reset reason, also without credentials.
 TEST(console_status_shows_erase_source_and_reset_reason)
 {
   Console c;
