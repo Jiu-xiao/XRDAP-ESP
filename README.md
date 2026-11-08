@@ -230,22 +230,22 @@ pnputil /remove-device "USB\VID_1D50&PID_6199\<序列号>" /subtree
 | USB 块读 / 块写（SWD 约 23.7 MHz） | 约 410 / 360 KiB/s |
 | OpenOCD 经 USB 读 128 KiB（10 MHz） | 约 0.3 s |
 | OpenOCD 经 USB 烧录 16 KiB 并校验（10 MHz，STM32H723，含擦除一个 128 KiB 扇区） | 约 1.1 s |
-| Wi-Fi 最小命令往返 | 约 1.3 ms |
+| Wi-Fi 最小命令往返（电脑经 5 GHz、探针经 2.4 GHz 连同一个路由器） | 约 3.3 ms |
 | 探针端采样 8 个变量，2 ms 周期，连续 5 分钟 | 149999 帧，不丢帧、不跳拍，时间戳偏差 -27 到 +12 µs |
 
-探针端采样（4 字节变量，不跳拍不丢帧）的最短周期。USB 一列在 SWD 10 MHz 下测，连续两轮各 3 秒；串口、Wi-Fi 两列在 SWD 约 23.7 MHz 下测，2 秒：
+探针端采样（4 字节变量，不跳拍不丢帧）的最短周期。USB、Wi-Fi 两列在 SWD 10 MHz 下测，连续两轮各 3 秒；串口一列在 SWD 约 23.7 MHz 下测，2 秒：
 
 | 变量数 | USB | 串口 | Wi-Fi |
 |---|---|---|---|
-| 1 | 100 µs | 86 µs | 118 µs |
-| 8 | 150 µs | 220 µs | 251 µs |
+| 1 | 100 µs | 86 µs | 100 µs |
+| 8 | 150 µs | 220 µs | 200 µs |
 | 32 | 300 µs | 681 µs | 608 µs |
 
 OpenOCD 读 128 KiB（4 MHz 请求）：
 
 | 路径 | S3 | C3 |
 |---|---|---|
-| Wi-Fi，TCP 后端 | 1.6 s | 1.9 s |
+| Wi-Fi，TCP 后端 | 0.9 s | 1.9 s |
 | Wi-Fi，USB/IP | 2.1 s | 2.7 s |
 | C3 插 USB，`xrdap share usbip` | - | 1.8 s |
 | C3 插 USB，`xrdap share openocd`（10 MHz 请求） | - | 0.64 s |

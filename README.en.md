@@ -232,22 +232,22 @@ Typical values; real results vary with the target chip and the wiring. S3:
 | USB block read / block write (SWD about 23.7 MHz) | about 410 / 360 KiB/s |
 | OpenOCD reading 128 KiB over USB (10 MHz) | about 0.3 s |
 | OpenOCD flashing 16 KiB with verify over USB (10 MHz, STM32H723, including the erase of one 128 KiB sector) | about 1.1 s |
-| Smallest command round trip over Wi-Fi | about 1.3 ms |
+| Smallest command round trip over Wi-Fi (PC on 5 GHz and probe on 2.4 GHz, same router) | about 3.3 ms |
 | Probe-side sampling of 8 variables, 2 ms period, 5 minutes continuous | 149999 frames, no lost frames, no skipped ticks, timestamp deviation -27 to +12 µs |
 
-Shortest probe-side sampling period (4-byte variables, no skipped ticks or lost frames). The USB column was measured at SWD 10 MHz over two runs of 3 seconds each; the serial and Wi-Fi columns at SWD about 23.7 MHz over 2 seconds:
+Shortest probe-side sampling period (4-byte variables, no skipped ticks or lost frames). The USB and Wi-Fi columns were measured at SWD 10 MHz over two runs of 3 seconds each; the serial column at SWD about 23.7 MHz over 2 seconds:
 
 | Variables | USB | Serial | Wi-Fi |
 |---|---|---|---|
-| 1 | 100 µs | 86 µs | 118 µs |
-| 8 | 150 µs | 220 µs | 251 µs |
+| 1 | 100 µs | 86 µs | 100 µs |
+| 8 | 150 µs | 220 µs | 200 µs |
 | 32 | 300 µs | 681 µs | 608 µs |
 
 OpenOCD reading 128 KiB (4 MHz requested):
 
 | Path | S3 | C3 |
 |---|---|---|
-| Wi-Fi, TCP backend | 1.6 s | 1.9 s |
+| Wi-Fi, TCP backend | 0.9 s | 1.9 s |
 | Wi-Fi, USB/IP | 2.1 s | 2.7 s |
 | C3 over USB, `xrdap share usbip` | - | 1.8 s |
 | C3 over USB, `xrdap share openocd` (10 MHz requested) | - | 0.64 s |
