@@ -53,7 +53,20 @@ USB 和 Wi-Fi 都连着时以有线为准，显示红色。上位机异常退出
 
 ### 烧固件
 
-用 Chrome 或 Edge 桌面版打开[网页烧录](https://jiu-xiao.github.io/XRDAP-ESP/)，选板子后点“烧录固件”。也可以用命令行：在 [Releases](../../releases) 下载 `xrdap-esp32-s3.bin`、`xrdap-esp32-s3-lite.bin`（Lite 板）、`xrdap-esp32-s2.bin`（S2 板）、`xrdap-esp32-c3.bin` 或 `xrdap-esp32.bin`（校验和在同一页的 `SHA256SUMS`），从地址 0 烧录：
+用 Chrome 或 Edge 桌面版打开[网页烧录](https://jiu-xiao.github.io/XRDAP-ESP/)，选板子后点“烧录固件”。
+
+也可以用命令行：在 [Releases](../../releases) 下载所用板子对应的文件，从地址 0 烧录。每个发布版本提供以下文件：
+
+| 文件 | 用于哪块板 |
+|---|---|
+| `xrdap-esp32-s3.bin` | ESP32-S3 开发板 |
+| `xrdap-esp32-s3-lite.bin` | “高速无线 DAP 调试器 Lite”板（ESP32-S3 模组） |
+| `xrdap-esp32-s2.bin` | ESP32-S2 板 |
+| `xrdap-esp32-c3.bin` | ESP32-C3 开发板 |
+| `xrdap-esp32.bin` | 传统 ESP32 开发板 |
+| `SHA256SUMS` | 以上五个文件的校验和 |
+
+每个 `.bin` 都是合并镜像，已包含 bootloader、分区表和应用，从地址 0 写入，不需要另外写其他文件。校验下载的文件：把文件和 `SHA256SUMS` 放在同一目录，运行 `sha256sum -c --ignore-missing SHA256SUMS`，已下载的文件显示 `OK` 即与发布一致。
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin

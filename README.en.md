@@ -53,7 +53,20 @@ With both USB and Wi-Fi connected, wired wins and the light is red. When a host 
 
 ### Flashing the firmware
 
-Open the [web flasher](https://jiu-xiao.github.io/XRDAP-ESP/) in desktop Chrome or Edge, choose the board and press Flash firmware. From the command line instead, download `xrdap-esp32-s3.bin`, `xrdap-esp32-s3-lite.bin` (Lite board), `xrdap-esp32-s2.bin` (S2 board), `xrdap-esp32-c3.bin` or `xrdap-esp32.bin` from [Releases](../../releases) (checksums are in `SHA256SUMS` on the same page) and flash it at address 0:
+Open the [web flasher](https://jiu-xiao.github.io/XRDAP-ESP/) in desktop Chrome or Edge, choose the board and press Flash firmware.
+
+From the command line instead, download the file for your board from [Releases](../../releases) and flash it at address 0. Each release provides these files:
+
+| File | Board |
+|---|---|
+| `xrdap-esp32-s3.bin` | ESP32-S3 board |
+| `xrdap-esp32-s3-lite.bin` | Wireless DAP Lite board (ESP32-S3 module) |
+| `xrdap-esp32-s2.bin` | ESP32-S2 board |
+| `xrdap-esp32-c3.bin` | ESP32-C3 board |
+| `xrdap-esp32.bin` | Classic ESP32 board |
+| `SHA256SUMS` | Checksums of the five files above |
+
+Every `.bin` is a merged image that already contains the bootloader, the partition table and the application; it is written at address 0 and no other file is needed. To verify a download, put the file and `SHA256SUMS` in the same directory and run `sha256sum -c --ignore-missing SHA256SUMS`; a downloaded file that shows `OK` matches the release.
 
 ```
 python -m esptool --chip esp32s3 write_flash 0x0 xrdap-esp32-s3.bin
