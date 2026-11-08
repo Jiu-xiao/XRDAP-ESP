@@ -1,16 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <cstdint>
-
-#include "esp_err.h"
-
 // Wi-Fi STA 连接，以及热点参数在 NVS 中的存取。
 //
 // Wi-Fi STA connection and NVS storage of the access-point credentials.
 
+#include <cstdint>
+
+#include "esp_err.h"
+#include "wifi_settings.hpp"
+
 namespace XrDap
 {
+/// @brief 初始化默认 NVS 分区（热点参数，以及 Wi-Fi 的 PHY 校准数据都在里面）。分区已满
+///        或格式版本不符时擦除重建，在状态里报告 storage_repaired，清除来源记为
+///        STORAGE_REPAIR / Initialise the default NVS partition (it holds the credentials
+///        and the Wi-Fi PHY calibration). When the partition is full or has a newer
+///        format version it is erased and rebuilt; the status then reports
+///        storage_repaired and the erase source STORAGE_REPAIR.
+/// @return ESP_OK，或 nvs_flash 的错误；出错时保存、清除和读取热点参数都会失败 / ESP_OK,
+///         or an nvs_flash error; on error saving, clearing and reading the credentials
+///         fail.
+/// @note app_main 在启动命令行、0x86 和状态灯之前调用一次 / app_main calls this once
+///       before it starts the console, 0x86 and the status light.
+esp_err_t WifiStaInitStorage();
+
 /// @brief 以 STA 模式连接 Wi-Fi，热点参数从 NVS 读取（命名空间 "rmlink"，键 "wifi"）/
 ///        Connect in STA mode using credentials from NVS (namespace "rmlink", key
 ///        "wifi").
@@ -20,53 +34,17 @@ namespace XrDap
 ///         connected; reconnecting in the background.
 /// @return 其他 / Other：无可用热点参数，Wi-Fi 未启动 / No usable credentials, Wi-Fi not
 ///         started.
-/// @note 只调用一次，阻塞调用任务至多 timeout_ms；SSID 和密码不会打印 / Call once;
-///       blocks the calling task for up to timeout_ms. SSID and password are never
-///       logged.
+/// @note 在 WifiStaInitStorage 之后调用一次，阻塞调用任务至多 timeout_ms；协议栈初始化
+///       失败时中止（ESP_ERROR_CHECK）/ Call once after WifiStaInitStorage; blocks the
+///       calling task for up to timeout_ms. Aborts (ESP_ERROR_CHECK) if the stack cannot
+///       be initialised.
 esp_err_t WifiStaStart(uint32_t timeout_ms);
 
-/// @brief 保存热点参数到 NVS，重启后生效 / Save the credentials to NVS; they take effect
-///        after a restart.
-/// @param ssid 热点名，1 到 32 字节 / SSID, 1 to 32 bytes.
-/// @param password 密码，8 到 63 字节，空串表示开放网络 / Password, 8 to 63 bytes; empty
-///        means an open network.
-/// @return ESP_ERR_INVALID_ARG 长度不合法 / invalid length；其他非 ESP_OK 为 NVS 错误 /
-///         other non-OK values are NVS errors.
-/// @note 存储格式固定，升级固件不丢热点参数 / The storage format is fixed, so firmware
-///       upgrades keep the credentials.
-esp_err_t WifiStaSave(const char* ssid, const char* password);
-
-/// @brief 清除已保存的热点参数；本来就没有也返回 ESP_OK / Erase the saved credentials;
-///        returns ESP_OK even if none exist.
-esp_err_t WifiStaClear();
-
-/// Wi-Fi 状态快照 / Wi-Fi status snapshot.
-struct WifiStatus
-{
-  /// Wi-Fi 是否已启动（有热点参数才会启动） / Wi-Fi started (only with saved
-  /// credentials).
-  bool started;
-  /// 是否已拿到 IP / An IP has been obtained.
-  bool connected;
-  /// 已保存的热点名，没有则为空串 / Saved SSID; empty if none.
-  char ssid[33];
-  /// 已拿到的 IPv4 地址 / Obtained IPv4 address.
-  uint8_t ip[4];
-  /// 信号强度，未连接时为 0 / Signal strength; 0 when not connected.
-  int8_t rssi;
-};
-
-/// 读取当前 Wi-Fi 状态，可在任意任务调用 / Read the current Wi-Fi status; callable from
-/// any task.
-WifiStatus WifiStaGetStatus();
-
-/// Wi-Fi 连接阶段 / Wi-Fi link stage.
-enum class WifiLink
-{
-  OFF,      ///< 没有热点参数，Wi-Fi 未启动 / No credentials, Wi-Fi not started.
-  JOINING,  ///< 已启动，还没拿到 IP / Started, no IP yet.
-  UP,       ///< 已拿到 IP / IP obtained.
-};
+/// @brief 命令行和 0x86 用的 Wi-Fi 设置，热点参数存在 NVS / Wi-Fi settings for the
+///        console and 0x86; the credentials live in NVS.
+/// @note 返回的对象一直有效，方法可在任意任务调用 / The object stays valid; its methods
+///       are callable from any task.
+WifiSettings& WifiStaSettings();
 
 /// 读取连接阶段；不读 NVS，适合周期性查询，可在任意任务调用 / Read the link stage; does
 /// not touch NVS, so it is cheap to poll; callable from any task.

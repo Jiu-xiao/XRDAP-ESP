@@ -1,6 +1,0 @@
-# NVS（Wi-Fi 热点参数）放在程序分区后面：release 的合并镜像从地址 0 写到程序末尾，
-# 不会覆盖它，升级固件后不用重新配网。
-# Name,   Type, SubType, Offset,   Size
-factory,  app,  factory, 0x10000,  0x200000
-nvs,      data, nvs,     0x210000, 0x6000
-phy_init, data, phy,     0x216000, 0x1000

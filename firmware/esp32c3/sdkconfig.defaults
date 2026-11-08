@@ -15,13 +15,24 @@ CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 
 # USB Serial/JTAG 给 DAP 链路和命令行用，UART0 给另一个命令行用（libxr 的 UART 驱动），
 # 任何控制台输出都不能走这两个口（否则日志混进 DAP 帧），系统日志控制台全部关闭。
+# USB Serial/JTAG is for the DAP link and the console, UART0 for a second console (libxr's
+# UART driver). No console output can use these two ports (logs would mix into DAP frames),
+# so the system log console is off.
 CONFIG_ESP_CONSOLE_NONE=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
-# 短周期采样时空闲任务很少能运行，不把它算作看门狗超时。看门狗本身保留（中断看门狗照常工作）。
-CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=n
+# 任务看门狗检查空闲任务：采样每个周期都让出时间，空闲任务 5 秒都没运行说明核被占死（Wi-Fi、
+# 串口都停），这时 panic 并重启，复位原因为看门狗；没有日志输出口，只报警不重启的话看不到。
+# 超时时在运行的任务记进 RTC 内存，wifi status 给出。
+# The task watchdog checks the idle task: sampling yields every period, so 5 seconds without
+# the idle task means the core is stuck (Wi-Fi and serial stopped). It then panics and
+# restarts with a watchdog reset reason; with no log output, a warning alone would go
+# unseen. The task running at the timeout is kept in RTC memory and shown by wifi status.
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0=y
+CONFIG_ESP_TASK_WDT_PANIC=y
 
-# 关掉用不到的功能：只用 Wi-Fi STA、IPv4、TCP 客户端连入
+# 关掉用不到的功能：只用 Wi-Fi STA、IPv4、TCP 客户端连入 / Turn off what is not used:
+# only Wi-Fi STA, IPv4 and incoming TCP clients.
 CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
 CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
 CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA=n
@@ -36,5 +47,20 @@ CONFIG_LWIP_MAX_SOCKETS=4
 CONFIG_LWIP_MAX_ACTIVE_TCP=8
 CONFIG_LWIP_MAX_LISTENING_TCP=4
 # DAP 一问一答，包不超过 1 KB，TCP 缓冲用 16 KB 足够；Wi-Fi 收发缓冲用 IDF 默认值。
+# DAP is request and reply with packets up to 1 KB, so 16 KB of TCP buffer is enough; the
+# Wi-Fi buffers keep the IDF defaults.
 CONFIG_LWIP_TCP_SND_BUF_DEFAULT=16384
 CONFIG_LWIP_TCP_WND_DEFAULT=16384
+# TCP 计时粒度：lwIP 按慢计时器（2 x TCP_TMR_INTERVAL）计 RTT 和重传。默认 250 ms 时，
+# 几毫秒的 RTT 会量成 0，重传超时一直停在初值 1.5 s，Wi-Fi 丢一个应答就要等很久，采样
+# 缓冲因此溢出。缩短计时粒度并降低重传超时的初值，丢包后能更快重传。
+# TCP timer granularity: lwIP counts RTT and retransmits in slow ticks (2 x
+# TCP_TMR_INTERVAL). At the default 250 ms an RTT of a few ms measures 0 and the
+# retransmit timeout stays at its 1.5 s start, so a reply lost on Wi-Fi waited a long
+# time and the sample buffer overflowed. A finer tick and a lower initial timeout resend
+# a lost reply sooner.
+CONFIG_LWIP_TCP_TMR_INTERVAL=50
+CONFIG_LWIP_TCP_RTO_TIME=300
+# 命令行 heap 命令要列出各任务栈的最高水位（uxTaskGetSystemState）/ The console's heap
+# command lists each task's stack high-water mark (uxTaskGetSystemState).
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

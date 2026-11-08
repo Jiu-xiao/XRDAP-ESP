@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-// ESP32-C3 版 XR-DAP 的固定参数；两种芯片共用的在 probe_config.hpp。
+// ESP32-C3 版 XR-DAP 的固定参数；各芯片共用的在 probe_config.hpp。
 //
 // Fixed parameters of the ESP32-C3 XR-DAP firmware; shared ones are in probe_config.hpp.
 
 #include <cstdint>
 
+#include "debug/swd_general_gpio.hpp"
+#include "freertos/FreeRTOS.h"
 #include "probe_config.hpp"
 
 namespace XrDap::Config
 {
 /// DAP_Info 产品名 / DAP_Info product name.
 inline constexpr char kProductName[] = "XR-DAP-C3";
-/// USB/IP 虚拟设备的产品名 / Product name of the USB/IP virtual device.
-inline constexpr char kUsbProductName[] = "XR-DAP-C3 CMSIS-DAP";
 /// mDNS TXT 里的芯片名 / Chip name in the mDNS TXT.
 inline constexpr char kChipName[] = "esp32c3";
 
@@ -27,24 +27,34 @@ constexpr int kSwclkGpio = 5;
 /// SWDIO 引脚 / SWDIO pin.
 constexpr int kSwdioGpio = 4;
 
-/// 写一次 SWCLK 沿在每个时钟周期多出的 CPU 周期数，用来校正 SWCLK 频率；偏低就加大，
-/// 偏高就减小。这个值还没有用逻辑分析仪在 C3 上校准过 / Extra CPU cycles one SWCLK edge
-/// write adds to each clock period, used to calibrate the SWCLK frequency; raise it if
-/// the frequency is low, lower it if high. Not yet calibrated on the C3 with a logic
-/// analyzer.
-constexpr uint32_t kEdgeWriteCycles = 13U;
+/// libxr SwdGeneralGPIO 的时序（CPU 周期 ×10）：带延时时每个 SWCLK 周期 a + b·N。
+/// b = 8.0 是一次延时循环的 4 个周期，a 是各路径的平均固定开销。c 设为 0，不用无延时
+/// 路径：无延时时读一位在 SWCLK 拉低后紧接着采 SWDIO，离上一个上升沿太近，目标还没送出
+/// 新的一位，会读到上一位。N = 1 在采样前多等一小段时间，读数正确，是最快的一档 /
+/// Timing of libxr's SwdGeneralGPIO (CPU cycles x10): a + b*N per SWCLK period with
+/// delay. b = 8.0 is the 4 cycles of one delay-loop iteration and a is the mean fixed
+/// cost of the paths. c is 0, so the path without delay is never used: there a read
+/// samples SWDIO right after pulling SWCLK low, too soon after the previous rising edge
+/// for the target to drive the new bit, so the previous bit is read. N = 1 waits a little
+/// longer before sampling and reads correctly; it is the fastest step.
+inline constexpr LibXR::Debug::SwdGpioTiming kSwdTiming{80, 247, 0};
 
 /// 所有任务所在的核（C3 为单核）/ Core running every task (the C3 is single-core).
 constexpr int kCore = 0;
-// 优先级从低到高：libxr 定时器 3 < 命令行 4 < 串口 DAP 8 < 网络服务 10 < lwIP 18 < 采样
-// 19 < esp_timer 22 < Wi-Fi 23。采样在节拍之间阻塞，每周期给别的任务留至少 1/8，所以可以
-// 排在 lwIP 之上；它低于 esp_timer 和 Wi-Fi 驱动，不拖住无线协议栈。
+// 优先级从低到高：libxr 定时器 3 < 命令行 4 < 串口 DAP 8 < 网络服务 10 < lwIP 18 <
+// esp_timer 22 < Wi-Fi 23 < 执行任务 24（与单核 S2 相同），中断仍可抢占。执行任务没有事做
+// 时阻塞，每帧之后仍留 max(15 us, 周期/8, 帧耗时/4) 给其他任务。执行任务排在 Wi-Fi 之上：
+// 排在它之下时，经 Wi-Fi 收发时 Wi-Fi 任务可能占住 CPU 超过一个 1 ms 节拍，采样会跳拍。
 // Priorities low to high: libxr timer 3 < console 4 < serial DAP 8 < network server 10
-// < lwIP 18 < sampling 19 < esp_timer 22 < Wi-Fi 23. Sampling blocks between ticks and
-// leaves at least 1/8 of each period to others, so it can sit above lwIP; it stays below
-// esp_timer and the Wi-Fi driver so the radio stack is not starved.
-/// 采样任务优先级 / Sampling task priority.
-constexpr unsigned kSamplingPriority = 19;
+// < lwIP 18 < esp_timer 22 < Wi-Fi 23 < execution task 24 (as on the single-core S2);
+// interrupts still preempt it. The execution task blocks when it has nothing to do and
+// keeps max(15 us, period/8, frame time/4) after each frame for other tasks. The
+// execution task is above Wi-Fi: below it, the Wi-Fi task could hold the CPU across a
+// 1 ms tick while traffic went over Wi-Fi, and sampling would skip that tick.
+/// 执行任务优先级 / Execution task priority.
+constexpr unsigned kDapPriority = 24;
+static_assert(kDapPriority < configMAX_PRIORITIES,
+              "DAP task priority must fit the FreeRTOS priority range");
 /// libxr 定时器任务优先级 / libxr timer task priority.
 constexpr unsigned kLibxrTimerPriority = 3;
 /// 串口 DAP 任务优先级 / Serial DAP task priority.

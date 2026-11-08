@@ -20,8 +20,16 @@ def main():
     images, version, out = Path(sys.argv[1]), sys.argv[2].lstrip("v"), Path(sys.argv[3])
     boards = json.loads((WEB / "boards.json").read_text(encoding="utf-8"))
     out.mkdir(parents=True, exist_ok=True)
-    for name in ("index.html", "boards.json"):
-        shutil.copy(WEB / name, out / name)
+    # A board whose image is not in this release (one added after it) stays off the site
+    # until the next release, instead of failing the deploy.
+    missing = [b["asset"] for b in boards if not (images / b["asset"]).exists()]
+    if missing:
+        print("not in this release, left out: " + ", ".join(missing))
+    boards = [b for b in boards if (images / b["asset"]).exists()]
+    shutil.copy(WEB / "index.html", out / "index.html")
+    (out / "boards.json").write_text(
+        json.dumps(boards, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     for board in boards:
         shutil.copy(images / board["asset"], out / board["asset"])
         manifest = {

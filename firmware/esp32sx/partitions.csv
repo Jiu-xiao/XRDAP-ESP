@@ -1,0 +1,11 @@
+# NVS（Wi-Fi 热点参数）放在程序分区后面：release 的合并镜像从地址 0 写到程序末尾，
+# 不会覆盖它，升级固件后不用重新配网。
+# phy_init 与乐鑫默认分区表一致（只在 CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION 下使用）；
+# 删掉它会改变 Flash 布局，已部署的板子要整片重刷，所以保留。
+# phy_init matches Espressif's default layout (used only with
+# CONFIG_ESP_PHY_INIT_DATA_IN_PARTITION); removing it would change the flash layout and
+# force a full reflash of deployed boards, so it stays.
+# Name,   Type, SubType, Offset,   Size
+factory,  app,  factory, 0x10000,  0x200000
+nvs,      data, nvs,     0x210000, 0x6000
+phy_init, data, phy,     0x216000, 0x1000
