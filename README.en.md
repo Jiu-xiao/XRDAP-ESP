@@ -241,7 +241,7 @@ Shortest probe-side sampling period (4-byte variables, no skipped ticks or lost 
 |---|---|---|---|
 | 1 | 100 µs | 86 µs | 118 µs |
 | 8 | 150 µs | 220 µs | 251 µs |
-| 32 | 350 µs | 681 µs | 608 µs |
+| 32 | 300 µs | 681 µs | 608 µs |
 
 OpenOCD reading 128 KiB (4 MHz requested):
 
