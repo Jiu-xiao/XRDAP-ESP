@@ -14,8 +14,8 @@
 | 走 Wi-Fi 给 Keil、pyOCD、probe-rs、OpenOCD 用 | 用 USB/IP 挂载 | 用 USB/IP 挂载 | 用 USB/IP 挂载 | 用 USB/IP 挂载 |
 | 走 Wi-Fi 给 OpenOCD 用 | OpenOCD 的 TCP 后端直连 | 同左 | 同左 | 同左 |
 | SWD 时钟 | 最高约 23.7 MHz | - | 最高约 5.2 MHz | 最高约 5 MHz（GPIO 寄存器位带，受外设总线限制） |
-| 探针端采样的最短周期（插线） | 4 个变量 118 µs | - | 4 个变量 300 µs | 8 个变量 1 ms，1 个变量 200 µs |
-| OpenOCD 读 128 KiB（插线） | 0.62 s | - | 1.8 s | 3.4 s |
+| 探针端采样的最短周期（插线） | 4 个变量 125 µs | - | 4 个变量 225 µs | 8 个变量 900 µs，1 个变量 350 µs |
+| OpenOCD 读 128 KiB（插线） | 约 0.3 s | - | 0.64 s | 2.0 s |
 
 要最快、最省事选 S3。S2 同样有原生 USB，是单核，内部 RAM 较小，表中没有列出它的典型值。手边只有 C3 或传统 ESP32 也能用，多一步 `xrdap share`。传统 ESP32 没有原生 USB 和 CPU 专用 GPIO，SWD 和串口都慢一档，调试、烧录没问题。
 
@@ -227,19 +227,19 @@ pnputil /remove-device "USB\VID_1D50&PID_6199\<序列号>" /subtree
 
 | 项目 | 结果 |
 |---|---|
-| USB 块读 / 块写（12 MHz） | 约 970 / 780 KiB/s |
-| OpenOCD 经 USB 读 128 KiB（4 MHz） | 0.62 s |
-| OpenOCD 经 USB 烧录 16 KiB 并校验（4 MHz） | 1.09 s |
+| USB 块读 / 块写（SWD 约 23.7 MHz） | 约 410 / 360 KiB/s |
+| OpenOCD 经 USB 读 128 KiB（10 MHz） | 约 0.3 s |
+| OpenOCD 经 USB 烧录 16 KiB 并校验（10 MHz，STM32H723，含擦除一个 128 KiB 扇区） | 约 1.1 s |
 | Wi-Fi 最小命令往返 | 约 1.3 ms |
 | 探针端采样 8 个变量，2 ms 周期，连续 5 分钟 | 149999 帧，不丢帧、不跳拍，时间戳偏差 -27 到 +12 µs |
 
-探针端采样（4 字节变量，2 秒内不跳拍不丢帧）的最短周期，SWD 约 23.7 MHz：
+探针端采样（4 字节变量，不跳拍不丢帧）的最短周期。USB 一列在 SWD 10 MHz 下测，连续两轮各 3 秒；串口、Wi-Fi 两列在 SWD 约 23.7 MHz 下测，2 秒：
 
 | 变量数 | USB | 串口 | Wi-Fi |
 |---|---|---|---|
-| 1 | 86 µs | 86 µs | 118 µs |
-| 8 | 167 µs | 220 µs | 251 µs |
-| 32 | 604 µs | 681 µs | 608 µs |
+| 1 | 100 µs | 86 µs | 118 µs |
+| 8 | 150 µs | 220 µs | 251 µs |
+| 32 | 350 µs | 681 µs | 608 µs |
 
 OpenOCD 读 128 KiB（4 MHz 请求）：
 
@@ -248,10 +248,11 @@ OpenOCD 读 128 KiB（4 MHz 请求）：
 | Wi-Fi，TCP 后端 | 1.6 s | 1.9 s |
 | Wi-Fi，USB/IP | 2.1 s | 2.7 s |
 | C3 插 USB，`xrdap share usbip` | - | 1.8 s |
+| C3 插 USB，`xrdap share openocd`（10 MHz 请求） | - | 0.64 s |
 
 C3 是单核，Wi-Fi 收发和采样在同一个核上，执行任务的优先级高于 Wi-Fi 任务：经 Wi-Fi 采样 4 个变量 500 µs 不跳拍，250 µs 约跳 1% 的拍。
 
-传统 ESP32（串口 921600 baud）：SWD 1 到 40 MHz 请求下读写全部正确；GPIO 寄存器在外设总线上（写一次约 12 个 CPU 周期，读一次约 17 个），请求 5 MHz 以上都按全速跑，全速不到 5 MHz；探针端采样 8 个变量 1 ms、1 个变量 200 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share usbip`，OpenOCD 读 128 KiB 3.4 s。经 Wi-Fi：4 个变量 500 µs、8 个变量 600 µs、1 个变量 150 µs 不丢帧（150 µs 时偶尔跳 1 拍）；USB/IP 挂载后 OpenOCD 读 128 KiB 3.2 s，TCP 后端 2.3 s。
+传统 ESP32（串口 921600 baud）：SWD 1 到 40 MHz 请求下读写全部正确；GPIO 寄存器在外设总线上（写一次约 12 个 CPU 周期，读一次约 17 个），请求 5 MHz 以上都按全速跑，全速不到 5 MHz；探针端采样 8 个变量 900 µs、1 个变量 350 µs 不跳拍不丢帧，再短时探针仍不跳拍，但 921600 的串口取不完数据，缓冲开始丢帧；经 `xrdap share openocd`（10 MHz 请求），OpenOCD 读 128 KiB 2.0 s。经 Wi-Fi：4 个变量 500 µs、8 个变量 600 µs、1 个变量 150 µs 不丢帧（150 µs 时偶尔跳 1 拍）；USB/IP 挂载后 OpenOCD 读 128 KiB 3.2 s，TCP 后端 2.3 s。
 
 ### SWD 时钟和接线
 

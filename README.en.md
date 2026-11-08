@@ -14,8 +14,8 @@ The host tool is in [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host): a sing
 | Wi-Fi, for Keil, pyOCD, probe-rs, OpenOCD | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP | Attach with USB/IP |
 | Wi-Fi, for OpenOCD | OpenOCD TCP backend, direct | Same as S3 | Same as S3 | Same as S3 |
 | SWD clock | up to about 23.7 MHz | - | up to about 5.2 MHz | up to about 5 MHz (GPIO register bit-banding, limited by the peripheral bus) |
-| Shortest probe-side sampling period (USB cable) | 4 variables 118 µs | - | 4 variables 300 µs | 8 variables 1 ms, 1 variable 200 µs |
-| OpenOCD reading 128 KiB (USB cable) | 0.62 s | - | 1.8 s | 3.4 s |
+| Shortest probe-side sampling period (USB cable) | 4 variables 125 µs | - | 4 variables 225 µs | 8 variables 900 µs, 1 variable 350 µs |
+| OpenOCD reading 128 KiB (USB cable) | about 0.3 s | - | 0.64 s | 2.0 s |
 
 The S3 is the fastest and simplest choice. The S2 also has native USB; it is single-core with less internal RAM, and the table lists no typical values for it. A C3 or a classic ESP32 also works, with one extra step: `xrdap share`. The classic ESP32 has no native USB and no CPU-dedicated GPIO, so SWD and the serial link are one step slower; debugging and flashing work fine.
 
@@ -229,19 +229,19 @@ Typical values; real results vary with the target chip and the wiring. S3:
 
 | Item | Result |
 |---|---|
-| USB block read / block write (12 MHz) | about 970 / 780 KiB/s |
-| OpenOCD reading 128 KiB over USB (4 MHz) | 0.62 s |
-| OpenOCD flashing 16 KiB with verify over USB (4 MHz) | 1.09 s |
+| USB block read / block write (SWD about 23.7 MHz) | about 410 / 360 KiB/s |
+| OpenOCD reading 128 KiB over USB (10 MHz) | about 0.3 s |
+| OpenOCD flashing 16 KiB with verify over USB (10 MHz, STM32H723, including the erase of one 128 KiB sector) | about 1.1 s |
 | Smallest command round trip over Wi-Fi | about 1.3 ms |
 | Probe-side sampling of 8 variables, 2 ms period, 5 minutes continuous | 149999 frames, no lost frames, no skipped ticks, timestamp deviation -27 to +12 µs |
 
-Shortest probe-side sampling period (4-byte variables, no skipped ticks or lost frames over 2 seconds), SWD about 23.7 MHz:
+Shortest probe-side sampling period (4-byte variables, no skipped ticks or lost frames). The USB column was measured at SWD 10 MHz over two runs of 3 seconds each; the serial and Wi-Fi columns at SWD about 23.7 MHz over 2 seconds:
 
 | Variables | USB | Serial | Wi-Fi |
 |---|---|---|---|
-| 1 | 86 µs | 86 µs | 118 µs |
-| 8 | 167 µs | 220 µs | 251 µs |
-| 32 | 604 µs | 681 µs | 608 µs |
+| 1 | 100 µs | 86 µs | 118 µs |
+| 8 | 150 µs | 220 µs | 251 µs |
+| 32 | 350 µs | 681 µs | 608 µs |
 
 OpenOCD reading 128 KiB (4 MHz requested):
 
@@ -250,10 +250,11 @@ OpenOCD reading 128 KiB (4 MHz requested):
 | Wi-Fi, TCP backend | 1.6 s | 1.9 s |
 | Wi-Fi, USB/IP | 2.1 s | 2.7 s |
 | C3 over USB, `xrdap share usbip` | - | 1.8 s |
+| C3 over USB, `xrdap share openocd` (10 MHz requested) | - | 0.64 s |
 
 The C3 has a single core, so Wi-Fi traffic and sampling run on the same core; the execution task has a higher priority than the Wi-Fi task. Sampling 4 variables over Wi-Fi at 500 µs skips no ticks. At 250 µs about 1% of ticks are skipped.
 
-Classic ESP32 (serial at 921600 baud): reads and writes are correct for SWD clock requests from 1 to 40 MHz. The GPIO registers are on the peripheral bus (about 12 CPU cycles per write, 17 per read), so any request above 5 MHz runs at full speed, which is just under 5 MHz. Probe-side sampling of 8 variables at 1 ms and of 1 variable at 200 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share usbip`, OpenOCD reads 128 KiB in 3.4 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs a tick is skipped now and then); OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
+Classic ESP32 (serial at 921600 baud): reads and writes are correct for SWD clock requests from 1 to 40 MHz. The GPIO registers are on the peripheral bus (about 12 CPU cycles per write, 17 per read), so any request above 5 MHz runs at full speed, which is just under 5 MHz. Probe-side sampling of 8 variables at 900 µs and of 1 variable at 350 µs skips no ticks and loses no frames. At shorter periods the probe still skips no ticks, but the 921600 serial link cannot carry all the data and the buffer starts dropping frames. Through `xrdap share openocd` (10 MHz requested), OpenOCD reads 128 KiB in 2.0 s. Over Wi-Fi, 4 variables at 500 µs, 8 variables at 600 µs and 1 variable at 150 µs lose no frames (at 150 µs a tick is skipped now and then); OpenOCD reads 128 KiB in 3.2 s through a USB/IP mount and in 2.3 s through the TCP backend.
 
 ### SWD clock and wiring
 
