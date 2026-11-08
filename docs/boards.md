@@ -77,13 +77,13 @@ GPIO5 是传统 ESP32 的启动配置引脚，因此 SWD 使用 GPIO18 和 GPIO1
 
 | 板子 | 进入下载模式 |
 |---|---|
-| ESP32-S3 开发板 | 经 USB 转串口芯片的口时，esptool 和网页烧录经自动下载电路进入；经原生 USB 口时，按住 BOOT 插上 USB，或按住 BOOT 按一下 RST |
+| ESP32-S3 开发板 | 经 USB 转串口芯片的口时，esptool 和网页烧录经自动下载电路进入；经原生 USB 口时，按住 BOOT 插上 USB，或按住 BOOT 短按 RST |
 | 传统 ESP32 开发板 | esptool 和网页烧录经 USB 转串口芯片的自动下载电路进入 |
 | ESP32-C3 开发板 | esptool 和网页烧录经芯片自带的 USB 口进入 |
 | ESP32-S2 板 | 按住 BOOT 插上 USB，然后松开 |
 | Lite 板 | 拔下 USB，按住 SW1 再插上，然后松开；电脑上出现原生 USB 的串口 `303A:1001`，esptool 加 `--after watchdog_reset` |
 
-有的开发板的自动下载电路只能复位芯片、无法拉低 GPIO0，esptool 报 `Wrong boot mode`。这时按住 BOOT，按一下 EN（RESET），松开 BOOT，再在 esptool 命令中加 `--before no_reset`。
+有的开发板的自动下载电路只能复位芯片、无法拉低 GPIO0，esptool 报 `Wrong boot mode`。这时按住 BOOT，短按 EN（RESET），松开 BOOT，再在 esptool 命令中加 `--before no_reset`。
 
 ## 状态灯和按键
 
@@ -97,7 +97,7 @@ S3 开发板、Lite 板和 S2 板有状态灯，显示规则与 XR-DAP 其他探
 | 紫 | USB 和 Wi-Fi 都没有连接；正在连接 Wi-Fi 时呼吸 |
 | 主色与紫色来回，2 s 一次 | 上位机经 DAP_HostStatus 报告已连接 |
 | 红蓝来回，1 s 一次 | 上位机报告目标运行中 |
-| 闪亮 | 每条 DAP 命令（经 USB、串口或 Wi-Fi）使灯亮一下再暗下去，命令不断时约 15 Hz 闪烁 |
+| 闪亮 | 每条 DAP 命令（经 USB、串口或 Wi-Fi）使灯先变亮再逐渐变暗，命令连续时灯持续闪烁 |
 | 紫色快闪 | Lite 板的 SW2 或 S2 板的 KEY 正被按住；按满 5 s 后变为紫色常亮，清除热点参数并重启 |
 | 紫色常亮 | 热点参数刚被修改或清除（按键、命令行、`xrdap wifi` 或 0x86 命令），探针随即重启 |
 

@@ -83,7 +83,7 @@ xrdap watch --elf app.elf motor.speed motor.current --period 1ms --csv log.csv
 | 项目 | ESP32-S3（原生 USB） | ESP32-C3（芯片 USB 口） | 传统 ESP32（串口 921600 baud） |
 |---|---|---|---|
 | SWD 最高时钟 | 约 23.7 MHz | 约 5.2 MHz | 约 5 MHz |
-| 探针端采样的最短周期 | 4 个变量 125 µs | 4 个变量 225 µs | 8 个变量 900 µs，1 个变量 350 µs |
+| 探针端采样的最短周期（SWD 请求 10 MHz） | 4 个变量 125 µs | 4 个变量 225 µs | 8 个变量 900 µs，1 个变量 350 µs |
 | OpenOCD 读 128 KiB（请求 10 MHz；C3、传统 ESP32 经 `xrdap share openocd`） | 约 0.3 s | 0.64 s | 2.0 s |
 
 ## 编译

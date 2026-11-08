@@ -97,7 +97,7 @@ The S3 board, the Lite board and the S2 board have a status light, which follows
 | Purple | Neither USB nor Wi-Fi connected; breathing while joining Wi-Fi |
 | Main colour fading to purple and back every 2 s | The host reported connected through DAP_HostStatus |
 | Red and blue alternating every 1 s | The host reported the target running |
-| Flash | Every DAP command (over USB, serial or Wi-Fi) brightens the light, which then fades; steady traffic flickers at about 15 Hz |
+| Flash | Every DAP command (over USB, serial or Wi-Fi) brightens the light, which then fades; steady traffic keeps it flickering |
 | Fast purple blink | SW2 on the Lite board or KEY on the S2 board is held; after 5 s the light turns solid purple, the hotspot settings are removed and the probe restarts |
 | Solid purple | The hotspot settings were just changed or removed (button, console, `xrdap wifi` or command 0x86); the probe restarts |
 

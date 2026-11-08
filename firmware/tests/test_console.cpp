@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// 命令行：判据是 console_core.hpp 写明的规则和 README 的命令表 / Console: the oracle is
-// the rules stated in console_core.hpp and the command table in the README.
+// 命令行：判据是 console_core.hpp 写明的规则和 docs/connections.md 的命令表 / Console:
+// the oracle is the rules stated in console_core.hpp and the command table in
+// docs/connections.md.
 #include <cstring>
 #include <string>
 

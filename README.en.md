@@ -83,7 +83,7 @@ Typical values with a USB cable; real results vary with the target chip and the 
 | Item | ESP32-S3 (native USB) | ESP32-C3 (chip's USB port) | Classic ESP32 (serial, 921600 baud) |
 |---|---|---|---|
 | Highest SWD clock | about 23.7 MHz | about 5.2 MHz | about 5 MHz |
-| Shortest probe-side sampling period | 4 variables 125 µs | 4 variables 225 µs | 8 variables 900 µs, 1 variable 350 µs |
+| Shortest probe-side sampling period (SWD 10 MHz requested) | 4 variables 125 µs | 4 variables 225 µs | 8 variables 900 µs, 1 variable 350 µs |
 | OpenOCD reading 128 KiB (10 MHz requested; C3 and classic ESP32 through `xrdap share openocd`) | about 0.3 s | 0.64 s | 2.0 s |
 
 ## Building
