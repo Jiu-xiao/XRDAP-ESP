@@ -109,4 +109,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release/*
+          # v0.6.0-rc.1 and the like: a prerelease, which the pages job does not take.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
