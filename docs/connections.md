@@ -80,7 +80,7 @@ openocd -c "adapter driver cmsis-dap; cmsis-dap backend tcp; cmsis-dap tcp host 
 
 经串口连接的探针由 `xrdap share openocd` 在本机提供同样的 TCP 后端，用法见 XRDAP-Host。
 
-TCP 后端不在正式版 0.12.0 中，需要从 master 编译。Windows 上要使用包含提交 e89e73839d53 的版本：更早的 master 在 Windows 上把“暂时没有数据”当作错误，启动时等待十几秒并反复输出 `error reading header`。
+TCP 后端不在正式版 0.12.0 中，需要从 master 编译。Windows 上要使用包含提交 e89e73839d53 的版本：不含这个提交的版本在 Windows 上把“暂时没有数据”当作错误，启动时等待十几秒并反复输出 `error reading header`，读写也可能失败。没有这样的版本时，用 `xrdap share usbip` 共享探针，挂载后经 USB 后端连接。
 
 ## Windows 上的驱动
 
