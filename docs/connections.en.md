@@ -80,7 +80,7 @@ openocd -c "adapter driver cmsis-dap; cmsis-dap backend tcp; cmsis-dap tcp host 
 
 For a probe on serial, `xrdap share openocd` serves the same TCP backend on the computer; see XRDAP-Host.
 
-The TCP backend is not in the official release 0.12.0 and is built from master. On Windows it needs a version that includes commit e89e73839d53: earlier master on Windows treats "no data yet" as an error, waits more than ten seconds at start-up and prints `error reading header` over and over.
+The TCP backend is not in the official release 0.12.0 and is built from master. On Windows it needs a version that includes commit e89e73839d53: a version without it treats "no data yet" as an error on Windows, waits more than ten seconds at start-up and prints `error reading header` over and over, and reads and writes may fail. Without such a version, the probe is shared with `xrdap share usbip`, attached, and reached through the USB backend.
 
 ## Drivers on Windows
 
@@ -89,6 +89,8 @@ Windows sometimes reinstalls the driver of the S3 interface and loses the device
 ```
 pnputil /remove-device "USB\VID_1D50&PID_6199\<serial>" /subtree
 ```
+
+With the 2016 Silicon Labs driver (6.7.4.261) on Windows, the serial link of the CP2102 on classic ESP32 boards is markedly slower than on Linux (figures in [performance.en.md](performance.en.md#classic-esp32-serial-on-windows)); a current Silicon Labs CP210x driver is recommended.
 
 ## Wi-Fi settings
 

@@ -78,13 +78,19 @@ While sampling, the probe runs only DAP_Info, DAP_HostStatus and the vendor exte
 
 ## Performance
 
-Typical values with a USB cable; real results vary with the target chip and the wiring. All measurements and their conditions are in [docs/performance.en.md](docs/performance.en.md).
+Typical values of 0.6.0; real results vary with the target chip and the wiring. The host runs Windows 11 (Linux for the row of the classic ESP32 over serial), the target is an STM32H723 (an STM32F401RC for the classic ESP32), and every row is measured at the highest stable SWD clock of that connection. Over Wi-Fi, OpenOCD connects to the probe directly with the CMSIS-DAP TCP backend, and that column was measured on a Linux host; over serial, OpenOCD uses its USB backend after `xrdap share usbip` shares the probe and `usbip attach` attaches it (the row of the classic ESP32 over serial goes through `xrdap share openocd`). All measurements and their conditions are in [docs/performance.en.md](docs/performance.en.md).
 
-| Item | ESP32-S3 (native USB) | ESP32-C3 (chip's USB port) | Classic ESP32 (serial, 921600 baud) |
-|---|---|---|---|
-| Highest SWD clock | about 23.7 MHz | about 5.2 MHz | about 5 MHz |
-| Shortest probe-side sampling period (SWD 10 MHz requested) | 4 variables 125 µs | 4 variables 225 µs | 8 variables 900 µs, 1 variable 350 µs |
-| OpenOCD reading 128 KiB (10 MHz requested; C3 and classic ESP32 through `xrdap share openocd`) | about 0.3 s | 0.64 s | 2.0 s |
+| Connection | Highest SWD clock | Block write / read | OpenOCD reading 128 KiB | Shortest period, 8 variables |
+|---|---|---|---|---|
+| S3 native USB | about 23.7 MHz | 370 / 441 KiB/s | 0.17 s | 200 µs |
+| S3 on-board USB-to-serial, 4 Mbaud | about 23.7 MHz | 139 / 140 KiB/s | 0.68 s | 200 µs |
+| S3 Wi-Fi | about 23.7 MHz | 82 / 93 KiB/s | 0.39–0.44 s | 250 µs |
+| C3 chip's USB port | about 5.2 MHz | 170 / 176 KiB/s | 0.64 s | 350 µs |
+| C3 Wi-Fi | about 5.2 MHz | 55 / 57 KiB/s | 0.78–0.88 s | 350 µs |
+| Classic ESP32 on-board USB-to-serial, 921600 baud | about 5 MHz | 51 / 54 KiB/s | 2.0 s | 600 µs |
+| Classic ESP32 Wi-Fi | about 5 MHz | 29 / 32 KiB/s | 0.93–1.09 s | 400 µs |
+
+With the 2016 Silicon Labs VCP driver (6.7.4.261) on Windows, the serial link of the classic ESP32 board's CP2102 is markedly slower: block write / read 20 / 22 KiB/s, and a shortest period of 900 µs for 8 variables. On Windows, a current Silicon Labs CP210x driver is recommended.
 
 ## Building
 

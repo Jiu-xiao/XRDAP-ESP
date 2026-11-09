@@ -80,7 +80,7 @@ openocd -c "adapter driver cmsis-dap; cmsis-dap backend tcp; cmsis-dap tcp host 
 
 经串口连接的探针由 `xrdap share openocd` 在本机提供同样的 TCP 后端，用法见 XRDAP-Host。
 
-TCP 后端不在正式版 0.12.0 中，需要从 master 编译。Windows 上要使用包含提交 e89e73839d53 的版本：更早的 master 在 Windows 上把“暂时没有数据”当作错误，启动时等待十几秒并反复输出 `error reading header`。
+TCP 后端不在正式版 0.12.0 中，需要从 master 编译。Windows 上要使用包含提交 e89e73839d53 的版本：不含这个提交的版本在 Windows 上把“暂时没有数据”当作错误，启动时等待十几秒并反复输出 `error reading header`，读写也可能失败。没有这样的版本时，用 `xrdap share usbip` 共享探针，挂载后经 USB 后端连接。
 
 ## Windows 上的驱动
 
@@ -89,6 +89,8 @@ Windows 偶尔会重装 S3 接口的驱动并丢失设备接口 GUID，此时所
 ```
 pnputil /remove-device "USB\VID_1D50&PID_6199\<序列号>" /subtree
 ```
+
+传统 ESP32 开发板上的 CP2102 在 Windows 上使用 Silicon Labs 2016 年的驱动（6.7.4.261）时，串口链路明显慢于 Linux（数据见 [performance.md](performance.md#传统-esp32-在-windows-上的串口)），推荐使用当前版本的 Silicon Labs CP210x 驱动。
 
 ## Wi-Fi 设置
 
