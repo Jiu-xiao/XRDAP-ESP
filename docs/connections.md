@@ -90,6 +90,8 @@ Windows 偶尔会重装 S3 接口的驱动并丢失设备接口 GUID，此时所
 pnputil /remove-device "USB\VID_1D50&PID_6199\<序列号>" /subtree
 ```
 
+传统 ESP32 开发板上的 CP2102 在 Windows 上使用 Silicon Labs 2016 年的驱动（6.7.4.261）时，串口链路明显慢于 Linux（数据见 [performance.md](performance.md#传统-esp32-在-windows-上的串口)），推荐使用当前版本的 Silicon Labs CP210x 驱动。
+
 ## Wi-Fi 设置
 
 探针作为 Wi-Fi 客户端连接已有的热点。ESP32 系列的 Wi-Fi 工作在 2.4 GHz 频段；路由器常把两个频段合用一个名字，探针连不上时先确认 2.4 GHz 频段已打开。填写密码时认证方式为 WPA2-Personal，不填密码为开放网络。热点名为 1 到 32 字节，密码为 8 到 63 字节。

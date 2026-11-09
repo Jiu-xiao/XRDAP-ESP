@@ -90,6 +90,8 @@ Windows sometimes reinstalls the driver of the S3 interface and loses the device
 pnputil /remove-device "USB\VID_1D50&PID_6199\<serial>" /subtree
 ```
 
+With the 2016 Silicon Labs driver (6.7.4.261) on Windows, the serial link of the CP2102 on classic ESP32 boards is markedly slower than on Linux (figures in [performance.en.md](performance.en.md#classic-esp32-serial-on-windows)); a current Silicon Labs CP210x driver is recommended.
+
 ## Wi-Fi settings
 
 The probe joins an existing hotspot as a Wi-Fi client. The Wi-Fi of the ESP32 family works in the 2.4 GHz band; routers often give both bands one name, so when the probe cannot connect, the 2.4 GHz band is the first thing to check. With a password the authentication is WPA2-Personal; without one the network is open. The SSID has 1 to 32 bytes, the password 8 to 63 bytes.
