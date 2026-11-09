@@ -78,13 +78,19 @@ xrdap watch --elf app.elf motor.speed motor.current --period 1ms --csv log.csv
 
 ## 性能
 
-下表为经 USB 线连接时的典型值，实际结果随目标芯片和接线变化。全部测量结果和条件见 [docs/performance.md](docs/performance.md)。
+下表为 0.6.0 的典型值，实际结果随目标芯片和接线变化。主机为 Windows 11（传统 ESP32 经串口的一行为 Linux），目标为 STM32H723（传统 ESP32 为 STM32F401RC），每行在该连接的最高稳定 SWD 时钟下测量。经串口和 Wi-Fi 时，OpenOCD 在 `xrdap share usbip` 共享、`usbip attach` 挂载后使用 USB 后端（传统 ESP32 经串口的一行经 `xrdap share openocd`）。全部测量结果和条件见 [docs/performance.md](docs/performance.md)。
 
-| 项目 | ESP32-S3（原生 USB） | ESP32-C3（芯片 USB 口） | 传统 ESP32（串口 921600 baud） |
-|---|---|---|---|
-| SWD 最高时钟 | 约 23.7 MHz | 约 5.2 MHz | 约 5 MHz |
-| 探针端采样的最短周期（SWD 请求 10 MHz） | 4 个变量 125 µs | 4 个变量 225 µs | 8 个变量 900 µs，1 个变量 350 µs |
-| OpenOCD 读 128 KiB（请求 10 MHz；C3、传统 ESP32 经 `xrdap share openocd`） | 约 0.3 s | 0.64 s | 2.0 s |
+| 连接 | SWD 最高时钟 | 块写 / 读 | OpenOCD 读 128 KiB | 8 个变量采样最短周期 |
+|---|---|---|---|---|
+| S3 原生 USB | 约 23.7 MHz | 370 / 441 KiB/s | 0.17 s | 200 µs |
+| S3 板上 USB 转串口，4 Mbaud | 约 23.7 MHz | 139 / 140 KiB/s | 0.68 s | 200 µs |
+| S3 Wi-Fi | 约 23.7 MHz | 82 / 93 KiB/s | 0.99–1.30 s | 250 µs |
+| C3 芯片 USB 口 | 约 5.2 MHz | 170 / 176 KiB/s | 0.64 s | 350 µs |
+| C3 Wi-Fi | 约 5.2 MHz | 55 / 57 KiB/s | 1.34–1.54 s | 350 µs |
+| 传统 ESP32 板上 USB 转串口，921600 baud | 约 5 MHz | 51 / 54 KiB/s | 2.0 s | 600 µs |
+| 传统 ESP32 Wi-Fi | 约 5 MHz | 29 / 32 KiB/s | 1.65–1.68 s | 400 µs |
+
+传统 ESP32 板上的 CP2102 在 Windows 上使用 Silicon Labs 2016 年的 VCP 驱动（6.7.4.261）时，串口链路明显变慢：块写 / 读为 20 / 22 KiB/s，8 个变量采样的最短周期为 900 µs。Windows 上推荐使用当前版本的 Silicon Labs CP210x 驱动。
 
 ## 编译
 
