@@ -4,6 +4,8 @@
 
 XRDAP-ESP is CMSIS-DAP v2 debug probe firmware for the Espressif ESP32-S3, ESP32-S2, ESP32-C3 and classic ESP32, built on [libxr](https://github.com/xrobot-org/libxr) and part of the XR-DAP family. Keil, pyOCD, probe-rs and OpenOCD use it as an ordinary CMSIS-DAP probe, connected to the computer by a USB cable or over Wi-Fi. The firmware also implements the XR vendor extension, with which the host tool of [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host) reads and writes variables and has the probe sample them at a fixed period. The code shared by the XR-DAP probes is in [XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core).
 
+An introduction video of the XR-DAP family is on [YouTube](https://youtu.be/H6S_sdkS8vs).
+
 ## Boards
 
 | Board | Firmware file | Connection to the computer |
