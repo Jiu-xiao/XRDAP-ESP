@@ -4,6 +4,8 @@
 
 XRDAP-ESP 是运行在乐鑫 ESP32-S3、ESP32-S2、ESP32-C3 和传统 ESP32 上的 CMSIS-DAP v2 调试探针固件，基于 [libxr](https://github.com/xrobot-org/libxr)，属于 XR-DAP 系列。Keil、pyOCD、probe-rs、OpenOCD 把它当作普通的 CMSIS-DAP 探针使用，探针经 USB 线或 Wi-Fi 连接电脑。固件还实现了 XR 厂商扩展，配合电脑端工具 [XRDAP-Host](https://github.com/Jiu-xiao/XRDAP-Host) 读写变量、在探针上按固定周期采样变量。XR-DAP 各探针共用的代码在 [XRDAP-Core](https://github.com/Jiu-xiao/XRDAP-Core)。
 
+XR-DAP 系列的介绍视频见 [Bilibili](https://www.bilibili.com/video/BV17oWx6YEde/)。
+
 ## 板子
 
 | 板子 | 固件文件 | 与电脑的连接 |
